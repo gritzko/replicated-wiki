@@ -1,5 +1,6 @@
 title: replicated.wiki
 permalink: /:path:output_ext
+theme: jekyll-theme-primer
 
 plugins:
   - jekyll-readme-index
