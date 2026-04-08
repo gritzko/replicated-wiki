@@ -1,4 +1,4 @@
-title: librdx
+title: replicated.wiki
 permalink: /:path:output_ext
 
 plugins:
@@ -7,10 +7,3 @@ plugins:
 readme_index:
   enabled: true
   remove_originals: false
-
-exclude:
-  - build*
-  - pcre2-*
-  - CMakeLists.txt
-  - Makefile
-  - "*.tar.gz"
