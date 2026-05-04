@@ -1,3 +1,6 @@
+---
+title: "Escher's art and computer science"
+---
 #   Escher's art and computer science
 
 <img align=right width="50%" src="./img/drawing_hands.jpg"/>

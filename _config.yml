@@ -8,3 +8,9 @@ plugins:
 readme_index:
   enabled: true
   remove_originals: false
+
+defaults:
+  - scope:
+      path: "blog"
+    values:
+      layout: "default"

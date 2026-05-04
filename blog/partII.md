@@ -1,3 +1,6 @@
+---
+title: "Beagle SCM: HTTP/CLI interface"
+---
 #   II. Beagle SCM: HTTP/CLI interface
 
 [**Part I. SCM as a database for the code**][1]
@@ -452,7 +455,7 @@ contributed feedback and ideas for this draft.
 
 [**Part I. SCM as a database for the code**][1]
 
-**Part III. Inner workings of CRDT revision control.**
+**Part III. Inner workings of Beagle revision control.**
 
 **Part IV. Experiments.**
 

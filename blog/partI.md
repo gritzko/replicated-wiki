@@ -1,3 +1,6 @@
+---
+title: "SCM as a database for the code"
+---
 #   I. SCM as a database for the code
 
 <img align=right width="40%" src="./img/tools.jpg"/>

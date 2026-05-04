@@ -1,3 +1,6 @@
+---
+title: "Beagle revision control: inner workings"
+---
 #   Beagle revision contol: inner workings
 
 This post is a status update on the progress of the Beagle revision control
@@ -52,11 +55,17 @@ by recombining the orthogonal primitives. For example,
     particular remote branch.
   - `be post '?./fix#in progress'` stashes the worktree changes into a
     child branch `fix` (advances a new branch from 0 to the new commit)
-  - `be get ?.#indexes checks out a commit containing "indexes" in the
+  - `be get ?.#indexes` checks out a commit containing "indexes" in the
     message, in the current branch' history
   - `be patch ?./fix` applies the stash back to the working tree
 
+URI syntax might be cryptic with special symbols at times, but most programming
+languages are. The good part, it is extremely familiar to people and LLMs alike 
+and more predictable than historically-defined CLI flags one has always look up 
+on SO/Claude/Google.
+
 [<img align=left width="100%" src="./img/dev.png"/>](https://en.wikipedia.org/wiki/Sanskrit)
+
 A major inspiration for this approach is the periodic table of elements, which
 was in turn inspired by Sanskrit sound table (above). 
 

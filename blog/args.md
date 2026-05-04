@@ -1,3 +1,6 @@
+---
+title: "Arguments for a syncable data exchange format"
+---
 #   Arguments for a syncable data exchange format
 
 If you spent quarter a century in this industry, you probably know one or
