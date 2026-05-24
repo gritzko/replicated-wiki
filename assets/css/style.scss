@@ -78,14 +78,19 @@
 .markdown-body {
   max-width: 45em;
   font-family: "Verdana, JetBrains Mono";
+  text-align: justify;
+  line-height: 1.4;
+  color: #000;
 }
 
 .markdown-body h1 {
   border-bottom: 1px solid #08f;
+  color: #444;
 }
 
 .markdown-body h2 {
   border-bottom: 1px dashed #08f;
+  color: #444;
 }
 
 .markdown-body .highlight pre,
@@ -121,3 +126,8 @@
   color: black;
   font-size: 100%;
 }
+
+p {
+  border-top: dotted 1px #aaa;
+  padding-top: 0.2em;
+  }

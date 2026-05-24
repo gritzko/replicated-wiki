@@ -3,7 +3,7 @@ title: "Beagle SCM: HTTP/CLI interface"
 ---
 #   II. Beagle SCM: HTTP/CLI interface
 
-[**Part I. SCM as a database for the code**][1]
+    [**Part I. SCM as a database for the code**][1]
 
 Despite L.Torvalds initially described git as "information manager
 from hell", it was a very innovative revision control system. 
