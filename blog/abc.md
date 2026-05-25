@@ -4,7 +4,7 @@
 Recently, "to C or not to C" became a topic on HN, which is a nice
 excuse to spend couple hours on [ABC][c] retrospective. The decision
 to work in C was rather natural: the author is a C/Go, not C++/Rust
-kind of person, so once go runtime became a problem, C was the
+kind of person, so once Go runtime became a problem, C was the
 most straightforward answer. The dirty secret of both C++ and C is
 that these two are like IKEA or LEGO languages. Languages to create
 other languages. For example, virtually any serious C++ user has
@@ -21,13 +21,21 @@ Abstractionless C resulted from many frustrations with C++ and its
 endless quirks. I needed generics, STL-like containers, disk and
 network serialization, some standard algorithms, with no pointer 
 arithmetics and no malloc/free headaches. Coming from Go, I clearly 
-needed slices. That was the pragmatic problem statement. On the
-higher level, I wanted to avoid the tower-of-abstractions trap that
-I felt quite sharply in C++. There, same bytes packaged differently
-become an entirely different incompatible story (like `std::string`
-vs `std::vector<char>` vs `std::vector<uint8_t>` etc). The fact
-that C++ `char` is neither signed nor unsigned and all those quirks
-that sound like a really strange religion -- those drive me mad.
+needed slices. That was the pragmatic problem statement. Things to
+improve productivity while doing systems-programming.
+
+<img align=right src="./img/Jenga.gif"/>
+On the higher philosophical level, I wanted to avoid the cursed
+tower-of-abstractions trap that I felt quite sharply in C++. 
+There, same bytes packaged differently become entirely different
+incompatible entities (like `std::string` vs `std::vector<char>` vs
+`std::valarray<>` etc). I understand quite clearly what happens on
+the bit and byte level. Lawyering about pure abstractions always 
+felt counter-productive to me, and C++ always had *lots* of that.
+Many of those abstractions abstracted away things that do not exist
+anymore, like big-endian CPUs and HDDs. 
+
+I did not want to play Jenga with imaginary bricks. 
 
 So the set of architectural choices was:
 
@@ -38,19 +46,26 @@ So the set of architectural choices was:
  2. Memory-owning buffers as arrays of four pointers, effectively
     ring buffer logic or ptr/len/cap constructs is built in.
  3. Generics through C templates, a known technique, enough for
-    STL-level containers.
+    STL-level containers: `HEAPu64Pop()`, `HEAPu8csPop()`, etc
  4. *Solid* containers, pointer chasing and malloc be damned.
-    Vectors, heaps, open addressed hash maps, LSM sorted sets.
+    Vectors, heaps, open addressed hash maps, LSM sorted sets,
+    these are fundamentally arrays.
  5. Naming conventions to enforce module structure, e.g.
     `void SHA1Sum(sha1* hash, u8csc from)` declared in `SHA1.h`,
     implemented in `SHA1.c`, tested in `test/SHA1.c`, etc.
+ 6. Ragel parsers for all text formats, TLV for binary, straight
+    mmap for solid containers.
+ 7. Last but not least, the primitives must effortlessly recombine.
+    `u8csb` is a buffer-of-const-byte-slices. `sha256bMap()` mmaps
+    a buffer of hashes, which might be treated as a vector, a heap, 
+    or a hash set, e.g. with `HASHsha256Put()`/`HASHsha256Get()`.
 
 Slices and generics are a bit unexpected in C, the rest is just
-another C style, nothing out of the ordinary. The obvious issue
+another C style with a funky notation, no biggie. The obvious issue
 here is that C does not support slices in any of its standard APIs.
 But, the C standard library is not that huge, and its usable part
-is even less, so unless a function is a syscall or somehow
-preferentially treated by the compiler, what is the value of it?
+is even less, so unless a function is a syscall or somehow gets
+special treatment from the compiler, what is the value of it?
 Diminishingly zero. Especially in the LLM era. What has a lot of
 value is the toolchain that understands C and the OS kernel. Those
 are true megaprojects.
@@ -77,8 +92,8 @@ dependendency management. Obviously, for C that is RPM, APT, apk,
 Brew and so on. I am not going to bring along second copies of
 CURL, libsodium, and all the other usual suspects.
 
-So for my purposes, it worked out fine. As L.Torvalds once said: 
-"Standards are paper. Buy some and write your own."
-Or something like that.
+So for my purposes, it worked out fine in a 100KLoC project. 
+As L.Torvalds once said:  "Standards are paper. Buy some and write
+your own." Or something like that.
 
 [c]: https://github.com/gritzko/libabc
