@@ -41,24 +41,24 @@ So the set of architectural choices was:
 
  0. All primitive types have specified bit width and layout; that
     gives serialization for free (`u32`, `i64`, `sha256`, etc).
- 1. Slices as arrays of two typed pointers, e.g. a byte slice is
-    `typedef u8* u8s[2];` and a slice is non-owning.
- 2. Memory-owning buffers as arrays of four pointers, effectively
+ 1. [Slices][s] as arrays of two typed pointers, e.g. a byte slice 
+    is `typedef u8* u8s[2];` and a slice is non-owning.
+ 2. Memory-owning [buffers][b] as arrays of four pointers, effectively
     ring buffer logic or ptr/len/cap constructs is built in.
- 3. Generics through C templates, a known technique, enough for
-    STL-level containers: `HEAPu64Pop()`, `HEAPu8csPop()`, etc
+ 3. [Generics][g] through C templates, a known technique, enough
+    for STL-level containers: `HEAPu64Pop()`, `HEAPu8csPop()`, etc
  4. *Solid* containers, pointer chasing and malloc be damned.
-    Vectors, heaps, open addressed hash maps, LSM sorted sets,
+    Vectors, heaps, open addressed hash maps, [LSM][l] sorted sets,
     these are fundamentally arrays.
  5. Naming conventions to enforce module structure, e.g.
     `void SHA1Sum(sha1* hash, u8csc from)` declared in `SHA1.h`,
     implemented in `SHA1.c`, tested in `test/SHA1.c`, etc.
- 6. Ragel parsers for all text formats, TLV for binary, straight
+ 6. [Ragel][r] parsers for all text formats, TLV for binary, straight
     mmap for solid containers.
  7. Last but not least, the primitives must effortlessly recombine.
     `u8csb` is a buffer-of-const-byte-slices. `sha256bMap()` mmaps
     a buffer of hashes, which might be treated as a vector, a heap, 
-    or a hash set, e.g. with `HASHsha256Put()`/`HASHsha256Get()`.
+    or a [hash set][h], e.g. with `HASHsha256Put()`/`HASHsha256Get()`.
 
 Slices and generics are a bit unexpected in C, the rest is just
 another C style with a funky notation, no biggie. The obvious issue
@@ -97,3 +97,9 @@ As L.Torvalds once said:  "Standards are paper. Buy some and write
 your own." Or something like that.
 
 [c]: https://github.com/gritzko/libabc
+[g]: https://github.com/gritzko/libabc/blob/main/HEAPx.h
+[s]: https://github.com/gritzko/libabc/blob/main/Sx.h
+[b]: https://github.com/gritzko/libabc/blob/main/Bx.h
+[l]: https://github.com/gritzko/libabc/blob/main/HIT.md
+[r]: https://github.com/gritzko/libabc/blob/main/HTTP.lex
+[h]: https://github.com/gritzko/libabc/blob/main/HASHx.h
