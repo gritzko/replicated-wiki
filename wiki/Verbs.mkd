@@ -1,0 +1,47 @@
+#   Verbs: a small orthogonal vocabulary, not git's sprawl
+
+Beagle's command language is a small, fixed set of HTTP verbs — GET, HEAD, POST, PUT, DELETE, PATCH — chosen to combat git's command and flag sprawl. Nobody remembers all of git, so these verbs are kept orthogonal: each has one clear function and a single direction of data flow, and none can be supplemented by creative use of another. You pick the verb for the move you want, then each URI slot adds its own effect.
+
+ -  [GET] — repo → worktree: check out or restore — clone, switch branch, or reset a single file.
+ -  [PATCH] — repo → worktree (mix/merge): weave another branch's commits into the wt — merge, rebase, cherry-pick, squash.
+ -  [POST] — worktree → repo: the only commit-maker; advance cur, and FF-advance labels or remotes.
+ -  [HEAD] — repo → repo: read-only peek — ahead/behind diff, and the canonical remote-cache refresh.
+ -  [PUT] — reflog: write a ref (create, move, reset, push) and stage files for the next commit.
+ -  [DELETE] — reflog: remove — tombstone a branch, delete a remote ref, or stage a file's removal.
+
+##  Orthogonal slots
+
+Pick the verb, then each populated URI part adds its own effect; the same four slots — `?branch`, `./path`, `//remote`, `#frag` — combine the same way across every verb.
+
+ -  `?branch`: HEAD/GET scope or switch; POST FF-advances; PUT names the ref; PATCH sources from it; DELETE drops it.
+ -  `./path`: scopes the diff (HEAD), restores a file (GET), stages (PUT), unlinks (DELETE), or scopes absorption (PATCH).
+ -  `//remote`: cached by default; a transport scheme (`ssh:`) opens the wire to fetch (GET/HEAD/PATCH) or push (POST/PUT).
+ -  `#frag`: a sha pin or a commit-message body; for PATCH the `#` shape alone picks merge vs rebase-one vs cherry-pick.
+ -  An empty `?branch` defaults to cur; cross-branch commits don't exist — switch cur first, then commit there.
+
+##  Bareword defaults
+
+A bare token with no URI markers lands in each verb's natural slot, so the common case needs no punctuation.
+
+ -  POST → commit message (`be post fix` ≡ `be post '#fix'`); HEAD/PATCH → query branch (`be head main` ≡ `?main`).
+ -  GET → path if it names a tracked file, else query branch (`be get file.c` vs `be get feat`).
+ -  PUT/DELETE/verbless → path (`be put file.c`, `be delete README`, `be file.c` opens it in bro).
+ -  Any token with `/`, `?`, `#`, or a scheme bypasses the default and parses as a URI.
+
+##  git → be cheat sheet
+
+The everyday git commands map onto verb + URI combinations, no extra flags.
+
+ -  `git clone URL` → `be get ssh://URL`; `git fetch` → `be head ssh://origin?*`; `git checkout feat` → `be get ?feat`.
+ -  `git checkout -b feat` → `be put ?./feat && be get ?./feat` (mkdir, then cd).
+ -  `git add f && commit -m` → `be put ./f && be post '#msg'`; `git commit -am` → `be put . && be post 'msg'`.
+ -  `git merge trunk` → `be patch ?trunk '#sync' && be post`; `git cherry-pick <sha>` → `be patch '#<sha>' && be post`.
+ -  `git push` → `be put ssh://origin`; `git branch -d feat` → `be delete ?feat`; `git status` → bare `be`.
+ -  `git stash` → use a sub-branch (eager branching); `git log -n 20 feat` → `be log:?feat#20`.
+
+[GET]: GET.mkd "GET verb"
+[HEAD]: HEAD.mkd "HEAD verb"
+[POST]: POST.mkd "POST verb"
+[PUT]: PUT.mkd "PUT verb"
+[DELETE]: DELETE.mkd "DELETE verb"
+[PATCH]: PATCH.mkd "PATCH verb"

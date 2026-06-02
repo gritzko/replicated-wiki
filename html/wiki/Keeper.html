@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Keeper</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>Keeper: the local git object store</h1>
+<p>
+Keeper is the object-store dog: its purview is git object storage, and it owns those objects — append-only <code>NNNNN.keeper</code> pack logs, their <code>NNNNN.keeper.idx</code> kv64 indexes, and per-branch <code>refs</code> reflogs, one shard per project. The goal is a store trivially git-exchangeable yet never rewriting packs, so packs copy verbatim and a branch dir drops wholesale. The method: address by 60-bit hashlets, append to pack logs, index as sorted kv64 runs, resolve deltas up a branch-dir DAG.
+</p>
+<ul>
+<li>Pack logs are append-only, git-encoded but not valid packfiles (no trailing checksum); offsets stay stable, never moved.</li>
+<li>OFS_DELTA bases are pack-local (a stable earlier offset); REF_DELTA bases resolve by hashlet walking up the branch-dir DAG.</li>
+<li>The kv64 index sorts <code>hashlet60|type4</code> keys, so a hash-prefix lookup is one range query spanning all object types.</li>
+<li>Branch dirs form a DAG: a leaf drops wholesale without breaking a surviving REF_DELTA — this replaces git-style repack.</li>
+<li>Refs and host aliases live in per-branch <code>refs</code> reflogs; a branch's refs is authoritative — resolution does not walk up.</li>
+</ul>
+<h2>API</h2>
+<p>
+Keeper follows the <a href="Dog.html">Dog</a> three-call contract plus an incremental pack writer; objects are read by hashlet or URI and written through the pack API.
+</p>
+<ul>
+<li><code>KEEPOpen</code> / <code>KEEPOpenBranch</code> / <code>KEEPClose</code> — open the store, add a branch's shard to the view, then close all shards.</li>
+<li><code>KEEPExec(state, cli)</code> — run a parsed verb plus URIs against the open store.</li>
+<li><code>KEEPGet</code> / <code>KEEPGetByURI</code> — read an object by hashlet or by a full URI into a buffer.</li>
+<li><code>KEEPLookup</code> — range-query the kv64 index, returning <code>(dir, file_id, offset)</code> for the first hit.</li>
+<li><code>KEEPHas</code> / <code>KEEPGetSize</code> — existence and size probes by hashlet.</li>
+<li><code>KEEPPackOpen</code> / <code>KEEPPackFeed</code> / <code>KEEPPackClose</code> — incremental pack writer; <code>Feed</code> appends one object and returns its sha.</li>
+<li><code>KEEPResolveRef</code> / <code>KEEPResolveHex</code> — resolve a <code>?ref</code> or a hex prefix to a full sha.</li>
+<li><code>KEEPIsAncestor</code> — ancestry test backing the ff-only push and advance checks.</li>
+</ul>
+<h2>CLI</h2>
+<p>
+The <code>keeper</code> CLI clones, fetches, resolves, and cats by URI, plus a few maintenance verbs; <code>be</code> normally drives it rather than the user.
+</p>
+<ul>
+<li><code>keeper get //host/path</code> clones, <code>//host?tags/v6.0</code> fetches a ref, <code>.?heads/master</code> resolves, <code>.#abc1234</code> cats an object.</li>
+<li><code>keeper refs</code> lists refs, <code>keeper import pack</code> ingests a git packfile, <code>keeper status</code> shows store stats.</li>
+<li><code>keeper verify .#sha</code> checks a commit and all reachable objects; <code>keeper alias //name url</code> records a host alias.</li>
+</ul>
+<h2>Pack logs</h2>
+<p>
+Pack logs are append-only, git-encoded object files — close to git's packfile format but not valid git packfiles, with no trailing checksum; see <a href="PackLog.html">PackLog</a> for the full format.
+</p>
+<ul>
+<li>The first batch keeps a standard PACK header from <code>git-upload-pack</code>; later fetches and <code>KEEPPackFeed</code> append objects.</li>
+<li>OFS_DELTA references are pack-local — the base sits earlier in the same pack at a stable offset, so packs copy verbatim.</li>
+<li>Objects are never moved or rewritten; offsets stay stable. Logs use mmap'd growable <code>FILEBook</code>, read via <code>FILEMapRO</code>.</li>
+</ul>
+<h2>Index (kv64)</h2>
+<p>
+Each index entry is 16 bytes — a u64 key and u64 val — sorted by hashlet then type, so a hash-prefix lookup is one range query over all types; see <a href="Indices.html">Indices</a> for the shared sorted-run format.
+</p>
+<ul>
+<li><code>key = hashlet60 | obj_type4</code> (commit/tree/blob/tag in the low 4 bits); <code>val = offset40 | file_id20 | flags4</code>, wh64 layout.</li>
+<li><code>file_id</code> is the store-wide <code>NNNNN</code> of the pack log; the dir holding it is recovered from the index run that hit.</li>
+<li>Index runs are per-dir sorted kv64 files: write sorts and flushes, read binary-searches, compact merges on invariant breach.</li>
+</ul>
+<h2>Delta-dependency DAG</h2>
+<p>
+Branch dirs form a DAG rooted at the store; an object may delta only against a base in the same or an ancestor dir, which makes a branch-dir drop safe by construction.
+</p>
+<ul>
+<li>REF_DELTA resolves by hashlet lookup up the dir chain; never delta against a sibling/descendant base — materialize it.</li>
+<li>A leaf dir drops wholesale (packs, indexes, reflog) without invalidating any surviving REF_DELTA; this replaces git repack.</li>
+<li>Resolution: range-query this dir's index, walk up on miss, read at <code>(dir, file_id, offset)</code>, chase deltas bottom-up.</li>
+</ul>
+<h2>Refs and aliases</h2>
+<p>
+A <code>&lt;branch-dir&gt;/refs</code> is an append-only reflog (a <code>dog/ULOG</code>) scoped to that one branch; the verb is always <code>set</code> and the key/val pair is packed into one URI.
+</p>
+<ul>
+<li>A row is <code>&lt;ron60-ms&gt;\tset\t&lt;from-uri&gt;#?&lt;40-hex-sha&gt;</code>; <code>REFSLoad</code> splits on <code>#</code> to return <code>{key,val}</code>, ts monotonic.</li>
+<li>A local tip uses a query-only key (<code>?heads/main#?&lt;sha&gt;</code>); remote-tracking a full origin (<code>//origin/path?heads/feat#?&lt;sha&gt;</code>).</li>
+<li>Host aliases ride the same file with a URL fragment (<code>//github#?https://…</code>); a branch's refs is authoritative, no walk-up.</li>
+</ul>
+</body>
+</html>

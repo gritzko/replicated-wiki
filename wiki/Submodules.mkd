@@ -1,0 +1,62 @@
+#   Submodules: nested projects mounted as secondary worktrees
+A submodule splits a project into smaller reusable parts or vendors a dependency; the goal is a seamless recursive experience where clone, checkout, and commit descend into subs by default. The method reuses Beagle's own machinery: a submodule is just another project in the parent's [Store], checked out as a secondary worktree at the gitlink path. Git stays byte-exact — a `160000` gitlink and a root `.gitmodules` blob name the pin and upstream. `be` recurses by forking a child into each mount.
+
+##  Inner workings
+A submodule is a secondary worktree of a separate project: the parent tree's gitlink pins which commit, `.gitmodules` names where to fetch it, and recursion is process-level — `be` forks a child into each mount.
+
+ -  A mount is a secondary worktree — `<wt>/<path>/.be` is a file anchoring back to the parent's shared store (see [Store]).
+ -  The pin is the parent tree's `160000` gitlink sha; the root `.gitmodules` blob supplies the upstream fetch URL.
+ -  Recursion is `BERecurseInto`: fork + chdir(`<wt>/<sub>`) + execvp self, so each child runs against its own HOME.
+ -  Pre-order verbs ([GET], [HEAD]) hit the parent then descend; post-order [POST] commits subs first, then bumps the gitlink.
+ -  The child reaches the parent's keeper through the row-0 `repo` anchor, so a sub needs no separate object pool of its own.
+
+##  CLI
+Recursion is the default — every verb descends into mounted subs; `--nosub` opts out for one invocation. Clones flow top-down, commits bottom-up.
+
+ -  `be get ssh://host/repo?ref` clones recursively: after the parent checkout, each sub is mounted and reset to its pinned sha.
+ -  `be get --nosub …` skips the mount loop and prints `submodule(s) skipped`; the parent's gitlinks stay unmounted.
+ -  `be post 'msg'` commits post-order: dirty subs commit first, then the parent stages each sub's new tip as a gitlink bump.
+ -  `be head` recurses pre-order, reporting ahead/behind and dirty state per sub alongside the parent's own diff.
+ -  `be put <subpath>` stages one gitlink bump by reading the sub-wt's pinned tip from its `.be` anchor; no recursion.
+
+##  API
+Four headers split by dog: dog/git/SUBS is the pure `.gitmodules` parser/synth, keeper/SUBS enumerates off a tree, sniff/SUBS drives mounts, beagle/SUBS orchestrates recursion.
+
+ -  `dog/git/SUBS.h`: `SUBSu8sParse` / `SUBSu8sFind` / `SUBSu8bSynth` — pure `.gitmodules` parse, find-by-path, synth.
+ -  `keeper/SUBS.h`: `KEEPSubsAt(tree,ts,verb,out)` emits a ULOG row `<url>?<path>#<pin>` per `160000` entry, in decl order.
+ -  `sniff/SUBS.h`: `SNIFFSubMount` drives a mount (anchor + fetch + checkout); `SNIFFSubReadTip` / `SNIFFSubIsMount` help.
+ -  `beagle/SUBS.h`: `BESubsHere` enumerates declared subs with mount state; `BERecurseInto` forks a child `be` into a mount.
+ -  `beagle/SUBS.h` GET helpers: `BEGetKeeperSubs`, `BEGetSubMount`, `BEGetSubUnmount`, `BEGetDrainSubs`, `BEGetDrainRemoved`.
+
+##  Git compatibility
+Beagle reads and writes submodules exactly as git does — `160000` gitlinks in the parent tree and a gitconfig-format `.gitmodules` blob — so a beagle-cloned repo round-trips through git untouched.
+
+ -  The tree, not `.gitmodules`, is authoritative for the mount set: a section whose path has no `160000` entry is skipped.
+ -  `.gitmodules` parse tolerates quoted names, `#`/`;` comments, CRLF, whitespace; sections missing `path`/`url` are skipped.
+ -  A gitlink stores the pinned commit sha (not a tree or blob); beagle preserves it byte-for-byte on clone, fetch, and push.
+ -  `SUBSu8bSynth` mirrors `git submodule add`: one `[submodule "<path>"]` section per pair, tab-indented `path =` then `url =`.
+
+##  Store layout
+A submodule is just another project shard in the parent's store, mounted as a secondary worktree that points back; there is no separate submodule store class.
+
+ -  The sub's objects sit in `<parent_root>/.be/<basename>/`, a shard beside the parent's, sharing its keeper (see [Store]).
+ -  The basename comes from the clone URL: last path segment, `.git` and trailing `/` stripped (`…/libabc.git` → `libabc`).
+ -  The mount `<wt>/<path>/.be` is a file holding one row `<ts>\trepo\tfile://<parent_root>/.be/` — the secondary-wt anchor.
+ -  Nesting composes: a sub-of-a-sub is another shard, so `<parent>/.be/<sub>/.be/<subsub>/` and deeper share one pool.
+ -  For beagle-sourced parents the sub fetches from the same source — url-basename, then path-basename, then the declared URL.
+
+##  TLV report aggregation (landed)
+The parent captures each sub's TLV hunk report and relays every hunk into its sequential stream, rebasing only the path prefix — one `be` lists affected files across the whole tree, for every verb.
+
+ -  `HUNKu8sRelay` (dog/HUNK) drains a child TLV stream, rebases each URI under a prefix, re-emits via `HUNKMode`.
+ -  `BERelaySub` (beagle/SUBS) forks `be <verb> --tlv` in a mount, captures stdout, relays the hunks path-prefixed.
+ -  All seven verbs relay: bare `be`, head, get, post, patch, put, delete list affected sub files, path-prefixed, in one stream.
+ -  get, patch, and bare put/delete emit per-file stdout hunks always; post's commit report stays TLV-gated.
+ -  A clean sub returns `*NONE`; recursion passes `-q` and treats it as a no-op, so it never fails a bare `be put`/`delete`.
+ -  Patch recursion is gitlink-diff driven (reuses GET): a sub whose applied pin differs from base is re-got and relayed.
+ -  put/delete recurse only the bare stage-all / delete-all form into mounted subs; path-scoped and remote forms don't recurse.
+
+[Store]: Store.mkd "the store and shards"
+[GET]: GET.mkd "GET verb"
+[POST]: POST.mkd "POST verb"
+[HEAD]: HEAD.mkd "HEAD verb"

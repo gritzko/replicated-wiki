@@ -1,0 +1,45 @@
+#   ABC: the foundation C dialect
+
+ABC is Beagle's foundation C library, the dialect every dog is written in. The goal is fast, allocation-light systems C with no runtime and no garbage collector: data lives in flat, contiguous buffers, and concurrency is cheap message-passing processes, not shared threads. The method is a few idioms — slices and buffers over pointer-plus-length pairs, a per-thread scratch arena over malloc, ragel grammars over hand-rolled parsing, and one error-and-resource discipline in the PRO.h macros.
+
+##  Memory model
+
+ABC moves data by consuming slices and filling buffers, never by tracking a pointer beside a length. A slice is a pair of pointers; a buffer owns a range; an arena hands out scratch along the call stack.
+
+ -  [Slices] are `[head, term)` pairs consumed head-first; four const shades pick read-vs-write and movable-vs-fixed.
+ -  [Buffers] own a range as PAST / DATA / IDLE; feed and drain move the borders, so a length never travels separately.
+ -  [BASS] is the per-thread scratch arena; `a_carve` and kin hand out memory that dies at the `call` / `try` boundary.
+
+##  Errors and control flow
+
+Every fallible function returns an `ok64` and threads it through the PRO.h macros, keeping error handling and resource ownership orthogonal. Resources are acquired at the top of the chain and released by their owner.
+
+ -  [PRO] gives `sane` / `call` / `try` / `done`: `call` propagates a non-OK `ok64` by return, `try` captures it.
+ -  An `ok64` is a RON60-encoded uppercase name, ten chars max; `abc/ok64` generates the constant boilerplate.
+ -  Acquire mmaps, files, and heap at the top; workers receive resources by pointer and never own them.
+
+##  Naming
+
+Functions read `MOD typ8 VerbStuff`: a module prefix, the operand type, the verb, and a combinatorial suffix. Fixed-layout record types end in their bit width.
+
+ -  `HEXu8sFeed`, `KEEPSync`, `URIutf8Drain` — module, type, verb; `Stuff` adds flavor like `FeedSome` or `FromHex`.
+ -  Records end in their width: `sha256`, `u64`, `tok32`; error codes are uppercase ron60 names.
+
+##  No manual parsing
+
+ABC never hand-scans bytes to recover structure. Lexing and parsing go through ragel state machines, generated to `.rl.c` and committed beside their source; a hand-rolled byte loop is a defect, not a shortcut.
+
+ -  Write the grammar in `*.c.rl`, generate with `ragel -C X.c.rl -o X.rl.c -L`, and commit both files.
+ -  Feed a slice to the machine and emit tokens via a callback; guard invariants with `must()`, not `assert()`.
+
+##  Paths and hashes
+
+Two record families recur across the dogs and both avoid the char-array-plus-length antipattern: NUL-terminated path buffers, and fixed-width content hashes.
+
+ -  `path8b` is a NUL-terminated path buffer; build it with `a_path`, append with `PATHu8bPush`, view as `$path(buf)`.
+ -  `sha1` / `sha1hex` (from `dog/WHIFF.h`) carry hashes; a hashlet is a 6–40 hex prefix, not a fixed forty.
+
+[Slices]: Slices.mkd "the slice model"
+[Buffers]: Buffers.mkd "the buffer model"
+[BASS]: BASS.mkd "the scratch arena"
+[PRO]: PRO.mkd "error flow and resources"

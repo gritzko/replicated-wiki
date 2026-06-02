@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PRO</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>PRO: error flow and resource discipline</h1>
+<p>
+PRO.h is the control-flow spine of every ABC <code>.c</code> file: macros that thread an <code>ok64</code> through the call chain so error handling and resource ownership stay separate. A function opens with <code>sane</code>, calls downward with <code>call</code>, and returns with <code>done</code>; a failure propagates by return with no scattered cleanup, because resources are acquired at the top of the chain and released only by their owner. Since the macros pollute the namespace, PRO.h is included by <code>.c</code> files only, never by a public header.
+</p>
+<h2>The flow macros</h2>
+<p>
+<code>sane</code> declares the hidden <code>ok64 __</code> carrier and guards arguments. From there <code>call</code> and <code>try</code> invoke downward; the difference is whether a failure returns at once or is captured for inspection.
+</p>
+<ul>
+<li><code>call(f, …)</code> runs <code>f</code> and returns its code on failure; <code>try(f, …)</code> runs it and leaves the code in <code>__</code>.</li>
+<li>After <code>try</code>, branch with <code>then</code> / <code>nedo</code> / <code>on(code)</code>; finish with <code>done</code> (return <code>__</code>) or <code>fail(code)</code>.</li>
+<li>An entry point must be <code>MAIN</code> / <code>TEST</code> / <code>FUZZ</code>; these declare the PRO globals and set up <a href="BASS.html">BASS</a>.</li>
+</ul>
+<h2>Error codes</h2>
+<p>
+Errors are <code>ok64</code> values: uppercase names encoded in RON base-64, at most ten characters (sixty bits). The encoding makes a code both a small integer and a printable name.
+</p>
+<ul>
+<li>Codes follow a predictable pattern; <code>abc/ok64</code> generates the constant from the name.</li>
+<li><code>OK</code> is zero; <code>ok64str</code> prints any code back to its name for traces and logs.</li>
+</ul>
+<h2>Resource discipline</h2>
+<p>
+Because <code>call</code> can return from anywhere, a function cannot release in scattered <code>if (failed) cleanup</code> blocks. So whoever acquires releases — and acquisition sits at the top of the chain.
+</p>
+<ul>
+<li>Open mmaps, files, and heap buffers at the top; pass them down by pointer to workers that never own them.</li>
+<li>The CLI shape is wrapper plus worker: allocate once, <code>try</code> the worker, free on every exit path.</li>
+</ul>
+</body>
+</html>

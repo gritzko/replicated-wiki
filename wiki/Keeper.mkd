@@ -1,0 +1,67 @@
+#   Keeper: the local git object store
+
+Keeper is the object-store dog: its purview is git object storage, and it owns those objects — append-only `NNNNN.keeper` pack logs, their `NNNNN.keeper.idx` kv64 indexes, and per-branch `refs` reflogs, one shard per project. The goal is a store trivially git-exchangeable yet never rewriting packs, so packs copy verbatim and a branch dir drops wholesale. The method: address by 60-bit hashlets, append to pack logs, index as sorted kv64 runs, resolve deltas up a branch-dir DAG.
+
+ -  Pack logs are append-only, git-encoded but not valid packfiles (no trailing checksum); offsets stay stable, never moved.
+ -  OFS_DELTA bases are pack-local (a stable earlier offset); REF_DELTA bases resolve by hashlet walking up the branch-dir DAG.
+ -  The kv64 index sorts `hashlet60|type4` keys, so a hash-prefix lookup is one range query spanning all object types.
+ -  Branch dirs form a DAG: a leaf drops wholesale without breaking a surviving REF_DELTA — this replaces git-style repack.
+ -  Refs and host aliases live in per-branch `refs` reflogs; a branch's refs is authoritative — resolution does not walk up.
+
+##  API
+
+Keeper follows the [Dog] three-call contract plus an incremental pack writer; objects are read by hashlet or URI and written through the pack API.
+
+ -  `KEEPOpen` / `KEEPOpenBranch` / `KEEPClose` — open the store, add a branch's shard to the view, then close all shards.
+ -  `KEEPExec(state, cli)` — run a parsed verb plus URIs against the open store.
+ -  `KEEPGet` / `KEEPGetByURI` — read an object by hashlet or by a full URI into a buffer.
+ -  `KEEPLookup` — range-query the kv64 index, returning `(dir, file_id, offset)` for the first hit.
+ -  `KEEPHas` / `KEEPGetSize` — existence and size probes by hashlet.
+ -  `KEEPPackOpen` / `KEEPPackFeed` / `KEEPPackClose` — incremental pack writer; `Feed` appends one object and returns its sha.
+ -  `KEEPResolveRef` / `KEEPResolveHex` — resolve a `?ref` or a hex prefix to a full sha.
+ -  `KEEPIsAncestor` — ancestry test backing the ff-only push and advance checks.
+
+##  CLI
+
+The `keeper` CLI clones, fetches, resolves, and cats by URI, plus a few maintenance verbs; `be` normally drives it rather than the user.
+
+ -  `keeper get //host/path` clones, `//host?tags/v6.0` fetches a ref, `.?heads/master` resolves, `.#abc1234` cats an object.
+ -  `keeper refs` lists refs, `keeper import pack` ingests a git packfile, `keeper status` shows store stats.
+ -  `keeper verify .#sha` checks a commit and all reachable objects; `keeper alias //name url` records a host alias.
+
+##  Pack logs
+
+Pack logs are append-only, git-encoded object files — close to git's packfile format but not valid git packfiles, with no trailing checksum; see [PackLog] for the full format.
+
+ -  The first batch keeps a standard PACK header from `git-upload-pack`; later fetches and `KEEPPackFeed` append objects.
+ -  OFS_DELTA references are pack-local — the base sits earlier in the same pack at a stable offset, so packs copy verbatim.
+ -  Objects are never moved or rewritten; offsets stay stable. Logs use mmap'd growable `FILEBook`, read via `FILEMapRO`.
+
+##  Index (kv64)
+
+Each index entry is 16 bytes — a u64 key and u64 val — sorted by hashlet then type, so a hash-prefix lookup is one range query over all types; see [Indices] for the shared sorted-run format.
+
+ -  `key = hashlet60 | obj_type4` (commit/tree/blob/tag in the low 4 bits); `val = offset40 | file_id20 | flags4`, wh64 layout.
+ -  `file_id` is the store-wide `NNNNN` of the pack log; the dir holding it is recovered from the index run that hit.
+ -  Index runs are per-dir sorted kv64 files: write sorts and flushes, read binary-searches, compact merges on invariant breach.
+
+##  Delta-dependency DAG
+
+Branch dirs form a DAG rooted at the store; an object may delta only against a base in the same or an ancestor dir, which makes a branch-dir drop safe by construction.
+
+ -  REF_DELTA resolves by hashlet lookup up the dir chain; never delta against a sibling/descendant base — materialize it.
+ -  A leaf dir drops wholesale (packs, indexes, reflog) without invalidating any surviving REF_DELTA; this replaces git repack.
+ -  Resolution: range-query this dir's index, walk up on miss, read at `(dir, file_id, offset)`, chase deltas bottom-up.
+
+##  Refs and aliases
+
+A `<branch-dir>/refs` is an append-only reflog (a `dog/ULOG`) scoped to that one branch; the verb is always `set` and the key/val pair is packed into one URI.
+
+ -  A row is `<ron60-ms>\tset\t<from-uri>#?<40-hex-sha>`; `REFSLoad` splits on `#` to return `{key,val}`, ts monotonic.
+ -  A local tip uses a query-only key (`?heads/main#?<sha>`); remote-tracking a full origin (`//origin/path?heads/feat#?<sha>`).
+ -  Host aliases ride the same file with a URL fragment (`//github#?https://…`); a branch's refs is authoritative, no walk-up.
+
+[Dog]: Dog.mkd "the dog convention"
+[Store]: Store.mkd "repo layout"
+[PackLog]: PackLog.mkd "the pack log format"
+[Indices]: Indices.mkd "the sorted-run indexes"

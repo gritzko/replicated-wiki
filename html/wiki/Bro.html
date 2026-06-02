@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bro</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>Bro: the syntax-highlighting pager and viewer</h1>
+<p>
+Bro is the display dog: its purview is rendering and it owns no repo data — its state is just an in-memory view stack. It renders syntax-highlighted code, <a href="Spot.html">Spot</a> results, and <a href="Graf.html">Graf</a> diffs in an interactive TUI pager. The goal is one viewer for every dog's output, driven by <a href="URI.html">URI</a>s. The method: take URIs as arguments or TLV hunks on stdin (pipe mode), color text from tok32 tags, keep a 32-deep view stack, and expose a <code>:</code>/<code>#</code> GURI prompt so any position is a re-openable URI.
+</p>
+<ul>
+<li>Hunks arrive as TLV records with a <code>path#symbol:line</code> URI; the display title is formatted at render time from that URI.</li>
+<li>Text is colored from tok32 tag arrays: comment gray, string green, number cyan, keyword blue, name/call bold, path violet.</li>
+<li>A <code>U</code> tag is an invisible click target — a left-click on the preceding token navigates to its URI.</li>
+<li>Opening a file or dir pushes the current view (max 32 deep); each stacked view keeps its scroll, <code>h</code> pops, <code>q</code> quits.</li>
+<li>Long lines soft-wrap by codepoint; <code>w</code> toggles wrap off (less -S clipping), <code>m</code> toggles mouse wheel/click.</li>
+</ul>
+<h2>API</h2>
+<p>
+Bro follows the <a href="Dog.html">Dog</a> three-call contract; above it sit the run loops, the tokenizer, and the SGR mouse helpers.
+</p>
+<ul>
+<li><code>BROOpen</code> / <code>BROClose</code> — set up the pager state and arena, then tear it down.</li>
+<li><code>BROExec(state, cli)</code> — entry for a parsed CLI of URIs and flags.</li>
+<li><code>BRORun</code> — the interactive pager loop (key handling, render, view stack).</li>
+<li><code>BROPipeRun</code> — pipe mode: read TLV hunks from stdin and page them.</li>
+<li><code>BROUpdate</code> — recompute the rendered view after a navigation or resize.</li>
+<li><code>BROTokenize</code> — tokenize a file's bytes into colored tok32 spans.</li>
+<li><code>BROListDir</code> — render a directory listing as a view.</li>
+<li><code>MAUSEnable</code> / <code>MAUSDisable</code> / <code>MAUSParse</code> — SGR mouse tracking on/off and event parsing.</li>
+</ul>
+<h2>CLI</h2>
+<p>
+<code>bro [URI...]</code> views files, directories, or piped hunks; spot and graf fork it automatically, so it is rarely invoked by hand.
+</p>
+<ul>
+<li><code>bro file.c</code> is highlighted cat; <code>bro file.c#42</code> opens at line 42; <code>bro file.c#Token</code> opens and searches for a token.</li>
+<li><code>bro dir/</code> or <code>bro .</code> lists a directory; multiple path args view several files; no args at a tty prints the key map.</li>
+<li>No args + piped stdin = pipe mode (TLV from spot/graf); <code>spot -g TODO .c</code> and <code>graf -d a b</code> fork bro for their output.</li>
+</ul>
+<h2>The URI prompt</h2>
+<p>
+The <code>:</code> (or <code>#</code>) prompt accepts GURI syntax, and the fragment picks the search type; Tab completes identifiers from the current view.
+</p>
+<ul>
+<li><code>:42</code> goes to a line, <code>:path</code> opens a file, <code>:path#token</code> searches, <code>:#TODO.c</code> greps, <code>:#'snippet'.c</code> snippet-searches.</li>
+<li>A trailing <code>.ext</code> filters results by type; when omitted, the current file's extension is the default.</li>
+<li>Tab tries a prefix match then a substring match over identifiers in the current view.</li>
+</ul>
+<h2>Navigation and status</h2>
+<p>
+Keys cover line/page/hunk motion and the view stack; the status bar shows a live, re-typeable URI of the current position.
+</p>
+<ul>
+<li>Keys: <code>j/k</code> lines, <code>d/u</code> half-pages, <code>space/f</code>/<code>b</code> pages, <code>g/G</code> ends, <code>]</code>/<code>[</code> hunks, <code>Enter</code>/<code>l</code> open, <code>h</code> back, <code>q</code> quit.</li>
+<li>The status bar's left is <code>&lt;path&gt;#L&lt;line&gt;</code>, updating live as you scroll, so <code>:</code> re-opens the prompt where you are.</li>
+<li>Position shows <code>TOP</code>/<code>BOT</code>/<code>NN%</code>/<code>ALL</code>; <code>H</code> is hunk count and <code>C</code> change count (diffs only).</li>
+</ul>
+</body>
+</html>

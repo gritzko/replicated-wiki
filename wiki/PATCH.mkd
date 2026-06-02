@@ -1,0 +1,73 @@
+#   PATCH: absorb another branch's work into the worktree
+
+PATCH absorbs commits from another branch into cur's worktree and records the absorbed sha(s) in `.be/wtlog` for the next [POST] to consume; it never commits on its own. The cycle is patch → test → post — run once per merge, cherry-pick, or squash, or looped per commit for rebase — so every commit that lands is a tested commit, never a chain of unverified work. PATCH is one verb in the Beagle [Verbs] vocabulary, and unlike [GET] it weave-merges theirs rather than overwriting the worktree.
+
+ -  Does not commit: the absorbed sha(s) are staged in `.be/wtlog`, and the next [POST] turns them into a commit with a header.
+ -  The URI shape is the operation: `?`/`#` presence and emptiness alone select squash, cherry-pick, merge, or rebase-one.
+ -  A dirty wt is fine: a 3-way WEAVE merges theirs against the wt's current bytes, so dirty files never cause a refusal.
+ -  Conflicts are loud: a conflict hits stderr and exits non-zero, stopping an unattended `patch && post` before a bad commit.
+
+##  Four shapes
+
+The PATCH URI form alone classifies the operation — `?` presence and `#` presence/emptiness — and every shape takes the usual extras (`//host` to fetch first, `./path` to scope).
+
+ -  `?<br>` squash: replay `fork..br.tip` as one wt-merge, after which [POST] records one `foster` commit header.
+ -  `?<br>#<msg>` merge: the same full replay as squash, after which [POST] records a `parent` commit header.
+ -  `?<br>#` rebase-one: the next not-yet-replayed commit on `?br`, after which [POST] records a `foster` header.
+ -  `#<hash>` cherry-pick: the one named commit, after which [POST] records a `picked:` trailer.
+
+##  CLI use
+
+The common PATCH CLI forms cover squash, rebase-one, merge, cherry-pick, remote fetch, path scope, and delegated structural rewrites.
+
+ -  `be patch ?..` squashes the parent's stack into the wt, while `be patch ?./fix` squashes a child branch.
+ -  `be patch ?feat/fix#` rebases one commit from `feat/fix` onto cur.
+ -  `be patch ?trunk '#sync from trunk'` merges trunk with an explicit message.
+ -  `be patch '#abc1234'` cherry-picks one commit, while `be patch ssh://origin?main` fetches then squashes.
+ -  `be patch file.c?feat` applies one file's version from `?feat`, recording no foster row.
+ -  `be patch spot:#'Old'->'New'.c` delegates an in-place structural rewrite to spot.
+ -  Multiple PATCHes compose: each PATCH appends a `patch` row the next POST consumes.
+
+##  Ancestor-skip walk
+
+Squash and merge replay only the commits cur doesn't already have; rebase-one finds the next un-absorbed commit by walking the source's first-parent chain.
+
+ -  Squash and merge replay only commits not already reachable from cur via parent ∪ foster.
+ -  `picked` trailers are dedup-only and do not participate in reachability.
+ -  Rebase-one walks `?br`'s first-parent chain and stops at the first sha already reachable from cur.
+
+##  Weave merge
+
+PATCH never refuses on dirty files: it runs a 3-way WEAVE with the absorbed commit on the theirs side and the wt's current bytes on the ours side, so PATCH-on-PATCH composes by construction.
+
+ -  The ours side is the wt's current bytes, including user edits and any prior output, so a prior absorption reads as an edit.
+ -  Unresolvable conflicts are marked token-level with 4-char delimiters (`<<<<`/`>>>>`), not git's 7-char line markers.
+ -  `git mergetool` and existing UIs won't recognize the token-level markers — hand-edit, or enumerate via a `diff:?` view.
+
+##  Path-scoped PATCH
+
+A non-empty path slot scopes the absorption to those paths, but records no provenance — a partial absorption is not a faithful DAG commit.
+
+ -  Path-scoped `be patch file.c?feat` lands theirs bytes for those paths only.
+ -  A path-scoped row carries the path but no `&theirs` slot, so [POST] emits no provenance header and counts zero commits.
+ -  Use a full (no-path) PATCH shape if you want POST to record provenance.
+
+##  Reporting and status
+
+Every PATCH prints a ULOG-style report — one line per applied commit and touched file, `<verb> <status> <path-or-uri>` — so the patch-test-post loop stays auditable.
+
+ -  `applied`: the file was clean (baseline or stamped) and overlaid with theirs bytes, no merge needed.
+ -  `merged`: the file had non-baseline bytes and theirs touched it, and WEAVE integrated both sides cleanly.
+ -  `mod`: ours diverged from the merge base but theirs didn't touch this path, so the bytes are kept as-is (fork-relative).
+ -  `conflict`: non-baseline bytes theirs touched but WEAVE couldn't resolve, leaving markers in the file and a non-zero exit.
+
+##  Open questions
+
+Two PATCH-side formats are still unsettled, both about how downstream tools read PATCH's output.
+
+ -  The token-level 4-char conflict delimiters need a stable wire format for bro, graf-resolve, and a `git mergetool` adapter.
+ -  A "partial picked" trailer naming `<sha>:<path>` for path-scoped forensics is a possible future extension.
+
+[POST]: POST.mkd "POST verb"
+[GET]: GET.mkd "GET verb"
+[Verbs]: Verbs.mkd "the verbs hub"

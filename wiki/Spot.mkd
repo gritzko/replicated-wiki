@@ -1,0 +1,50 @@
+#   Spot: structural code search, grep, regex, diff, merge
+
+Spot is the search dog: its purview is structural code search, grep, regex, replace, and token-level diff/merge, and it owns the `NNNNN.spot.idx` trigram and symbol index runs under `.be/`. The goal is instant search plus token-granular diff and merge, all syntax-highlighted. The method: tokenize source by file extension, build the indexes, seek candidates by trigram, then match by flat token pattern (SPOT), substring (grep), or a Thompson NFA (regex); diff and merge run LCS over token streams.
+
+ -  Indexing tokenizes per extension and writes trigram + symbol runs to `.be/*.idx`; `--fork N` stripes files across N workers.
+ -  A per-blob memo (blob hashlet → path hashlet) skips unchanged blobs, reindexes a changed path (catches renames).
+ -  SPOT and grep share trigram candidate filtering, then run token-pattern matching (SPOT) or substring over all leaves (grep).
+ -  Regex pulls literal runs of 3+ chars for trigram filtering (Russ Cox), so the index still speeds patterns with literals.
+ -  Diff and merge tokenize both files, run LCS over the token streams, and emit highlighted hunks with function headers.
+
+##  API
+
+Spot follows the [Dog] three-call contract; the CAPO layer carries the index and the search/index primitives the verbs dispatch to.
+
+ -  `SPOTOpen` / `SPOTOpenBranch` / `SPOTClose` — open the index, add a branch's shard, then close.
+ -  `SPOTExec(state, cli)` — dispatch a parsed verb plus URIs against the open index.
+ -  `SPOTIndexFromTips` — incremental reindex walking the invoking URI's tips; pulls blobs from [Keeper].
+ -  `CAPOIndexFile` / `CAPOIndexBlob` — tokenize and index one file or one blob into a run.
+ -  `CAPOSpot` — structural snippet search with token/block placeholders.
+ -  `CAPOGrep` / `CAPOPcreGrep` — indexed substring search and Thompson-NFA regex search.
+ -  `SPOTReplace` — structural search-and-replace over matched token spans.
+ -  `CAPOTrigramFilter` — narrow the candidate file set by trigram before matching; `CAPOCompact` merges runs.
+
+##  CLI
+
+The `spot` CLI is the multitool surface — cat, search, replace, diff, merge, and indexing — selectable by flag.
+
+ -  `spot file.c` is highlighted cat; bare `spot` is an incremental update; `spot --fork N` reindexes on N cores.
+ -  `spot -s 'snippet' .c` snippet-searches, `-r 'repl'` rewrites; `-g TODO .c` greps; `-p 'regex' .c` regex-greps.
+ -  `spot --diff old new` token-diffs; `spot --merge base ours theirs -o out` 3-way merges; `--gitdiff`/`--hook` wire git.
+ -  Trailing `.ext` args are extension filters (required for `-s`, optional for `-g`): `.c` matches `**/*.c` and `**/*.h`.
+
+##  Snippet search (SPOT)
+
+`-s` matches structurally, not textually, so whitespace and formatting differences are ignored; placeholders bind tokens, and `-r` rewrites them.
+
+ -  Lowercase `a`–`z` bind one token (`ok64 o = OK;` also matches `ok64 ret = OK;`); uppercase `A`–`Z` match any block.
+ -  Two spaces skip any token sequence; `-r` rewrites: `spot -s 'TOK_VAL(A,B,C,D)' -r 'tok32Val(A,B,C,D)' .c .h`.
+ -  Results are syntax-highlighted with context lines and a function-header hunk title per match.
+
+##  Git integration
+
+Spot plugs into git as a diff and merge driver and a post-commit indexing hook, via `.gitattributes` and `git config`.
+
+ -  Git drivers: `git config diff.spot.command "spot --gitdiff"` and a `merge.spot.driver` of `spot --merge %O %A %B -o %A`.
+ -  `.gitattributes`: `*.c diff=spot merge=spot` routes C files through spot's token-level diff and merge.
+ -  A post-commit `spot --hook` keeps the index incremental; `--hook` is the same as bare `spot`.
+
+[Dog]: Dog.mkd "the dog convention"
+[Keeper]: Keeper.mkd "the keeper dog"

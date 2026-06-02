@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>URI: scheme://authority/path?ref#fragment</h1>
+<p>
+Every <code>be</code> argument is one URI — <code>[scheme:][//authority][path][?ref][#fragment]</code> — and each component reflects one aspect of the command. The verb picks the direction; the URI picks the resource. Changing the URI's shape changes the command's semantics: the same <a href="PATCH.html">PATCH</a> becomes a merge, a rebase, or a cherry-pick depending on which slots are filled.
+</p>
+<ul>
+<li><code>scheme:</code> is the transport (<code>ssh:</code>/<code>https:</code>/<code>file:</code>) or a read-only projector (<code>sha1:</code>/<code>diff:</code>/…); none acts locally.</li>
+<li><code>//authority</code> is a remote label; bare <code>//host</code> reads the cache (no wire, reflog grep), a transport scheme opens the wire.</li>
+<li><code>path</code> is a file or dir in the branch's tree; with <code>file:</code> it is a filesystem path to another store/wt on this host.</li>
+<li><code>?ref</code> is a branch, tag, sha, or commit-message search; the ref shape alone decides which (see Refs).</li>
+<li><code>#fragment</code> is free-form payload: a commit-message body, an object hash, a line jump, or an extension filter (<code>#.c.h</code>).</li>
+</ul>
+<h2>Shape changes semantics</h2>
+<p>
+Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation — most visibly for <a href="PATCH.html">PATCH</a>, where the <code>?</code>/<code>#</code> shape alone selects the merge mode.
+</p>
+<ul>
+<li><code>be patch ?feat</code> squashes, <code>?feat#msg</code> merges, <code>?feat#</code> rebases one, <code>#sha</code> cherry-picks — one <a href="PATCH.html">PATCH</a> verb, varied shape.</li>
+<li>A bare <code>//host</code> reads the cache while <code>ssh://host</code> opens the wire — the scheme alone flips cached vs network.</li>
+<li><code>diff:</code> vs <code>diff:?br</code> vs <code>diff:?a#b</code> change the diff from/to sides — projector slots compose like verb slots.</li>
+<li>An empty <code>?</code> slot in a URI means the project trunk; no <code>?</code> slot at all means cur (see Refs rule 0).</li>
+</ul>
+<h2>Argument classification</h2>
+<p>
+Every non-flag argv token becomes one URI via <code>DOGNormalizeArg</code>; the token's markers decide the slot, so the common case needs no punctuation.
+</p>
+<ul>
+<li>An argv token with whitespace is a fragment (<code>be post 'fix the typo'</code>); <code>?</code>/<code>#</code>/<code>/</code> or a <code>scheme:</code> send it to the URI lexer.</li>
+<li>A bareword argv token with no markers lands in the verb's natural slot via <code>DOGPromoteBareword</code> (see <a href="Verbs.html">Verbs</a>).</li>
+<li>One scheme per URI: <code>sha1:</code> is itself the scheme, so <code>sha1:ssh://…</code> is not a valid shape — fetch then read separately.</li>
+</ul>
+</body>
+</html>

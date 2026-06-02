@@ -1,0 +1,44 @@
+#   Dog: the static-lib-plus-exe convention every tool follows
+
+A dog is a Beagle tool with a fixed shape: a static library plus an executable, each owning one purview of the repo's data. The goal is uniform composition — `be` dispatches HTTP-like verbs to dogs by spawning processes, and dogs coordinate through keeper's read APIs rather than pushing into each other. The method: a `name` struct with three entry points (`DOGOpen`/`DOGExec`/`DOGClose`), a shared `dog [verb] [--flags] URI*` CLI, sibling discovery via dog/HOME, and pull-based indexing from [Keeper].
+
+##  The three entry points
+
+Every dog's static lib exposes a `name` control struct and three uniform calls; the first DOGOpen across all dogs in a process decides whether the session is writable.
+
+ -  `DOGOpen(branch, rw)` opens the dog's shards for `branch` in the home singleton; repeated calls compose a multi-branch view.
+ -  Write-once: the FIRST DOGOpen across all dogs decides ro-vs-rw; later calls downgrade to read-only regardless of `rw`.
+ -  `DOGExec(state, cli)` runs a parsed CLI (verb + flags + URIs) against open state; `DOGClose` closes every shard it opened.
+
+##  Dependency graph
+
+Dogs layer over a foundation — `beagle → spot,graf,sniff,… → keeper → libdog` — so the dispatcher sits on top and the object store at the bottom.
+
+ -  [Beagle] dispatches the verb vocabulary to the worker dogs, defining the order; it mostly spawns them as processes.
+ -  Worker dogs — [Spot], [Graf], [Sniff], [Bro] — sit in the middle; [Keeper] owns the objects and libdog the shared infra.
+ -  Dogs find their home and each other via dog/HOME (`HOMEResolveSibling`), so graf can fork a sibling like [Bro].
+
+##  CLI and URI convention
+
+Every dog speaks `dog [verb] [--flags] URI*`; no verb means a read-only view or search, a verb means an action with a direction of data flow.
+
+ -  Verbs: `get` repo→wt, `post` wt→repo, `patch` transform in place, `put`/`delete` reflog edits; no verb = view/search.
+ -  URIs are `[scheme:][//authority][path][?ref][#fragment]`, canonicalized via `DOGCanonURI`; see [URI] for the slots.
+ -  Command history logs to ULOG files (refs, wtlog) as `timestamp verb uri` rows (see [Sniff] for the wtlog).
+
+##  Pull-based indexing
+
+There is no push path into a dog's index: after a write each indexing dog runs its own pass driven by the invoking URI, pulling object data from [Keeper].
+
+ -  [Spot] indexes current-tip versions, keyed by path hash; a per-blob memo skips unchanged blobs and catches renames.
+ -  [Graf] indexes the commit graph, walking back from each tip and stopping at a commit already in its DAG (mention ≡ known).
+ -  [Sniff] keeps no index: it updates the worktree and writes attribution rows to ULOG, reading the wt and ULOG, not a graph.
+
+[Keeper]: Keeper.mkd "the keeper dog"
+[Beagle]: Verbs.mkd "the be dispatcher"
+[Spot]: Spot.mkd "the spot dog"
+[Graf]: Graf.mkd "the graf dog"
+[Sniff]: Sniff.mkd "the sniff dog"
+[Bro]: Bro.mkd "the bro dog"
+[Verbs]: Verbs.mkd "the verbs hub"
+[URI]: URI.mkd "URI structure"

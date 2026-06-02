@@ -1,0 +1,27 @@
+#   PRO: error flow and resource discipline
+
+PRO.h is the control-flow spine of every ABC `.c` file: macros that thread an `ok64` through the call chain so error handling and resource ownership stay separate. A function opens with `sane`, calls downward with `call`, and returns with `done`; a failure propagates by return with no scattered cleanup, because resources are acquired at the top of the chain and released only by their owner. Since the macros pollute the namespace, PRO.h is included by `.c` files only, never by a public header.
+
+##  The flow macros
+
+`sane` declares the hidden `ok64 __` carrier and guards arguments. From there `call` and `try` invoke downward; the difference is whether a failure returns at once or is captured for inspection.
+
+ -  `call(f, …)` runs `f` and returns its code on failure; `try(f, …)` runs it and leaves the code in `__`.
+ -  After `try`, branch with `then` / `nedo` / `on(code)`; finish with `done` (return `__`) or `fail(code)`.
+ -  An entry point must be `MAIN` / `TEST` / `FUZZ`; these declare the PRO globals and set up [BASS].
+
+##  Error codes
+
+Errors are `ok64` values: uppercase names encoded in RON base-64, at most ten characters (sixty bits). The encoding makes a code both a small integer and a printable name.
+
+ -  Codes follow a predictable pattern; `abc/ok64` generates the constant from the name.
+ -  `OK` is zero; `ok64str` prints any code back to its name for traces and logs.
+
+##  Resource discipline
+
+Because `call` can return from anywhere, a function cannot release in scattered `if (failed) cleanup` blocks. So whoever acquires releases — and acquisition sits at the top of the chain.
+
+ -  Open mmaps, files, and heap buffers at the top; pass them down by pointer to workers that never own them.
+ -  The CLI shape is wrapper plus worker: allocate once, `try` the worker, free on every exit path.
+
+[BASS]: BASS.mkd "the scratch arena"

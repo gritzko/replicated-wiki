@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StrictMark</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>StrictMark: rational Markdown</h1>
+<p>
+Markdown is a wonderful lightweight markup — minimal, easy to read and write, widely supported — but precedent-based: it codified diverse practices, so it is messy and inconsistent. StrictMark is Markdown refactored: a rational subset that keeps every feature while shrinking the grammar to its shortest formal form, for a uniform, unambiguous syntax. It reuses existing Markdown tooling without legacy weight, and is the markup every Beagle wiki page uses, from the <a href="Home.html">Home</a> overview to the <a href="Verbs.html">Verbs</a> vocabulary.
+</p>
+<h2>Markdown critique</h2>
+<p>
+Markdown implementations disagree — Vim, VS Code, and the output HTML all differ — and the textbook fix, a formal grammar, is blocked by the syntax itself: every element has its own shape and those shapes interact, so N elements spawn N×N corner cases.
+</p>
+<ul>
+<li>HTML gives every <code>&lt;/element&gt;</code> one uniform syntax; Markdown gives each a different one, so a grammar becomes a road of pain.</li>
+<li>The one serious PEG grammar attempt runs 700 lines — absurd for a markup billed as minimalistic.</li>
+<li>CommonMark, the fullest spec yet, is rule-and-exception based, not a grammar — pure legalese, one of N×N pairwise rules.</li>
+<li>Asymmetries like single-line ATX vs multiline Setext exist only because the spec says so — a strategy, not a generator.</li>
+<li>The libcmark parser is 10K lines of hand-written exceptions; building anything advanced on so shaky a base is hard.</li>
+</ul>
+<h2>StrictMark principles</h2>
+<p>
+StrictMark makes a Markdown subset a proper markup language by formalizing its grammar — a minimal hypertext markup, not an elephantine HTML engine. Feature sprawl is held back by transclusion, not new syntax. This document is itself StrictMark.
+</p>
+<ul>
+<li>Formal grammar: the block layer is a regular language and the inline layer is regex markers, so a parser can be all regexes.</li>
+<li>One way to do a thing: spaces not tabs, ATX headings only, one-char brackets, all blocks indented in 4-char groups.</li>
+<li>Minimize ambiguity: the same character never denotes two things (lists vs emphasis, and so on).</li>
+<li>No spooky action-at-a-distance: every line parses on its own, since all markup is 4-char-wide and nesting is unambiguous.</li>
+<li>Inline markup nests minimally with clear precedence — code span beats strong, strong beats emph; it is secondary by design.</li>
+<li>HTML is not the only output format (PDF, DOC, TeX, …), so no HTML inserts; other formats arrive via transclusion.</li>
+<li>Backwards compatible: a CommonMark subset, so existing tooling renders it; a StrictMark parser need not read all Markdown.</li>
+<li>When StrictMark contradicts CommonMark, or CommonMark is ambiguous, StrictMark wins.</li>
+</ul>
+<h2>Inline markup</h2>
+<p>
+Markdown inline markup looks easy but is not: ambiguity makes it hard to implement. StrictMark treats it all as bracketing — brackets matched by regex, effective only when they satisfy precedence. The cuts are deliberate; inline formatting is secondary.
+</p>
+<ul>
+<li>All inline markup is bracketing; matched by regex — <code>(?&lt;=\s)[*](?=\S)</code> opens STRONG — live only if precedence allows.</li>
+<li>Precedence, low to high: <code>_emphasized_</code>, <code>[link][1]</code>, <code>*strong*</code>, <code>\*</code> escapes, `<code> </code>code<code> </code>`.</li>
+<li>An open bracket pairs with any later close of its kind; a new open bracket cancels a preceding unmatched one.</li>
+<li>On overlap the higher-precedence range wins; on equal precedence the earlier range wins.</li>
+<li>Higher-precedence brackets may nest inside lower, never the reverse — the lower one is cancelled.</li>
+<li>No double symbols: <code>*strong*</code>, never <code>**strong**</code>.</li>
+<li>Cuts vs CommonMark: no double symbols, no arbitrary nesting, one-symbol explicit labels, no backticks inside code.</li>
+</ul>
+<h2>Links, images, transclusion</h2>
+<p>
+StrictMark links come in exactly two cases, both defined out of line: an explicit <code>[text text][l]</code> pairing any display text with a one-symbol label <code>l</code>, and a shortcut <code>[page]</code> that keys on the bracket text, so a page name is its own key.
+</p>
+<ul>
+<li>Explicit: <code>[text text][l]</code> with <code>[l]: url &quot;title&quot;</code> — any display text, one-symbol label <code>l</code> (digits, then letters).</li>
+<li>Shortcut: <code>[page]</code> keys on the bracket text — <code>[StrictMark]</code> resolves <code>[StrictMark]: url</code>; the key may be multi-char.</li>
+<li>Definitions sit anywhere, the foot idiomatic; an external URL or <code>#anchor</code> rides on an explicit label.</li>
+<li>Images and transclusions are the explicit form with a leading <code>!</code> — <code>![alt][t]</code>; the renderer handles the foreign type.</li>
+</ul>
+<pre><code>    see [Replicated Object Notation][1]
+    [1]: http://doc.replicated.cc/ron.sm &quot;What is RON&quot;
+
+    a bare [StrictMark] link, defined below
+    [StrictMark]: StrictMark.mkd &quot;the markup&quot;
+
+    ![here is the table][T]
+    [T]: /table?@tab &quot;this might be any object&quot;
+</code></pre>
+<h2>Block markup</h2>
+<p>
+Blocks are containers (lists, blockquotes, divs) or leaves (paragraphs, headers, …); containers nest, leaves do not. Markup sits at line start in 4-char groups — the block stack — as <code>(INDENT|QUOTE)* LIST? LEAF?</code>; absent a leaf, a paragraph is implied.
+</p>
+<ul>
+<li>A block continues on later lines via a 4-space indent; a blank line continues open containers but not a leaf block.</li>
+<li>Block-stack depth changes drive nesting; extra indent under 4 spaces is meaningless, keeping interpretation line-by-line.</li>
+<li>A bare indent opens a generic container (a div) where CommonMark would start a code block — a slight generalization.</li>
+<li>If a marker ends in a non-space char, the next char must be whitespace (the gap space); e.g. <code>####</code> needs a following space.</li>
+<li>Block markers: <code>&gt;   </code> quote, <code> -  </code> bullet, <code> 1. </code> numbered, four spaces a div, <code>##  </code> header (4 levels).</li>
+<li>More markers: 3–4 backticks a code fence, <code>[x]:</code> a reference def, <code>---</code>/<code>--- </code>/<code>----</code> a ruler, <code>[ ] </code> a list TODO.</li>
+<li>Structural markup is 4-char-wide, except two shorter cases: a 3-backtick code fence and a 3-dash <code>---</code> ruler.</li>
+</ul>
+<h2>Headers</h2>
+<p>
+StrictMark allows four header levels, ATX only, and a header may span lines. Markings appear only at the line start and, like all block markup, are padded to four chars; when the last char is not a space, the text must begin with a gap space.
+</p>
+<pre><code>    #   Top header
+    ##  Subheader
+    ### Small header
+    #### Smallest header
+</code></pre>
+<h2>Lists</h2>
+<p>
+The unordered marker is the dash <code>-</code>; <code>*</code> is dropped as ambiguous and <code>+</code> as unpopular — there must be one way only. Ordered lists use <code>12.</code> (digits then dot), again four chars per level, and the GitHub TODO syntax <code>[ ]</code> is supported as another leaf block.
+</p>
+<ul>
+<li>Marker padding is the author's taste, but a non-space final char needs a following gap space.</li>
+<li>Numbered lists cap at 999 numbered entries; writing every entry <code>1.</code> renders fine but the raw markup is then mis-numbered.</li>
+<li>Separate two adjacent same-kind lists with an empty <code>&lt;!-- --&gt;</code> comment — better still, put real text between them.</li>
+</ul>
+<pre><code>    -   bulleted item
+    -   still bulleted
+        1.  nested numbered list
+        2.  more numbered
+        plain paragraph, nested, indented 4 chars
+    -   resume the bulleted list
+</code></pre>
+<h2>Blockquotes</h2>
+<p>
+Blockquote markup is one <code>&gt;</code> and three spaces, in any order. The blockquote is the only block whose continuation line may carry the quotation marker instead of a bare indent — an exception kept for historical reasons; using indents is still highly advised.
+</p>
+<pre><code>    &gt;   #   Quoted header
+    &gt;   Quoted paragraph text.
+</code></pre>
+<h2>Code blocks</h2>
+<p>
+Code blocks use the fenced syntax with three or four backticks; the opening fence may name the language. The code is indented four chars and follows the same continuation rules as any container, so the closing fence is optional — a drop in indent ends it.
+</p>
+<ul>
+<li>A StrictMark code block can safely contain backtick runs of its own, since its body is indented and the fence is not.</li>
+</ul>
+<pre><code>    console.log(&quot;JavaScript is the best worst lang ever&quot;);
+</code></pre>
+<h2>Grammar</h2>
+<p>
+The structural layer is a regular language and the inline layer is regex-matched brackets, so the whole parser stays compact. The canonical grammar lives in the Beagle source, not in prose — the block lexer and the inline Ragel machine below.
+</p>
+<ul>
+<li>Block lexer <code>MKDTLexer</code> in <code>dog/tok/MKDT.c</code> scans by line: fences, rulers, ref defs, headings, then the block stack.</li>
+<li>Inline lexer <code>MKDTInlineLexer</code> (Ragel, <code>MKDT.c.rl</code>) matches code, strong, emph, strike, links, transclusions as regexes.</li>
+</ul>
+</body>
+</html>

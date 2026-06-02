@@ -1,0 +1,29 @@
+#   DELETE: remove files, branches, and remote refs
+
+DELETE is [PUT]'s counterpart: where PUT writes refs and stages files, DELETE removes them — by writing to the same ulogs. DELETE stages a tracked file's removal as a `delete` row, tombstones a branch label in the reflog, or deletes a remote ref; an in-tree file is also unlinked on disk at once, after a dirty check. DELETE is one of the [Verbs].
+
+ -  Immediate + staged: a file is unlinked at once and a `delete` row is appended for the next [POST] (git-rm semantics).
+ -  Dirty-safe: deleting a modified file refuses `DELDIRTY` (mtime, then a hash double-check); `--force` removes it anyway.
+ -  A branch removal is a reflog tombstone; it refuses `SNIFFFAIL` for cur, trunk, or a non-leaf; `-r`/`--force` drops a tree.
+ -  The network is touched only to push: `be delete //origin` drops the local cache; `//origin?feat` opens the wire to push.
+
+##  CLI use
+
+The DELETE forms span single files, subtrees, branches, and remote refs; a bare `be delete` mirrors bare [PUT] for on-disk removals.
+
+ -  Bare `be delete` stages every tracked file missing on disk — one `delete` row each, the mirror of bare PUT.
+ -  `be delete file.c` unlinks and stages the removal; `be delete src/` pre-flights, then drops a whole clean subtree.
+ -  `be delete ?feat/fix1` tombstones a leaf branch (not cur/trunk); `be delete -r ?feat` drops the whole subtree, leaves first.
+ -  `be delete //origin?feat` push-deletes the remote ref; `be delete //origin` drops only the cached remote shard.
+
+##  Errors
+
+DELETE refuses rather than lose unsaved work or orphan a worktree; a DELETE of an already-absent path is simply a no-op.
+
+ -  `DELDIRTY` — the file is modified off-baseline (mtime, then a hash double-check); `--force` deletes it anyway.
+ -  `SNIFFFAIL` — branch refusal: cur, trunk, or a non-leaf (so cur's ancestors too); `-r`/`--force` drops the subtree.
+ -  An already-absent path is an OK no-op — removing what's already gone is not an error.
+
+[Verbs]: Verbs.mkd "the verbs hub"
+[PUT]: PUT.mkd "PUT verb"
+[POST]: POST.mkd "POST verb"

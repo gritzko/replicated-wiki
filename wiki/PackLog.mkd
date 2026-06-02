@@ -1,0 +1,57 @@
+#   PackLog: git packs appended into a numbered log
+
+A pack log is [Keeper]'s sole object storage: a numbered append-only file holding git packs back-to-back, never mutated in place. The goal is a store trivially git-exchangeable that still never rewrites packs, so bytes copy verbatim and a branch dir drops whole instead of repacking. The method: keep git's pack encoding but strip the per-pack header and checksum, append object records to a dir's tail log, and index every object and pack boundary in the [Indices] so a valid packfile reframes on the fly.
+
+##  Numbered append-only logs
+
+A log is named `NNNNN.keeper` with a 10-char RON64 store-wide sequential seqno, so logs in different branch dirs never share a number; the file sits in whichever dir wrote it.
+
+ -  Sharded by branch dir: each dir under the [Store] holds its own `NNNNN.keeper` logs, `.idx` runs, and a `refs` reflog.
+ -  Store-wide seqno: numbering is global, so a `file_id` names a log; its holding dir comes from the index run that hit.
+ -  Never mutated: objects are only appended and offsets stay stable, so the [Indices] point at them by `(file_id, offset)`.
+
+##  Many packs per log, stripped framing
+
+One log holds many packs back-to-back; a new log starts only past a size threshold, so a lone local commit appends to the tail rather than opening a file.
+
+ -  Stripped framing: only object records land in the log; the PACK header and SHA-1 trailer are dropped except at file start.
+ -  Cheaply reframed: the wire encoder writes a fresh PACK header, sendfiles the records, and appends a fresh SHA-1 trailer.
+ -  No self-sync markers: pack boundaries are found only via the index bookmarks below, a git limitation kept for compatibility.
+
+##  Intra-pack object order
+
+Within a pack, objects MUST follow git's type order — commits, trees, blobs, tags; keeper makes the implicit `git repack` grouping an explicit invariant writers enforce and readers trust.
+
+ -  Forward-reference free: a tree never cites a commit, a blob never a tree; delta bases sit earlier in this or a prior pack.
+ -  Cheap commit scan: a pack's first object is a commit, so sync and [Graf] find commits by prefix scan, not body inflation.
+ -  Enforced on import: `KEEPPackFeed` sets `strict_order`; sniff staging packs go DFS order, repacked canonically on [POST].
+
+##  Delta-dependency DAG
+
+Two git delta encodings get two base rules; together they make the branch tree a dependency DAG where a leaf detaches without breaking anything above it.
+
+ -  OFS_DELTA is pack-local: the base sits earlier in the same pack, so a pack copies verbatim between stores with no rewrite.
+ -  REF_DELTA resolves by hashlet up the dir chain: a base MUST be in the same dir or an ancestor — never below.
+ -  Materialize upward refs: a writer that would delta against an out-of-chain object emits the base raw into the target dir.
+
+##  Pack bookmarks
+
+Every appended pack also gets a bookmark index entry recording its extent, so per-pack reconstruction for the wire is O(1) — no varint scan, no inflation.
+
+ -  Bookmark: `key=file_id20|offset40|type4(PACK)`, `val=obj_count32|byte_len32`; the reserved PACK type avoids object collisions.
+ -  `obj_count` sums into the fresh PACK header; `byte_len` is the record length to sendfile from `offset` in `file_id`.
+ -  No per-pack hashlet: the pkt-line wire negotiates over object sha1s; per-object hashlets in the [Indices] still remain.
+
+##  Drop-a-dir replaces GC
+
+Keeper never rewrites or GCs packs; consolidation is per-branch-dir, which the DAG invariant makes safe by construction.
+
+ -  Drop a leaf: delete the dir (logs, indexes, refs, WT); no surviving REF_DELTA pointed in, so ancestor resolution holds.
+ -  Drop an interior dir: refused unless every descendant's cross-dir REF_DELTA into it is materialized; no automatic rewrite.
+ -  Live readers survive: an mmap of a dropped log works until close; new lookups route around the missing dir.
+
+[Keeper]: Keeper.mkd "the keeper dog"
+[Store]: Store.mkd "repo layout"
+[Indices]: Indices.mkd "the sorted-run indexes"
+[Graf]: Graf.mkd "the graf dog"
+[POST]: POST.mkd "POST verb"

@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>POST: the only commit-maker — advance cur, FF labels, push</h1>
+<p>
+POST is the only commit-maker: it advances cur — the current branch's tip — and, through its other URI slots, fast-forwards labels and remotes to that new tip, all in one invocation. It is the worktree→repo write that turns staged and absorbed work into a commit.
+</p>
+<ul>
+<li>Only commit-maker: the commit is assembled from <code>patch</code> rows since the pd boundary; <a href="PUT.html">PUT</a> and <a href="PATCH.html">PATCH</a> never commit.</li>
+<li>Advances cur only: cur's history is never rewritten and a commit never lands onto another branch.</li>
+<li>Fast-forward-only: a <code>?branch</code>/<code>//remote</code> advance refuses <code>POSTNOFF</code> unless cur descends from it; else PATCH+POST.</li>
+<li>Three orthogonal slots: <code>#frag</code> commits, <code>?branch</code> FF-advances a label, <code>//remote</code> FF-pushes — composing to cur's new tip.</li>
+</ul>
+<h2>The three slots</h2>
+<p>
+POST's three URI slots are orthogonal — each adds its own effect, none implies another — and cur is the only ref POST ever commits onto, never another branch; the slots follow the shared <a href="Verbs.html">Verbs</a> vocabulary.
+</p>
+<ul>
+<li><code>#frag</code> (and stage scope): commit on cur; without it, the message is derived from <code>patch</code> rows since the pd boundary.</li>
+<li><code>?branch</code>: FF-advance it to cur's post-commit tip; <code>POSTNOFF</code> if cur isn't a descendant. Standalone is a pure label move.</li>
+<li><code>//remote</code>: FF-push cur's tip to the remote's counterpart, same FF check. Standalone is a pure push (≡ <code>be put //origin</code>).</li>
+<li>Empty intent in one slot is not an error when another slot is populated — it just skips the commit step.</li>
+<li>Combinations compose: <code>be post '#msg' ?feat //origin</code> commits, FF-advances <code>?feat</code>, and pushes, all to cur's new tip.</li>
+</ul>
+<h2>CLI use</h2>
+<p>
+A bare POST is a dry-run status printer (the same read-only preview as <a href="HEAD.html">HEAD</a>); with intent it commits on cur and, per any populated slot, also FF-advances a label or pushes to a remote.
+</p>
+<ul>
+<li><code>be post 'fix the typo'</code> commits on cur; <code>be post '#fix'</code> is the single-word form.</li>
+<li><code>be post '#fix' ?feat</code> commits, then FF-advances <code>?feat</code> to cur's new tip.</li>
+<li><code>be post ?..</code> FF-advances the parent (no commit); <code>be post //origin</code> FF-pushes cur's tip (no commit).</li>
+<li><code>be post '#sync' //origin</code> commits, then FF-pushes cur's new tip to origin.</li>
+<li>Bare <code>be post</code> with no slot prints dry-run status; with in-scope patch rows it commits using the auto-resolved message.</li>
+<li>Commit message: a quoted spaced arg is the fragment; a single word needs <code>#</code>; legacy <code>-m &quot;msg&quot;</code> still works.</li>
+<li>Each POST appends one entry to cur's <code>REFS</code>; patch-id dedup (<code>GRAFPatchId</code>) skips an absorption already reachable from cur.</li>
+</ul>
+<h2>Commit assembly</h2>
+<p>
+For each in-scope <code>patch</code> row POST classifies by URI shape and emits the matching header; the first parent is always cur's previous tip, so walking first-parents reaches the fork point in a straight line.
+</p>
+<ul>
+<li><code>?&lt;sha&gt;</code> squash → one <code>foster &lt;sha&gt;</code> header; <code>?&lt;sha&gt;#&lt;msg&gt;</code> merge → a <code>parent &lt;sha&gt;</code> header.</li>
+<li><code>?&lt;sha&gt;#</code> rebase-one → a <code>foster &lt;sha&gt;</code> header; <code>#&lt;sha&gt;</code> cherry-pick → a <code>picked: &lt;sha&gt;</code> trailer.</li>
+<li>Headers emit in patch-row order and compose freely: two rebase-ones plus a cherry-pick give two fosters and one picked.</li>
+<li>Cross-branch dedup: foster/parent reachability once the work is in the DAG, plus patch-id matching for replays.</li>
+</ul>
+<h2>Message resolution</h2>
+<p>
+POST picks the commit message in a fixed order, and a squash never auto-supplies one because it collapses many commits.
+</p>
+<ul>
+<li>The supplied <code>#frag</code> wins if present.</li>
+<li>Else, if exactly one in-scope patch row carries a usable msg (rebase-one, cherry-pick, or <code>?br#msg</code> merge), reuse it.</li>
+<li>Else refuse with <code>POSTNOMSG</code>; a squash always needs an explicit message.</li>
+<li><code>POSTNONE</code> is the separate case: a commit was asked for but every candidate path is an unchanged baseline.</li>
+</ul>
+<h2>File classification</h2>
+<p>
+Every sniff row stamps the files it touched with its <code>ts</code>; at POST time each on-disk file's mtime is looked up to decide KEEP vs REWRITE, in selective or implicit (commit-all) mode.
+</p>
+<ul>
+<li>KEEP: mtime <code>&lt; last_get_ts</code>, or the file is owned by a <code>get</code>/<code>post</code> row (baseline content) — in both modes.</li>
+<li>REWRITE: owned by a <code>patch</code> row (merged bytes) or a <code>put</code> row (current bytes) — in both modes.</li>
+<li>Tracked file outside the stamp-set: ignored in selective mode unless an explicit <code>put</code> named it; REWRITE in implicit mode.</li>
+<li>Untracked files never sweep in by accident — even bare <code>be post 'msg'</code> needs <code>be put &lt;path&gt;</code> first.</li>
+<li>Selective = ≥1 explicit <code>put</code>/<code>delete</code> since last post; implicit = none (mirrors git <code>commit -a</code> for tracked edits).</li>
+</ul>
+<h2>Boundaries and guards</h2>
+<p>
+Two <code>.be/wtlog</code> boundaries, both anchored at the most recent <a href="GET.html">GET</a> (a hard reset of the world, the repo→worktree inverse of POST), scope what the next POST consumes; a wall-clock guard refuses backwards clock motion.
+</p>
+<ul>
+<li>pd boundary = most recent <code>get</code> or <code>post</code>; <code>put</code>/<code>delete</code> rows after it are in scope for the next POST.</li>
+<li>patch boundary = most recent <code>get</code> or commit-all <code>post</code>; <code>patch</code> rows after it are in scope.</li>
+<li>A <code>post</code> is commit-all iff no <code>put</code>/<code>delete</code> lies between its pd boundary and itself — one forward scan, no new verb.</li>
+<li>Wall-clock guard: every command checks <code>now ≥ last_log_ts</code> and refuses <code>CLOCKBAD</code> on backwards motion.</li>
+</ul>
+<h2>Flags</h2>
+<p>
+POST refuses by default to commit any tracked file holding PATCH's conflict-marker triple; <code>be post --force</code> bypasses that one scan and nothing else.
+</p>
+<ul>
+<li>The scan stops an unattended <code>patch &amp;&amp; post</code> from recording a half-merged commit (<code>&lt;&lt;&lt;&lt;…||||…&gt;&gt;&gt;&gt;</code>).</li>
+<li>Use <code>--force</code> only for false positives — source or prose describing the marker shape — never a genuinely unmerged file.</li>
+<li><code>--force</code> does not relax the FF rule, change <code>?branch</code>/<code>//remote</code> advance, or affect message resolution.</li>
+</ul>
+<h2>Errors</h2>
+<p>
+POST's refusals are all fast-forward, message, or safety guards; each has its own code.
+</p>
+<ul>
+<li><code>POSTNOFF</code> — cur isn't a descendant of the <code>?branch</code>/remote tip being advanced.</li>
+<li><code>POSTNOMSG</code> — no fragment and no single reusable patch-row message.</li>
+<li><code>POSTNONE</code> — a commit was asked for but every path is an unchanged baseline.</li>
+<li><code>POSTCFLCT</code> — a tracked file holds conflict markers (bypass with <code>--force</code>).</li>
+<li><code>KEEPFAIL</code> — <code>//host</code> push with no matching reflog row; <code>CLOCKBAD</code> — clock moved backwards.</li>
+</ul>
+<h2>Open questions</h2>
+<p>
+The provenance-trailer wire format is the one POST-side detail still unsettled.
+</p>
+<ul>
+<li><code>picked</code> trailer — exact key and parser contract TBD; multiple accumulate in row order.</li>
+</ul>
+</body>
+</html>

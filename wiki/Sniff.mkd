@@ -1,0 +1,62 @@
+#   Sniff: worktree management with one append-only log
+
+Sniff is the worktree dog: its purview is checkout, status, stage, and commit, and it owns one append-only log per worktree at `<wt>/.be/wtlog` — no objects, caches, or path registry (objects are [Keeper]'s). The goal is worktree attribution that survives across processes with no desyncing cache; the method is mtime-as-pointer: every row sniff writes stamps its files' mtime with the row's ts, so a file's mtime looks up the owning row, and a file outside the stamp-set is a user edit.
+
+ -  Every row stamps its files via `utimensat`; a later mtime lookup finds the owning row, ∉ stamp-set means user-edited.
+ -  POST walks the wt, classifies each file by stamp lookup, emits one pack `commit → trees → blobs`, then appends a `post` row.
+ -  The wt's files plus the wtlog plus [Keeper]'s objects are the whole ground truth — there is no separate index to rebuild.
+ -  Two wtlog boundaries anchored at the latest [GET] scope what the next POST consumes (pd for put/delete, patch for patch).
+ -  A wall-clock guard refuses `CLOCKBAD` on backwards clock motion; one ts is reserved per command for all its rows and stamps.
+
+##  API
+
+Sniff follows the [Dog] three-call contract; the verb ops sit above an `AT` façade over the wtlog (append, baseline, stamp, scan).
+
+ -  `SNIFFOpen` / `SNIFFClose` — open the wtlog for a worktree, then close; `SNIFFExec` dispatches a parsed verb.
+ -  `GETCheckout` — reset the wt to a target tree, classifying each path and refusing on dirty ∩ real-change.
+ -  `POSTCommit` — compute the change-set, emit one keeper pack, advance refs, and append a `post` row.
+ -  `PATCHApply` — 3-way wt merge (`base = LCA`, `ours = cur`, `theirs = arg`), appending a `patch` row.
+ -  `PUTStage` / `DELStage` — append `put` / `delete` rows for the next commit.
+ -  `SNIFFClassify` — KEEP/REWRITE/DROP a path from its mtime stamp; `SNIFFCheckClock` is the wall-clock guard.
+ -  `SNIFFAtAppend` — append a `(ts, verb, uri)` row; `SNIFFAtBaseline` resolves the baseline get/post/patch row.
+ -  `SNIFFAtStampPath` — stamp a file's mtime to a row's ts; `SNIFFAtScanPutDelete` finds in-scope staged rows.
+
+##  CLI
+
+The `sniff` CLI mirrors the [Verbs]; `be` drives it in normal use, and it adds a status view and an inotify watch daemon.
+
+ -  `sniff get <hex>` checks out, `put/delete [files]` append rows, `post -m <msg>` commits, `patch ?<ref>` merges into the wt.
+ -  `sniff status` lists mtime-dirty files; `sniff list` lists keeper paths; `put old#new` does `rename(2)` plus a row.
+ -  `sniff watch` forks an inotify daemon appending a `mod <relpath>` row when a file leaves the stamp-set, until a commit.
+
+##  Change-set at commit time
+
+For each candidate path POST looks up the on-disk mtime in the wtlog and classifies KEEP vs REWRITE vs DROP, in selective or implicit (commit-all) mode.
+
+ -  KEEP: mtime `< last_get_ts`, or owned by a `get`/`post` row (baseline content) — in both modes.
+ -  REWRITE: owned by a `patch` row (merged bytes) or a `put` row (current bytes) — in both modes.
+ -  ∉ stamp-set: ignored in selective mode unless an explicit `put` named it; REWRITE implicitly; a `delete` row DROPs.
+ -  Selective = any put/delete in scope; implicit = none (mirrors git `commit -a`); see [POST] for the verb view.
+
+##  Boundaries in the wtlog
+
+Two boundaries anchored at the latest [GET] scope what the next POST consumes; both are found on a single forward scan, no extra verb.
+
+ -  pd boundary = most recent `get`/`post` row; `put`/`delete` rows after it are in scope for the next commit.
+ -  patch boundary = most recent `get` or commit-all `post`; `patch` rows after it are in scope (commit-all = no put/delete).
+ -  Wall-clock guard: every command checks `now ≥ last_log_ts` and refuses `CLOCKBAD` on backwards motion, one ts per command.
+
+##  On-disk layout
+
+A worktree holds only `.be/wtlog` (and a transient watch pidfile); the store (`.be/`) is keeper's, and sniff never writes objects there directly.
+
+ -  `.be/wtlog` rows are `<ron60-ts>\t<verb>\t<uri>`; row 0 is a `repo` anchor whose `file://` URI names the [Store].
+ -  Worktrees may share a store: each has its own wtlog but row 0 points them all at the same `.be/` (colocated or secondary).
+ -  The current branch is the latest get/post row's `?branch`, not the anchor; switching appends a row, never rewrites row 0.
+
+[Dog]: Dog.mkd "the dog convention"
+[Keeper]: Keeper.mkd "the keeper dog"
+[Store]: Store.mkd "repo layout"
+[Verbs]: Verbs.mkd "the verbs hub"
+[GET]: GET.mkd "GET verb"
+[POST]: POST.mkd "POST verb"

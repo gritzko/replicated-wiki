@@ -1,0 +1,64 @@
+#   WikiWeb: one concept per page
+
+WikiWeb is Beagle's wiki format: many small pages, each on one concept, cross-linked into a web. The aim is docs fast to read, write, grep, and navigate, with no dependence on a host renderer — just [StrictMark] files in a flat directory. The method is a fixed section shape and tight budgets: every page opens with a goals-and-method summary, then each section carries a one-line header, a short summary, and a few bulletpoints. Sizes count in 64-char lines (top intro 8 lines, section into 4, bulletpoint 2).
+
+##  Pages
+
+Each page covers exactly one concept and is named for it; the file is that name plus `.mkd`. Pages live flat in one directory with no folders, so any page is reachable by name alone.
+
+ -  One concept per page: if a page grows two distinct ideas, split it into two pages and link them.
+ -  Page name matches the file: `GET.mkd`, `StrictMark.mkd` — short, capitalized, no spaces.
+ -  [Home] is the entry page; every page should be reachable from it by following links.
+
+##  The opening section
+
+The first section is the 1st-level header and its summary. That summary answers why (goals) and how (method) and may run to 8 lines — it is the page's abstract, so a reader who stops here still gets the point.
+
+ -  1st-level header `#   Name: gloss`: the page name plus a short gloss of the concept.
+ -  Summary up to 8 lines (≤512 chars): goals first (why this exists), then method (how it works).
+ -  Bulletpoints are optional here; the why/how summary is expected to carry the section on its own.
+
+##  Sections
+
+Below the opener, every section is one header line, an optional summary of up to 4 lines, and any number of bulletpoints of up to 2 lines each. Each block is a single physical line relying on soft wrap; never hard-break a block.
+
+ -  Header: one line, ≤64 chars, ATX `##` (StrictMark, 4 levels); states the section's point, not a bare noun.
+ -  Summary: up to 4 lines (≤256 chars), one physical line; it sets up the bullets, or stands alone if there are none.
+ -  Bulletpoint: up to 2 lines (≤128 chars), marker ` -  `; one self-contained claim per bullet.
+ -  A "line" is 64 chars: the budgets count lines, not newlines — soft wrap renders the one long line.
+
+##  Greppable lines
+
+Wiki pages must be greppable: each line reads on its own, carrying enough context to make sense when `rg` pulls it from the page. `rg` prints the filename too, so a bullet need not repeat the page name; write standalone claims and link inline.
+
+ -  Greppable: `rg` shows the filename and the line, so a bullet needn't repeat the page name — the file supplies it.
+ -  Self-contained: each bullet is a full claim with its own context, not a fragment continuing the summary or a prior bullet.
+ -  Shortcut links inline: link with a bare `[Page]` (def at the foot) in the sentence, so the line carries its references.
+ -  Line independence: keep each line readable on its own; avoid an `it`/`this`/`the above` that points at another line.
+ -  No See-also block: a trailing link list greps as context-free noise — fold links into the prose where relevant.
+
+##  Markup
+
+WikiWeb pages are StrictMark, so its block grammar, 4-char markers, and inline precedence all apply. WikiWeb adds no new syntax — it only fixes the page and section shape and the size budgets, and forms the web from StrictMark's own links.
+
+ -  Markup is StrictMark: ATX headers, ` -  ` bullets, 4-backtick code fences, and its two link cases; see [StrictMark].
+ -  Idiom: define `[Page]: Page.mkd` at the foot, then link with bare `[Page]`; use `[text][id]` only when the text differs.
+ -  No auto-linking: a bare word is never a link, so prose acronyms (HTTP, CRDT) need no escaping.
+
+##  Page skeleton
+
+A whole page is the opener and a few sections, with link definitions at the foot; each block below is one physical line, annotated with its budget.
+
+````
+    #   ConceptName: one-line gloss
+    One summary line covering why, then how; up to 8 lines.
+    ##  A topic
+    One summary line linking [StrictMark] inline; up to 4 lines.
+     -  A self-contained bulletpoint; up to 2 lines; one claim.
+     -  Another that names its subject and a [Page] link.
+    [StrictMark]: StrictMark.mkd "the markup"
+    [Page]: Page.mkd "another page"
+````
+
+[StrictMark]: StrictMark.mkd "the markup"
+[Home]: Home.mkd "wiki entry page"

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BASS</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>BASS: the per-thread scratch arena</h1>
+<p>
+BASS is ABC's answer to malloc churn: a single per-thread, LIFO scratch arena that lives for the whole program, set up by <code>MAIN</code> / <code>TEST</code> / <code>FUZZ</code> at entry. Every <code>call</code> and <code>try</code> snapshots the arena's boundaries on the way in and rewinds them on the way out, so any scratch a procedure carves is freed automatically when control returns to its caller — no manual free, no leaks. Forked children inherit it copy-on-write. You acquire from it through <code>a_</code>-macros that wrap the underlying buffer-arena operations.
+</p>
+<h2>Acquiring scratch</h2>
+<p>
+Three macro families cover the cases: a writable buffer to fill, a gauge closed into a slice of exactly the right length, and a one-shot copy. Each acquires from BASS and needs no release.
+</p>
+<ul>
+<li><code>a_carve(T, name, cap)</code> — a writable buffer of <code>cap</code> elements; the workhorse for scratch you feed into.</li>
+<li><code>a_lign(T, g)</code> then <code>a_cquire(T, s)</code> — open a gauge, fill it, close it into a slice (see <a href="Slices.html">Slices</a>).</li>
+<li><code>a_rent(T, new, src)</code> / <code>a_ren(new, src)</code> — copy <code>src</code> into a fresh BASS slice in one shot.</li>
+</ul>
+<h2>Lifecycle and rules</h2>
+<p>
+BASS moves in lockstep with the call stack, which is what makes it both safe and free. A few rules keep that invariant intact; breaking one corrupts an in-flight allocation.
+</p>
+<ul>
+<li>Scratch dies at the surrounding <code>call</code> / <code>try</code> (see <a href="PRO.html">PRO</a>); the macros run their op directly, since <code>call</code> would rewind it.</li>
+<li>Do not <code>a_carve</code> or <code>a_rent</code> between an <code>a_lign</code> and its <code>a_cquire</code> — that corrupts the open gauge.</li>
+<li>A carve used as a hash set must <code>zerob</code> after acquire: BASS reuses memory that may carry old bytes.</li>
+<li>Prefer BASS to heap <code>u8bAllocate</code> or a fixed <code>u8 pad[N]</code> for scratch; fixed buffers overflow to NOROOM.</li>
+</ul>
+</body>
+</html>

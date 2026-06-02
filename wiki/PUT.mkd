@@ -1,0 +1,40 @@
+#   PUT: write any ref — stage, mkdir branches, push
+
+PUT writes to repo/worktre reflogs: creates, deletes or resets branches, pushes a ref to a remote, or stages files for the next commit. PUT is deliberately unconstrained: any ref to any sha, force allowed on either side of the wire; [DELETE] is PUT's remove counterpart.
+
+ -  Unconstrained: any ref to any sha, non-FF (force) allowed — [POST] and [GET] also move refs, but only the FF/checkout way.
+ -  A `./path` slot hashes the file's dirty bytes into keeper and records a `put` row for the next POST.
+ -  Cheap branches: `be put ?./fix` makes an empty branch at cur.tip — a label-only fork, no commit, no wt change.
+ -  No commit happens: only `.be/REFS` rows and keeper blobs are written; the commit object is always [POST]'s job.
+
+##  CLI use
+
+PUT's four slots (see [Verbs]) combine orthogonally: `?branch` names the ref, `./path` stages a blob, `//remote` pushes, and `#sha` sets an explicit value.
+
+ -  Bare `be put` stages every tracked-and-dirty file (one `put` row each), and auto-pairs `mis`+`unk` same-sha paths as moves.
+ -  `be put file.c` stages one file (re-stamping it); `be put src/` stages a dirty subtree plus untracked, non-ignored files.
+ -  `be put old.c#new.c` is the move form: `rename(2)` on disk + one `put old.c#new.c` row; a `#sub/` target keeps the basename.
+ -  `be put ?./fix` mkdirs a branch at cur.tip; `be put ?../sib` and `be put ?feat/new` mint siblings and absolute leaves.
+ -  `be put ?br#abc1234` resets `?br` to a sha (non-FF allowed); `be put //origin` force-pushes cur to origin's counterpart.
+ -  `be put ssh://host/path` (no `?ref`) just logs the URL to the project reflog — no other side-effect.
+
+##  Where it writes
+
+PUT writes the wtlog for path rows and REFS for ref rows; blob bytes land in keeper, and PUT never writes a commit object.
+
+ -  `./path` rows go to `<wt>/.be/wtlog`; `?branch` and `?branch#sha` rows go to `.be/REFS`; blob bytes land in keeper.
+ -  The default sha is cur.tip (a label move); a `#sha` writes an explicit sha instead.
+ -  A `put` on a clean baseline-stamped file is refused — re-stamping it as a put shifts provenance for no gain.
+
+##  Errors
+
+PUT's refusals guard the staging set and the move form; PUT never half-applies a change.
+
+ -  `PUTNONE` — nothing to stage: no tracked file dirty and no move pair (or `be put file.c` on a missing/clean file).
+ -  `PUTAMBIG` — bare move auto-pairing isn't strictly 1:1; disambiguate by running `mv` yourself, then `be put old#new`.
+ -  Move-form errors: `PUTNOSRC` (src absent), `PUTDSTBAD` (dst exists, or both on disk), `PUTNODIR` (dst's parent missing).
+
+[POST]: POST.mkd "POST verb"
+[GET]: GET.mkd "GET verb"
+[DELETE]: DELETE.mkd "DELETE verb"
+[Verbs]: Verbs.mkd "the verbs hub"

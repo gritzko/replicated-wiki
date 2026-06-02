@@ -1,0 +1,52 @@
+#   Store: one flat object pool per project, branches as refs
+
+A store is a directory (`.be/`) holding one or more project shards; each shard is one flat object pool for all of a project's branches, tags, and remotes. The goal is a repo almost impossible to break — your own little GitHub in `~/.be` — with cheap parallel worktrees and submodules. The method: multi-project shards, branches and tags as pure ref rows (no per-branch object dirs), nested branch dirs for pack locality, and ff-only branch trees that keep trunk linear while mess sinks into leaves.
+
+##  Why multi-project, repo-per-store
+
+A store hosts many projects, so the idiomatic setup is one `~/.be` GitHub of your own; a store is hard to break where a worktree is easy, so worktrees stay cheap.
+
+ -  Multi-project: one store hosts many projects, each its own shard, making submodules and parallel worktrees the default.
+ -  Don't copy the repo: a worktree breaks a hundred ways, a store almost none — secondary worktrees share one store.
+ -  Coordinates are a [URI] resolving to a sha: `ssh://host/beagle.git?v0.0.3` → `b8caa674…`, relayed to each dog as `--at`.
+
+##  Branch-tree model
+
+Branches form a tree (`feature/fix1`) of ff-only tips, so churn lives deep in the tree while trunk and its neighbors stay clean; staging and stash become short dirty branchlets.
+
+ -  Tree-structured: every project has a trunk plus arbitrarily nested branch dirs and tags on particular branches.
+ -  ff-only steering: [POST] fast-forwards, so trunk stays linear; messy work sinks into leaves and rebases up as one stack.
+ -  No stash needed: a short-lived dirty branchlet replaces git stash and the staging area (see [Verbs]).
+
+##  Repo dir layout
+
+Each project is one flat shard dir holding objects for all its branches; branch dirs nest freely and carry their own packs, indexes, and `refs`, so a leaf branch drops as a whole-dir delete.
+
+ -  `.be/<project>/` is the shard (== its trunk); `NNNNN.keeper` packs, `NNNNN.*.idx` index runs, and a `refs` ULOG live in it.
+ -  Branch dirs mirror `?refname` path-for-path: `feature/fix1/` is a sub-branch of `feature/`, with its own `refs` + packs.
+ -  A branch's `refs` is authoritative for its own tips — resolution does NOT walk up; drop-survivors live in `<project>/refs`.
+ -  Branches and tags are ref rows, not dirs: creating writes a row (no mkdir), dropping a tombstone (no object deletion).
+ -  Remotes fold in: fetched objects land in the project's packs, remote-tracking refs (`//host?heads/…`) ride the same `refs`.
+
+##  Worktrees and the anchor
+
+A worktree is a separate on-disk checkout with its own `.be/wtlog`; row 0 pins the project store, and the branch is the latest get/post row's `?branch`, never the anchor.
+
+ -  Colocated: `<wt>/.be/` is the store dir itself, one shard beside the wt files; row 0's `repo` is `file:<wt>/.be/<project>`.
+ -  Central (`~/.be`): `<wt>/.be` is a file naming a project under a remote store, then get/post rows for branch state.
+ -  The current branch isn't the anchor — it's the latest `get`/`post` row's `?branch`; switching appends a row, never rewrites it.
+ -  [Sniff] owns the wtlog and tracks the wt's commit; [Keeper] owns the object pool and keeps no per-branch worktree map.
+
+##  Garbage collection
+
+GC is epoch-based and out of band: a dropped branch's objects simply linger, and a major release recompacts by copying the reachable closure into a fresh project id.
+
+ -  No live deletion: dropping a branch leaves its objects in the shard; there is no per-branch GC and packs aren't rewritten.
+ -  Epoch recompaction: a release copies the reachable closure to a new project id (`beagle`→`beagle2`), leaving dead objects.
+ -  Cross-project REF_DELTA bases are forbidden, so every shard stays droppable and movable in isolation (see [Keeper]).
+
+[URI]: URI.mkd "URI structure"
+[Verbs]: Verbs.mkd "the verbs hub"
+[POST]: POST.mkd "POST verb"
+[Sniff]: Sniff.mkd "the sniff dog"
+[Keeper]: Keeper.mkd "the keeper dog"

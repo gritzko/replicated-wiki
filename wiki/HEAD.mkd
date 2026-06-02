@@ -1,0 +1,28 @@
+#   HEAD: peek — what changed and what a sync would change
+
+HEAD is the read-only peek: it shows what changed and what a command would change — the ahead/behind counts and the files that differ between cur and a target — without ever touching a branch's history or the worktree. HEAD is the dry-run twin of [GET] and [POST], and bare `be head` is the everyday status check.
+
+ -  Read-only: never changes history or the wt; safe to run anytime as a status or dry-run.
+ -  Implicit target: bare `be head` is cur vs trunk, or cur vs its cached remote counterpart when cur is trunk (≡ bare `be`).
+ -  Network needs a transport scheme: `//origin` reads the cache; `ssh://origin` fetches refs + minimal pack into `.be/refs`.
+ -  Canonical cache refresh: a transport scheme updates the remote-tracking cache without checking anything out.
+
+##  CLI use
+
+The forms cover the implicit status check, an explicit branch diff, path and message scoping, and cached or fetched remote diffs.
+
+ -  Bare `be head` shows ahead/behind for the implicit target; `be head ?br` diffs cur vs `br` plus the differing files.
+ -  `be head ./path?br` scopes the diff to a path; `be head '?free text'` finds and diffs the commit whose message matches.
+ -  `be head //origin` prints the cached cur-vs-remote diff with no network.
+ -  `be head ssh://origin` fetches refs + minimal pack into `.be/refs`, then prints the diff; `?feat` scopes to one branch.
+ -  `be head ssh://origin?*` fetches every branch origin advertises (≈ `git fetch`) and prints a summary.
+
+##  Open questions
+
+The exact rendering of HEAD's summary is not yet fixed; see [Verbs] for the verb vocabulary and slots HEAD shares.
+
+ -  The bare-target output shape — the ahead/behind-plus-dirty-list summary format — is still TBD.
+
+[GET]: GET.mkd "GET verb"
+[POST]: POST.mkd "POST verb"
+[Verbs]: Verbs.mkd "the verbs hub"

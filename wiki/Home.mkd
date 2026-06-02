@@ -1,0 +1,109 @@
+#   Beagle: git-compatible revision control, reworked
+
+Beagle is a revision control system for modern workflows: a comfortable client for local multi-branch, multi-worktree development. Its data format and syncing protocol are 100% git, so it stays compatible with the existing mass of git repos; everything above that is reworked. The command language can express any git operation, but the model steers toward tree-structured, rebase-centric branching, and the project dogfoods from day one.
+
+ -  Diff and merge are syntax-aware — finer-grained, drawing on CRDT ideas, with no false conflicts.
+ -  Content is indexed for fast search: grep, regex, and syntax-aware code-snippet or template lookups.
+ -  The command language is a uniform HTTP-like set of [Verbs] and [URI]s (get/post/put/delete), not a flag zoo.
+ -  The branching model is tree-like (`feature/fix`).
+ -  The UI is reworked as well.
+
+##  The `be` command language
+
+The dispatcher is `be`. It uses standard [URI] arguments and the [Verbs] of the HTTP dictionary, which cover every data maneuver — not a zoo of flags. The verbs are orthogonal: one verb cannot supplement another through creative use.
+
+ -  Read-only: [GET] fetches or checks out a version/branch/project; [HEAD] is its dry-run, listing what would change.
+ -  Read-write: [POST] advances the current branch — commit or fast-forward — writing worktree→repo.
+ -  Read-write: [PATCH] applies another branch's changes into the worktree, writing repo→worktree.
+ -  Reflog: [PUT] sets a branch tip or stages a file; [DELETE] drops a branch or file.
+ -  The work sequence — edit the worktree, merge in other branches, verify, then commit — is mirrored by the verb order.
+
+##  URI structure
+
+Every non-flag argument is one [URI], `scheme:host/path?query#fragment`, and each component reflects one aspect of the command. Changing the URI shape changes the semantics — `patch` becomes merge, rebase, or cherry-pick depending on the shape.
+
+ -  `scheme` is the app/protocol, `host` a remote, `path` a file path relative to the project root.
+ -  `query` selects the project/branch/tag/commit; Beagle is multi-project — one [Store] hosts many projects, each a branch tree.
+ -  `fragment` is free-form payload: a commit-message body, a line jump, an extension filter.
+ -  Branch shapes: `?/project/branch/tag` absolute, `?branch/` relative branch, `?v1.2.3` tag, `?./fix`/`?..` branch-relative.
+ -  More shapes: `?abc1234` sha-prefix, `?free text` message search, `?null`/`?back` magic (no-branch / prev-branch).
+
+##  Everyday use
+
+The common loop is clone or switch, edit the worktree, stage, commit, then push — each one a `be` verb over a URI.
+
+````sh
+    be get ssh://host/repo.git   # clone: fetch + checkout
+    be get ?feat/                # switch to branch feat
+    vim file.c                   # edit the worktree
+    be put file.c                # stage the change
+    be post 'wonderful changes'  # commit on cur
+    be post //origin             # ff-push to the remote
+````
+
+##  Projections
+
+Apart from verbs, Beagle has projections — read-only, presentation-only verbless views. Projections accept URIs of any shape and never mutate, so they compose freely with the rest of the language.
+
+ -  `be diff:?other_branch` diffs against a branch; `be log:file.c` shows a file's history.
+ -  `be grep:TODO` does literal search; `be spot:#FuncName` does structural search across the repo.
+ -  Projections compose with any URI shape, e.g. `be diff://host/file.c?remote_branch`.
+
+##  The dogs
+
+The repo is structured into dogs — each with its purview, the data and functions it owns, all following one [Dog] convention. Dogs coordinate to carry out complex tasks; new dogs may join, old dogs learn new tricks.
+
+ -  [Bro] — interactive syntax-highlighted pager and viewer.
+ -  [Spot] — structural code search, grep, regex and replace across a repo; maintains a trigram index.
+ -  [Graf] — token-level diffing, 3-way merges and history navigation; maintains a history index.
+ -  [Sniff] — serves the worktree and detects changes via one append-only wtlog.
+ -  [Keeper] — stores data (blobs, trees, commits) in one flat [Store] pool per project; branches and tags are refs into it.
+ -  [Mark] — renders the [StrictMark] wiki to HTML and lints its [WikiWeb] structure and size budgets.
+
+##  Quick start
+
+Building Beagle needs libsodium, libcurl, lz4, zlib and cmake; ninja is recommended.
+
+````sh
+    mkdir build && cd build
+    CC=clang CXX=clang++ cmake -GNinja \
+        -DCMAKE_BUILD_TYPE=Release ..
+    ninja && ls bin/
+````
+
+##  FAQ
+
+Two framing questions about what Beagle is and how it is built.
+
+ -  Is Beagle git-based? No — git-compatible: it reuses git's object model and format, not git itself (no external API).
+ -  Is Beagle VC-funded? No — old discarded hardware; heavy fuzzing on a 32-core Hetzner box, coding mostly by Claude Max.
+
+##  Credits
+
+Beagle stands on prior art for its indexing, scanning and storage layers.
+
+ -  Trigram indexing comes from [Russ Cox][1]; scanners started with [tree-sitter][2], later rewritten as [ragel][3] for speed.
+ -  The Merkle scheme is Linus Torvalds'.
+
+[1]: https://swtch.com/~rsc/regexp/regexp4.html "trigram indexing"
+[2]: https://tree-sitter.github.io/tree-sitter/ "tree-sitter"
+[3]: https://www.colm.net/open-source/ragel/ "ragel"
+
+[Verbs]: Verbs.mkd "the verbs hub"
+[URI]: URI.mkd "URI structure"
+[GET]: GET.mkd "GET verb"
+[HEAD]: HEAD.mkd "HEAD verb"
+[POST]: POST.mkd "POST verb"
+[PUT]: PUT.mkd "PUT verb"
+[DELETE]: DELETE.mkd "DELETE verb"
+[PATCH]: PATCH.mkd "PATCH verb"
+[Dog]: Dog.mkd "the dog convention"
+[Store]: Store.mkd "repo layout"
+[Bro]: Bro.mkd "the bro dog"
+[Spot]: Spot.mkd "the spot dog"
+[Graf]: Graf.mkd "the graf dog"
+[Sniff]: Sniff.mkd "the sniff dog"
+[Keeper]: Keeper.mkd "the keeper dog"
+[Mark]: Mark.mkd "the mark dog"
+[StrictMark]: StrictMark.mkd "the markup"
+[WikiWeb]: WikiWeb.mkd "the wiki format"

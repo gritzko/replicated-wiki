@@ -1,0 +1,23 @@
+#   BASS: the per-thread scratch arena
+
+BASS is ABC's answer to malloc churn: a single per-thread, LIFO scratch arena that lives for the whole program, set up by `MAIN` / `TEST` / `FUZZ` at entry. Every `call` and `try` snapshots the arena's boundaries on the way in and rewinds them on the way out, so any scratch a procedure carves is freed automatically when control returns to its caller — no manual free, no leaks. Forked children inherit it copy-on-write. You acquire from it through `a_`-macros that wrap the underlying buffer-arena operations.
+
+##  Acquiring scratch
+
+Three macro families cover the cases: a writable buffer to fill, a gauge closed into a slice of exactly the right length, and a one-shot copy. Each acquires from BASS and needs no release.
+
+ -  `a_carve(T, name, cap)` — a writable buffer of `cap` elements; the workhorse for scratch you feed into.
+ -  `a_lign(T, g)` then `a_cquire(T, s)` — open a gauge, fill it, close it into a slice (see [Slices]).
+ -  `a_rent(T, new, src)` / `a_ren(new, src)` — copy `src` into a fresh BASS slice in one shot.
+
+##  Lifecycle and rules
+
+BASS moves in lockstep with the call stack, which is what makes it both safe and free. A few rules keep that invariant intact; breaking one corrupts an in-flight allocation.
+
+ -  Scratch dies at the surrounding `call` / `try` (see [PRO]); the macros run their op directly, since `call` would rewind it.
+ -  Do not `a_carve` or `a_rent` between an `a_lign` and its `a_cquire` — that corrupts the open gauge.
+ -  A carve used as a hash set must `zerob` after acquire: BASS reuses memory that may carry old bytes.
+ -  Prefer BASS to heap `u8bAllocate` or a fixed `u8 pad[N]` for scratch; fixed buffers overflow to NOROOM.
+
+[Slices]: Slices.mkd "the slice model"
+[PRO]: PRO.mkd "error flow and resources"

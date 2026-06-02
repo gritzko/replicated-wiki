@@ -1,0 +1,58 @@
+#   Graf: token-level diff, merge, blame, and history index
+
+Graf is the versioning dog: its purview is token-level diff, 3-way merge, blame, weave history, and the commit graph, and it owns the `NNNNN.graf.idx` DAG index under `.be/`. The goal is fine-grained, syntax-aware history drawing on CRDT, the whole DAG replayed into one weave so merges never re-derive and false conflicts vanish. The method: pull commit data from [Keeper] (no git CLI), index parent and root-tree edges, and build per-file weaves whose alive tokens carry a stable birth-id.
+
+ -  The DAG index stores only `(COMMIT,COMMIT)` parent and `(COMMIT,TREE)` root-tree edges; path resolution hits keeper.
+ -  Per-tree-entry edges are NOT recorded — git's pack delta keeps trees cheap, so materializing each would dominate the size.
+ -  A file's history is one weave: token records carry a birth-id `(seq,pos)` and run-length remover sets.
+ -  `WEAVEApply` replays each commit against its parent-closure view, so a merge is an Apply over the union of parent closures.
+ -  Replay order fixes concurrent inserts once, so they never re-derive — no cyclic transposition, no false conflicts.
+
+##  API
+
+Graf follows the [Dog] three-call contract; above it sit the diff/merge/blame/log ops and the DAG navigation surface, all keeper-read-only.
+
+ -  `GRAFOpen` / `GRAFOpenBranch` / `GRAFClose` — open the index, select a branch's ref context, then close.
+ -  `GRAFExec(state, cli)` — dispatch a parsed verb (get / merge / blame / weave / log / index / status).
+ -  `GRAFGet` — single-tip blob/tree read (`file?sha`) via `GRAFBlobAtCommit`.
+ -  `GRAFMerge` / `GRAFMerge3Bytes` — 3-way merge to a file or to bytes through the single-weave engine.
+ -  `GRAFBlame` / `GRAFFileWeave` — render attribution over a file's ancestor-closure weave.
+ -  `GRAFLog` / `GRAFHead` — commit history, and the first cur-reachable commit matching a `#msg`.
+ -  `GRAFRebase` / `GRAFPatchId` — linear replay onto a new base, with a stable diff-id for dedup.
+ -  `GRAFIndexFromTips` — incremental DAG ingest; `DAGParents` / `DAGAncestors` / `DAGTopoSort` navigate it.
+
+##  CLI
+
+The `graf` CLI exposes the same ops as verbs; `be` normally drives it, and most output pages through [Bro].
+
+ -  `graf get path?sha` reads one blob/tree; any other URI shape is the incremental indexer; `graf index` forces a reindex.
+ -  `graf merge base ours theirs` 3-way merges; `graf blame path` and `graf weave path?a..b` show token-level history.
+ -  `graf log [path]?ref[#N]` lists history; `graf head '#msg'` finds cur's first-parent commit whose body has the substring.
+
+##  The single-weave model
+
+The whole DAG replays in topo order into one interleaved-delta weave per file, so merges are replays rather than re-derivations and concurrent inserts get a fixed position.
+
+ -  A token is alive iff its remover set is empty; the birth-id `(seq = commit, pos = ordinal)` is its exact, stable identity.
+ -  A merge is just an Apply whose predicate covers the union of its parents' closures — there is no separate merge op.
+ -  GET and REBASE build one weave (base → ours → theirs) and render via `WEAVEEmitMerged`; the markers are render-time only.
+
+##  Conflict framing and rebase
+
+Divergent regions are framed at render time with 4-char token-level markers, never stored; rebase replays linear history with patch-id dedup.
+
+ -  `WEAVEEmitMerged` frames divergent inserts with `<<<<`/`||||`/`>>>>` at render time only; never stored in the weave.
+ -  `GRAFPatchId` is a stable diff-id vs the first parent (over sorted path/sha tuples), 0 for empty so dedup never mismatches.
+ -  `GRAFRebase` replays a child tip onto a new base oldest-first, dedup'd against its ancestors; a conflict aborts `GRAFCNFL`.
+
+##  Rendering and pager
+
+With a tty stdout graf forks [Bro] and writes TLV hunks; otherwise it writes plain ASCII, and merge never pages.
+
+ -  Byte rendering goes through `HUNKu8sFeedOut` off a module-global `HUNKMode` (TLV / Color / Plain) — no per-call formatter.
+ -  `be map:` draws a subway-map history view: cur's ancestors-to-trunk plus descendants, time-sorted, with branch-spine glyphs.
+ -  Per-call scratch rides BASS (`a_carve`/`a_lign`); long-lived weave and arena buffers are caller-owned across `GRAFExec`.
+
+[Dog]: Dog.mkd "the dog convention"
+[Keeper]: Keeper.mkd "the keeper dog"
+[Bro]: Bro.mkd "the bro dog"

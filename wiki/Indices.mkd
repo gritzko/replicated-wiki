@@ -1,0 +1,49 @@
+#   Indices: sorted integer LSM runs
+
+An index is a dog's read side: sorted runs of fixed-width integer key/val records, the lookup mirror of the [PackLog]. [Keeper]'s object index, [Spot]'s trigram index, and [Graf]'s DAG index share one shape: `NNNNN.<dog>.idx` runs on ABC's LSM/SST/HIT. The goal is append-fast writes, binary-search reads, no in-place rewrite: it grows by flushing a run, shrinks only by merging. The method: sort a batch into a run, binary-search newest-wins, and merge size-tiered once a younger run outgrows 1/8 of its elder.
+
+##  One shape, three dogs
+
+Every dog needing lookups keeps `NNNNN.<dog>.idx` runs beside its data, numbered by the same store-wide seqno as pack logs; only the key/val widths differ.
+
+ -  [Keeper] `keeper.idx`: `key=hashlet60|type4`, `val=offset40|file_id20|flags4` — object location by sha prefix.
+ -  [Spot] `spot.idx`: trigram and symbol runs mapping code features to the blobs holding them; `--fork N` stripes the build.
+ -  [Graf] `graf.idx`: DAG edges only, `(COMMIT,COMMIT)` parent and `(COMMIT,TREE)` root-tree; path resolution stays in keeper.
+
+##  Fixed-width integer keys
+
+Keys are fixed-length integers (u64, u128, sha256-shaped), so a run is an ABC SST: a sorted key-value table with an embedded skiplog, deterministic to the byte.
+
+ -  No prefix compression: with u64/id128/sha256 keys it isn't worth it; page-level DEFLATE harvests that gain instead.
+ -  Packed key fields: keeper folds object type into the key's low 4 bits, so one compare orders by hashlet then type.
+ -  Deterministic files: two runs with the same entry set are bitwise identical, making runs comparable and sync-friendly.
+
+##  Sorted runs, binary-searched
+
+A write sorts the batch and flushes one run; a read mmaps every run and binary-searches each, so reads never block on compaction and writes never touch a live run.
+
+ -  Append-only like the log: a flush adds a run, never edits one; offsets into a run stay stable for live mmaps.
+ -  Newest wins: runs scan oldest-first, so a later run's entry shadows an earlier one — the LSM update rule.
+ -  Read path: range each run, take the first hit; on a miss keeper walks up the branch-dir chain to the [Store] root.
+
+##  Size-tiered compaction
+
+Runs accumulate until they break the 1/8 size-tiered invariant; compaction then merges the youngest violators into one run — the LSM analogue of drop-a-dir.
+
+ -  The invariant: each younger run stays under 1/8 of its predecessor; `KEEPCompact` merges the youngest stack until it holds.
+ -  Heap merge with dedup: a HIT min-heap of run iterators merge-sorts them, so identical rows across runs collapse to one.
+ -  Atomic swap: write the merged `.idx`, unlink consumed sources, swap the shard's run mmaps — invoked from `KEEPClose`.
+
+##  Range queries and walk-up
+
+A lookup is a range query, not a point query, since keys pack a sub-field and callers hold a prefix; misses cascade up the branch-dir DAG.
+
+ -  Hashlet prefix: keeper zero-pads a hex prefix to 60 bits and ranges `[p<<4, p<<4|0xf]`, spanning all object types at once.
+ -  Walk-up on miss: range each run in this dir, then retry the parent, up to the store root — mirroring REF_DELTA's dir rule.
+ -  First match wins: the first `(dir, file_id, offset)` hit feeds the [PackLog] read, which chases the delta chain bottom-up.
+
+[PackLog]: PackLog.mkd "the pack log format"
+[Keeper]: Keeper.mkd "the keeper dog"
+[Spot]: Spot.mkd "the spot dog"
+[Graf]: Graf.mkd "the graf dog"
+[Store]: Store.mkd "repo layout"

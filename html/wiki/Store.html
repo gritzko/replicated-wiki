@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Store</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>Store: one flat object pool per project, branches as refs</h1>
+<p>
+A store is a directory (<code>.be/</code>) holding one or more project shards; each shard is one flat object pool for all of a project's branches, tags, and remotes. The goal is a repo almost impossible to break — your own little GitHub in <code>~/.be</code> — with cheap parallel worktrees and submodules. The method: multi-project shards, branches and tags as pure ref rows (no per-branch object dirs), nested branch dirs for pack locality, and ff-only branch trees that keep trunk linear while mess sinks into leaves.
+</p>
+<h2>Why multi-project, repo-per-store</h2>
+<p>
+A store hosts many projects, so the idiomatic setup is one <code>~/.be</code> GitHub of your own; a store is hard to break where a worktree is easy, so worktrees stay cheap.
+</p>
+<ul>
+<li>Multi-project: one store hosts many projects, each its own shard, making submodules and parallel worktrees the default.</li>
+<li>Don't copy the repo: a worktree breaks a hundred ways, a store almost none — secondary worktrees share one store.</li>
+<li>Coordinates are a <a href="URI.html">URI</a> resolving to a sha: <code>ssh://host/beagle.git?v0.0.3</code> → <code>b8caa674…</code>, relayed to each dog as <code>--at</code>.</li>
+</ul>
+<h2>Branch-tree model</h2>
+<p>
+Branches form a tree (<code>feature/fix1</code>) of ff-only tips, so churn lives deep in the tree while trunk and its neighbors stay clean; staging and stash become short dirty branchlets.
+</p>
+<ul>
+<li>Tree-structured: every project has a trunk plus arbitrarily nested branch dirs and tags on particular branches.</li>
+<li>ff-only steering: <a href="POST.html">POST</a> fast-forwards, so trunk stays linear; messy work sinks into leaves and rebases up as one stack.</li>
+<li>No stash needed: a short-lived dirty branchlet replaces git stash and the staging area (see <a href="Verbs.html">Verbs</a>).</li>
+</ul>
+<h2>Repo dir layout</h2>
+<p>
+Each project is one flat shard dir holding objects for all its branches; branch dirs nest freely and carry their own packs, indexes, and <code>refs</code>, so a leaf branch drops as a whole-dir delete.
+</p>
+<ul>
+<li><code>.be/&lt;project&gt;/</code> is the shard (== its trunk); <code>NNNNN.keeper</code> packs, <code>NNNNN.*.idx</code> index runs, and a <code>refs</code> ULOG live in it.</li>
+<li>Branch dirs mirror <code>?refname</code> path-for-path: <code>feature/fix1/</code> is a sub-branch of <code>feature/</code>, with its own <code>refs</code> + packs.</li>
+<li>A branch's <code>refs</code> is authoritative for its own tips — resolution does NOT walk up; drop-survivors live in <code>&lt;project&gt;/refs</code>.</li>
+<li>Branches and tags are ref rows, not dirs: creating writes a row (no mkdir), dropping a tombstone (no object deletion).</li>
+<li>Remotes fold in: fetched objects land in the project's packs, remote-tracking refs (<code>//host?heads/…</code>) ride the same <code>refs</code>.</li>
+</ul>
+<h2>Worktrees and the anchor</h2>
+<p>
+A worktree is a separate on-disk checkout with its own <code>.be/wtlog</code>; row 0 pins the project store, and the branch is the latest get/post row's <code>?branch</code>, never the anchor.
+</p>
+<ul>
+<li>Colocated: <code>&lt;wt&gt;/.be/</code> is the store dir itself, one shard beside the wt files; row 0's <code>repo</code> is <code>file:&lt;wt&gt;/.be/&lt;project&gt;</code>.</li>
+<li>Central (<code>~/.be</code>): <code>&lt;wt&gt;/.be</code> is a file naming a project under a remote store, then get/post rows for branch state.</li>
+<li>The current branch isn't the anchor — it's the latest <code>get</code>/<code>post</code> row's <code>?branch</code>; switching appends a row, never rewrites it.</li>
+<li><a href="Sniff.html">Sniff</a> owns the wtlog and tracks the wt's commit; <a href="Keeper.html">Keeper</a> owns the object pool and keeps no per-branch worktree map.</li>
+</ul>
+<h2>Garbage collection</h2>
+<p>
+GC is epoch-based and out of band: a dropped branch's objects simply linger, and a major release recompacts by copying the reachable closure into a fresh project id.
+</p>
+<ul>
+<li>No live deletion: dropping a branch leaves its objects in the shard; there is no per-branch GC and packs aren't rewritten.</li>
+<li>Epoch recompaction: a release copies the reachable closure to a new project id (<code>beagle</code>→<code>beagle2</code>), leaving dead objects.</li>
+<li>Cross-project REF_DELTA bases are forbidden, so every shard stays droppable and movable in isolation (see <a href="Keeper.html">Keeper</a>).</li>
+</ul>
+</body>
+</html>

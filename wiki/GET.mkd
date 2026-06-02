@@ -1,0 +1,46 @@
+#   GET: repo → worktree — clone, checkout, switch, restore
+
+GET reads from the repo into the worktree: it is the clone / checkout / switch / restore verb. Depending on the URI it clones over a transport scheme, switches wt+cur to a branch, detaches on a sha, or restores a single file — always resetting the worktree to match the chosen tip.
+
+ -  Repo-read-only: never modifies a branch's history, only resets the worktree (see [Verbs] for the slot grammar).
+ -  Refuses up front: dirty overlap or a missing ref aborts the whole run (no partial reset) — mint a leaf with [PUT] first.
+ -  Network reads need a transport scheme: `be get //origin` reads cached refs/packs from the store; `ssh://` opens the wire.
+ -  A successful run writes the new base `(branch, tip-sha)` to `.be/wtlog` reflog and clears any pending [PATCH] parents.
+
+##  CLI use
+
+The forms span branch switching, detached checkout, single-file restore, and remote fetch; the bareword picks branch vs path automatically.
+
+ -  `be get ?feat` switches wt+cur and resets files from the branch tip; refuses on dirty overlap or a missing ref.
+ -  `be get ?./fix` enters a child branch (`?../sib` a sibling); refuses if missing — mint the child branch with [PUT] first.
+ -  `be get ?abc1234` is a detached checkout — [POST] and [PATCH] refuse until you re-attach to a branch.
+ -  `be get '#~1'` rewinds cur's ref by one commit and resets the wt, staying attached to cur.
+ -  `be get file.c` (or `file.c?.`) restores one file from cur's baseline, discarding edits and resurrecting if deleted.
+ -  `be get file.c?` takes the file from the trunk (empty `?` = trunk); `be get file.c?feat` from another branch's tip.
+ -  The bareword `file.c` promotes to the path slot (it matches a tracked entry) — type `?feat` to force a branch switch.
+ -  `//origin?feat` resets from the cached store; `ssh://host?feat` fetches then checks out (logging the URL to the reflog).
+ -  `be get file:../proj?feat` wires an empty cwd as a sibling wt sharing `../proj`'s store, resetting to `feat`'s tip.
+ -  Bare `be get` is a no-op status (≡ bare `be`).
+
+##  Flags
+
+`--force` turns GET from a careful merge into a tree reset; `--prune` additionally clears wt-only clutter. Untracked files survive unless pruned.
+
+ -  `--force` overwrites dirty tracked paths instead of merging, and bypasses the no-baseline refusal; untracked files survive.
+ -  `--prune` (usually with `--force`) removes every wt-only path after checkout, except `.gitignore` matches and `.be/`.
+ -  The target tree's `.gitignore` is re-read post-checkout, so freshly added rules apply (mirrors `git clean -f`, not `-fx`).
+
+##  Refusals
+
+Aborts before touching the wt rather than half-applying, and adds a fast-forward rule when syncing a local branch from its remote; preview the refusals risk-free with [HEAD], the read-only dry-run.
+
+ -  Dirty overlap aborts up front if a locally-edited wt file would be overwritten — no partial reset.
+ -  A missing ref refuses (the `cd nonexistent` mirror); mint the leaf with [PUT] first.
+ -  Transport sync is FF-only on the local tip: `be get ssh://origin?A` refuses if the local tip isn't an ancestor of `A`.
+ -  The FF rule applies only to syncing a local branch from its remote counterpart, not to local branch switches.
+
+[Verbs]: Verbs.mkd "the verbs hub"
+[POST]: POST.mkd "POST verb"
+[PATCH]: PATCH.mkd "PATCH verb"
+[HEAD]: HEAD.mkd "HEAD verb"
+[PUT]: PUT.mkd "PUT verb"

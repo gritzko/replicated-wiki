@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>HEAD</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>HEAD: peek — what changed and what a sync would change</h1>
+<p>
+HEAD is the read-only peek: it shows what changed and what a command would change — the ahead/behind counts and the files that differ between cur and a target — without ever touching a branch's history or the worktree. HEAD is the dry-run twin of <a href="GET.html">GET</a> and <a href="POST.html">POST</a>, and bare <code>be head</code> is the everyday status check.
+</p>
+<ul>
+<li>Read-only: never changes history or the wt; safe to run anytime as a status or dry-run.</li>
+<li>Implicit target: bare <code>be head</code> is cur vs trunk, or cur vs its cached remote counterpart when cur is trunk (≡ bare <code>be</code>).</li>
+<li>Network needs a transport scheme: <code>//origin</code> reads the cache; <code>ssh://origin</code> fetches refs + minimal pack into <code>.be/refs</code>.</li>
+<li>Canonical cache refresh: a transport scheme updates the remote-tracking cache without checking anything out.</li>
+</ul>
+<h2>CLI use</h2>
+<p>
+The forms cover the implicit status check, an explicit branch diff, path and message scoping, and cached or fetched remote diffs.
+</p>
+<ul>
+<li>Bare <code>be head</code> shows ahead/behind for the implicit target; <code>be head ?br</code> diffs cur vs <code>br</code> plus the differing files.</li>
+<li><code>be head ./path?br</code> scopes the diff to a path; <code>be head '?free text'</code> finds and diffs the commit whose message matches.</li>
+<li><code>be head //origin</code> prints the cached cur-vs-remote diff with no network.</li>
+<li><code>be head ssh://origin</code> fetches refs + minimal pack into <code>.be/refs</code>, then prints the diff; <code>?feat</code> scopes to one branch.</li>
+<li><code>be head ssh://origin?*</code> fetches every branch origin advertises (≈ <code>git fetch</code>) and prints a summary.</li>
+</ul>
+<h2>Open questions</h2>
+<p>
+The exact rendering of HEAD's summary is not yet fixed; see <a href="Verbs.html">Verbs</a> for the verb vocabulary and slots HEAD shares.
+</p>
+<ul>
+<li>The bare-target output shape — the ahead/behind-plus-dirty-list summary format — is still TBD.</li>
+</ul>
+</body>
+</html>

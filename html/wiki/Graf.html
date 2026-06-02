@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Graf</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>Graf: token-level diff, merge, blame, and history index</h1>
+<p>
+Graf is the versioning dog: its purview is token-level diff, 3-way merge, blame, weave history, and the commit graph, and it owns the <code>NNNNN.graf.idx</code> DAG index under <code>.be/</code>. The goal is fine-grained, syntax-aware history drawing on CRDT, the whole DAG replayed into one weave so merges never re-derive and false conflicts vanish. The method: pull commit data from <a href="Keeper.html">Keeper</a> (no git CLI), index parent and root-tree edges, and build per-file weaves whose alive tokens carry a stable birth-id.
+</p>
+<ul>
+<li>The DAG index stores only <code>(COMMIT,COMMIT)</code> parent and <code>(COMMIT,TREE)</code> root-tree edges; path resolution hits keeper.</li>
+<li>Per-tree-entry edges are NOT recorded — git's pack delta keeps trees cheap, so materializing each would dominate the size.</li>
+<li>A file's history is one weave: token records carry a birth-id <code>(seq,pos)</code> and run-length remover sets.</li>
+<li><code>WEAVEApply</code> replays each commit against its parent-closure view, so a merge is an Apply over the union of parent closures.</li>
+<li>Replay order fixes concurrent inserts once, so they never re-derive — no cyclic transposition, no false conflicts.</li>
+</ul>
+<h2>API</h2>
+<p>
+Graf follows the <a href="Dog.html">Dog</a> three-call contract; above it sit the diff/merge/blame/log ops and the DAG navigation surface, all keeper-read-only.
+</p>
+<ul>
+<li><code>GRAFOpen</code> / <code>GRAFOpenBranch</code> / <code>GRAFClose</code> — open the index, select a branch's ref context, then close.</li>
+<li><code>GRAFExec(state, cli)</code> — dispatch a parsed verb (get / merge / blame / weave / log / index / status).</li>
+<li><code>GRAFGet</code> — single-tip blob/tree read (<code>file?sha</code>) via <code>GRAFBlobAtCommit</code>.</li>
+<li><code>GRAFMerge</code> / <code>GRAFMerge3Bytes</code> — 3-way merge to a file or to bytes through the single-weave engine.</li>
+<li><code>GRAFBlame</code> / <code>GRAFFileWeave</code> — render attribution over a file's ancestor-closure weave.</li>
+<li><code>GRAFLog</code> / <code>GRAFHead</code> — commit history, and the first cur-reachable commit matching a <code>#msg</code>.</li>
+<li><code>GRAFRebase</code> / <code>GRAFPatchId</code> — linear replay onto a new base, with a stable diff-id for dedup.</li>
+<li><code>GRAFIndexFromTips</code> — incremental DAG ingest; <code>DAGParents</code> / <code>DAGAncestors</code> / <code>DAGTopoSort</code> navigate it.</li>
+</ul>
+<h2>CLI</h2>
+<p>
+The <code>graf</code> CLI exposes the same ops as verbs; <code>be</code> normally drives it, and most output pages through <a href="Bro.html">Bro</a>.
+</p>
+<ul>
+<li><code>graf get path?sha</code> reads one blob/tree; any other URI shape is the incremental indexer; <code>graf index</code> forces a reindex.</li>
+<li><code>graf merge base ours theirs</code> 3-way merges; <code>graf blame path</code> and <code>graf weave path?a..b</code> show token-level history.</li>
+<li><code>graf log [path]?ref[#N]</code> lists history; <code>graf head '#msg'</code> finds cur's first-parent commit whose body has the substring.</li>
+</ul>
+<h2>The single-weave model</h2>
+<p>
+The whole DAG replays in topo order into one interleaved-delta weave per file, so merges are replays rather than re-derivations and concurrent inserts get a fixed position.
+</p>
+<ul>
+<li>A token is alive iff its remover set is empty; the birth-id <code>(seq = commit, pos = ordinal)</code> is its exact, stable identity.</li>
+<li>A merge is just an Apply whose predicate covers the union of its parents' closures — there is no separate merge op.</li>
+<li>GET and REBASE build one weave (base → ours → theirs) and render via <code>WEAVEEmitMerged</code>; the markers are render-time only.</li>
+</ul>
+<h2>Conflict framing and rebase</h2>
+<p>
+Divergent regions are framed at render time with 4-char token-level markers, never stored; rebase replays linear history with patch-id dedup.
+</p>
+<ul>
+<li><code>WEAVEEmitMerged</code> frames divergent inserts with <code>&lt;&lt;&lt;&lt;</code>/<code>||||</code>/<code>&gt;&gt;&gt;&gt;</code> at render time only; never stored in the weave.</li>
+<li><code>GRAFPatchId</code> is a stable diff-id vs the first parent (over sorted path/sha tuples), 0 for empty so dedup never mismatches.</li>
+<li><code>GRAFRebase</code> replays a child tip onto a new base oldest-first, dedup'd against its ancestors; a conflict aborts <code>GRAFCNFL</code>.</li>
+</ul>
+<h2>Rendering and pager</h2>
+<p>
+With a tty stdout graf forks <a href="Bro.html">Bro</a> and writes TLV hunks; otherwise it writes plain ASCII, and merge never pages.
+</p>
+<ul>
+<li>Byte rendering goes through <code>HUNKu8sFeedOut</code> off a module-global <code>HUNKMode</code> (TLV / Color / Plain) — no per-call formatter.</li>
+<li><code>be map:</code> draws a subway-map history view: cur's ancestors-to-trunk plus descendants, time-sorted, with branch-spine glyphs.</li>
+<li>Per-call scratch rides BASS (<code>a_carve</code>/<code>a_lign</code>); long-lived weave and arena buffers are caller-owned across <code>GRAFExec</code>.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,97 @@
+#   POST: the only commit-maker — advance cur, FF labels, push
+
+POST is the only commit-maker: it advances cur — the current branch's tip — and, through its other URI slots, fast-forwards labels and remotes to that new tip, all in one invocation. It is the worktree→repo write that turns staged and absorbed work into a commit.
+
+ -  Only commit-maker: the commit is assembled from `patch` rows since the pd boundary; [PUT] and [PATCH] never commit.
+ -  Advances cur only: cur's history is never rewritten and a commit never lands onto another branch.
+ -  Fast-forward-only: a `?branch`/`//remote` advance refuses `POSTNOFF` unless cur descends from it; else PATCH+POST.
+ -  Three orthogonal slots: `#frag` commits, `?branch` FF-advances a label, `//remote` FF-pushes — composing to cur's new tip.
+
+##  The three slots
+
+POST's three URI slots are orthogonal — each adds its own effect, none implies another — and cur is the only ref POST ever commits onto, never another branch; the slots follow the shared [Verbs] vocabulary.
+
+ -  `#frag` (and stage scope): commit on cur; without it, the message is derived from `patch` rows since the pd boundary.
+ -  `?branch`: FF-advance it to cur's post-commit tip; `POSTNOFF` if cur isn't a descendant. Standalone is a pure label move.
+ -  `//remote`: FF-push cur's tip to the remote's counterpart, same FF check. Standalone is a pure push (≡ `be put //origin`).
+ -  Empty intent in one slot is not an error when another slot is populated — it just skips the commit step.
+ -  Combinations compose: `be post '#msg' ?feat //origin` commits, FF-advances `?feat`, and pushes, all to cur's new tip.
+
+##  CLI use
+
+A bare POST is a dry-run status printer (the same read-only preview as [HEAD]); with intent it commits on cur and, per any populated slot, also FF-advances a label or pushes to a remote.
+
+ -  `be post 'fix the typo'` commits on cur; `be post '#fix'` is the single-word form.
+ -  `be post '#fix' ?feat` commits, then FF-advances `?feat` to cur's new tip.
+ -  `be post ?..` FF-advances the parent (no commit); `be post //origin` FF-pushes cur's tip (no commit).
+ -  `be post '#sync' //origin` commits, then FF-pushes cur's new tip to origin.
+ -  Bare `be post` with no slot prints dry-run status; with in-scope patch rows it commits using the auto-resolved message.
+ -  Commit message: a quoted spaced arg is the fragment; a single word needs `#`; legacy `-m "msg"` still works.
+ -  Each POST appends one entry to cur's `REFS`; patch-id dedup (`GRAFPatchId`) skips an absorption already reachable from cur.
+
+##  Commit assembly
+
+For each in-scope `patch` row POST classifies by URI shape and emits the matching header; the first parent is always cur's previous tip, so walking first-parents reaches the fork point in a straight line.
+
+ -  `?<sha>` squash → one `foster <sha>` header; `?<sha>#<msg>` merge → a `parent <sha>` header.
+ -  `?<sha>#` rebase-one → a `foster <sha>` header; `#<sha>` cherry-pick → a `picked: <sha>` trailer.
+ -  Headers emit in patch-row order and compose freely: two rebase-ones plus a cherry-pick give two fosters and one picked.
+ -  Cross-branch dedup: foster/parent reachability once the work is in the DAG, plus patch-id matching for replays.
+
+##  Message resolution
+
+POST picks the commit message in a fixed order, and a squash never auto-supplies one because it collapses many commits.
+
+ -  The supplied `#frag` wins if present.
+ -  Else, if exactly one in-scope patch row carries a usable msg (rebase-one, cherry-pick, or `?br#msg` merge), reuse it.
+ -  Else refuse with `POSTNOMSG`; a squash always needs an explicit message.
+ -  `POSTNONE` is the separate case: a commit was asked for but every candidate path is an unchanged baseline.
+
+##  File classification
+
+Every sniff row stamps the files it touched with its `ts`; at POST time each on-disk file's mtime is looked up to decide KEEP vs REWRITE, in selective or implicit (commit-all) mode.
+
+ -  KEEP: mtime `< last_get_ts`, or the file is owned by a `get`/`post` row (baseline content) — in both modes.
+ -  REWRITE: owned by a `patch` row (merged bytes) or a `put` row (current bytes) — in both modes.
+ -  Tracked file outside the stamp-set: ignored in selective mode unless an explicit `put` named it; REWRITE in implicit mode.
+ -  Untracked files never sweep in by accident — even bare `be post 'msg'` needs `be put <path>` first.
+ -  Selective = ≥1 explicit `put`/`delete` since last post; implicit = none (mirrors git `commit -a` for tracked edits).
+
+##  Boundaries and guards
+
+Two `.be/wtlog` boundaries, both anchored at the most recent [GET] (a hard reset of the world, the repo→worktree inverse of POST), scope what the next POST consumes; a wall-clock guard refuses backwards clock motion.
+
+ -  pd boundary = most recent `get` or `post`; `put`/`delete` rows after it are in scope for the next POST.
+ -  patch boundary = most recent `get` or commit-all `post`; `patch` rows after it are in scope.
+ -  A `post` is commit-all iff no `put`/`delete` lies between its pd boundary and itself — one forward scan, no new verb.
+ -  Wall-clock guard: every command checks `now ≥ last_log_ts` and refuses `CLOCKBAD` on backwards motion.
+
+##  Flags
+
+POST refuses by default to commit any tracked file holding PATCH's conflict-marker triple; `be post --force` bypasses that one scan and nothing else.
+
+ -  The scan stops an unattended `patch && post` from recording a half-merged commit (`<<<<…||||…>>>>`).
+ -  Use `--force` only for false positives — source or prose describing the marker shape — never a genuinely unmerged file.
+ -  `--force` does not relax the FF rule, change `?branch`/`//remote` advance, or affect message resolution.
+
+##  Errors
+
+POST's refusals are all fast-forward, message, or safety guards; each has its own code.
+
+ -  `POSTNOFF` — cur isn't a descendant of the `?branch`/remote tip being advanced.
+ -  `POSTNOMSG` — no fragment and no single reusable patch-row message.
+ -  `POSTNONE` — a commit was asked for but every path is an unchanged baseline.
+ -  `POSTCFLCT` — a tracked file holds conflict markers (bypass with `--force`).
+ -  `KEEPFAIL` — `//host` push with no matching reflog row; `CLOCKBAD` — clock moved backwards.
+
+##  Open questions
+
+The provenance-trailer wire format is the one POST-side detail still unsettled.
+
+ -  `picked` trailer — exact key and parser contract TBD; multiple accumulate in row order.
+
+[Verbs]: Verbs.mkd "the verbs hub"
+[PATCH]: PATCH.mkd "PATCH verb"
+[PUT]: PUT.mkd "PUT verb"
+[HEAD]: HEAD.mkd "HEAD verb"
+[GET]: GET.mkd "GET verb"

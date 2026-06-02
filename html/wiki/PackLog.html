@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PackLog</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>PackLog: git packs appended into a numbered log</h1>
+<p>
+A pack log is <a href="Keeper.html">Keeper</a>'s sole object storage: a numbered append-only file holding git packs back-to-back, never mutated in place. The goal is a store trivially git-exchangeable that still never rewrites packs, so bytes copy verbatim and a branch dir drops whole instead of repacking. The method: keep git's pack encoding but strip the per-pack header and checksum, append object records to a dir's tail log, and index every object and pack boundary in the <a href="Indices.html">Indices</a> so a valid packfile reframes on the fly.
+</p>
+<h2>Numbered append-only logs</h2>
+<p>
+A log is named <code>NNNNN.keeper</code> with a 10-char RON64 store-wide sequential seqno, so logs in different branch dirs never share a number; the file sits in whichever dir wrote it.
+</p>
+<ul>
+<li>Sharded by branch dir: each dir under the <a href="Store.html">Store</a> holds its own <code>NNNNN.keeper</code> logs, <code>.idx</code> runs, and a <code>refs</code> reflog.</li>
+<li>Store-wide seqno: numbering is global, so a <code>file_id</code> names a log; its holding dir comes from the index run that hit.</li>
+<li>Never mutated: objects are only appended and offsets stay stable, so the <a href="Indices.html">Indices</a> point at them by <code>(file_id, offset)</code>.</li>
+</ul>
+<h2>Many packs per log, stripped framing</h2>
+<p>
+One log holds many packs back-to-back; a new log starts only past a size threshold, so a lone local commit appends to the tail rather than opening a file.
+</p>
+<ul>
+<li>Stripped framing: only object records land in the log; the PACK header and SHA-1 trailer are dropped except at file start.</li>
+<li>Cheaply reframed: the wire encoder writes a fresh PACK header, sendfiles the records, and appends a fresh SHA-1 trailer.</li>
+<li>No self-sync markers: pack boundaries are found only via the index bookmarks below, a git limitation kept for compatibility.</li>
+</ul>
+<h2>Intra-pack object order</h2>
+<p>
+Within a pack, objects MUST follow git's type order — commits, trees, blobs, tags; keeper makes the implicit <code>git repack</code> grouping an explicit invariant writers enforce and readers trust.
+</p>
+<ul>
+<li>Forward-reference free: a tree never cites a commit, a blob never a tree; delta bases sit earlier in this or a prior pack.</li>
+<li>Cheap commit scan: a pack's first object is a commit, so sync and <a href="Graf.html">Graf</a> find commits by prefix scan, not body inflation.</li>
+<li>Enforced on import: <code>KEEPPackFeed</code> sets <code>strict_order</code>; sniff staging packs go DFS order, repacked canonically on <a href="POST.html">POST</a>.</li>
+</ul>
+<h2>Delta-dependency DAG</h2>
+<p>
+Two git delta encodings get two base rules; together they make the branch tree a dependency DAG where a leaf detaches without breaking anything above it.
+</p>
+<ul>
+<li>OFS_DELTA is pack-local: the base sits earlier in the same pack, so a pack copies verbatim between stores with no rewrite.</li>
+<li>REF_DELTA resolves by hashlet up the dir chain: a base MUST be in the same dir or an ancestor — never below.</li>
+<li>Materialize upward refs: a writer that would delta against an out-of-chain object emits the base raw into the target dir.</li>
+</ul>
+<h2>Pack bookmarks</h2>
+<p>
+Every appended pack also gets a bookmark index entry recording its extent, so per-pack reconstruction for the wire is O(1) — no varint scan, no inflation.
+</p>
+<ul>
+<li>Bookmark: <code>key=file_id20|offset40|type4(PACK)</code>, <code>val=obj_count32|byte_len32</code>; the reserved PACK type avoids object collisions.</li>
+<li><code>obj_count</code> sums into the fresh PACK header; <code>byte_len</code> is the record length to sendfile from <code>offset</code> in <code>file_id</code>.</li>
+<li>No per-pack hashlet: the pkt-line wire negotiates over object sha1s; per-object hashlets in the <a href="Indices.html">Indices</a> still remain.</li>
+</ul>
+<h2>Drop-a-dir replaces GC</h2>
+<p>
+Keeper never rewrites or GCs packs; consolidation is per-branch-dir, which the DAG invariant makes safe by construction.
+</p>
+<ul>
+<li>Drop a leaf: delete the dir (logs, indexes, refs, WT); no surviving REF_DELTA pointed in, so ancestor resolution holds.</li>
+<li>Drop an interior dir: refused unless every descendant's cross-dir REF_DELTA into it is materialized; no automatic rewrite.</li>
+<li>Live readers survive: an mmap of a dropped log works until close; new lookups route around the missing dir.</li>
+</ul>
+</body>
+</html>

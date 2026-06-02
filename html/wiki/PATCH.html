@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>PATCH: absorb another branch's work into the worktree</h1>
+<p>
+PATCH absorbs commits from another branch into cur's worktree and records the absorbed sha(s) in <code>.be/wtlog</code> for the next <a href="POST.html">POST</a> to consume; it never commits on its own. The cycle is patch → test → post — run once per merge, cherry-pick, or squash, or looped per commit for rebase — so every commit that lands is a tested commit, never a chain of unverified work. PATCH is one verb in the Beagle <a href="Verbs.html">Verbs</a> vocabulary, and unlike <a href="GET.html">GET</a> it weave-merges theirs rather than overwriting the worktree.
+</p>
+<ul>
+<li>Does not commit: the absorbed sha(s) are staged in <code>.be/wtlog</code>, and the next <a href="POST.html">POST</a> turns them into a commit with a header.</li>
+<li>The URI shape is the operation: <code>?</code>/<code>#</code> presence and emptiness alone select squash, cherry-pick, merge, or rebase-one.</li>
+<li>A dirty wt is fine: a 3-way WEAVE merges theirs against the wt's current bytes, so dirty files never cause a refusal.</li>
+<li>Conflicts are loud: a conflict hits stderr and exits non-zero, stopping an unattended <code>patch &amp;&amp; post</code> before a bad commit.</li>
+</ul>
+<h2>Four shapes</h2>
+<p>
+The PATCH URI form alone classifies the operation — <code>?</code> presence and <code>#</code> presence/emptiness — and every shape takes the usual extras (<code>//host</code> to fetch first, <code>./path</code> to scope).
+</p>
+<ul>
+<li><code>?&lt;br&gt;</code> squash: replay <code>fork..br.tip</code> as one wt-merge, after which <a href="POST.html">POST</a> records one <code>foster</code> commit header.</li>
+<li><code>?&lt;br&gt;#&lt;msg&gt;</code> merge: the same full replay as squash, after which <a href="POST.html">POST</a> records a <code>parent</code> commit header.</li>
+<li><code>?&lt;br&gt;#</code> rebase-one: the next not-yet-replayed commit on <code>?br</code>, after which <a href="POST.html">POST</a> records a <code>foster</code> header.</li>
+<li><code>#&lt;hash&gt;</code> cherry-pick: the one named commit, after which <a href="POST.html">POST</a> records a <code>picked:</code> trailer.</li>
+</ul>
+<h2>CLI use</h2>
+<p>
+The common PATCH CLI forms cover squash, rebase-one, merge, cherry-pick, remote fetch, path scope, and delegated structural rewrites.
+</p>
+<ul>
+<li><code>be patch ?..</code> squashes the parent's stack into the wt, while <code>be patch ?./fix</code> squashes a child branch.</li>
+<li><code>be patch ?feat/fix#</code> rebases one commit from <code>feat/fix</code> onto cur.</li>
+<li><code>be patch ?trunk '#sync from trunk'</code> merges trunk with an explicit message.</li>
+<li><code>be patch '#abc1234'</code> cherry-picks one commit, while <code>be patch ssh://origin?main</code> fetches then squashes.</li>
+<li><code>be patch file.c?feat</code> applies one file's version from <code>?feat</code>, recording no foster row.</li>
+<li><code>be patch spot:#'Old'-&gt;'New'.c</code> delegates an in-place structural rewrite to spot.</li>
+<li>Multiple PATCHes compose: each PATCH appends a <code>patch</code> row the next POST consumes.</li>
+</ul>
+<h2>Ancestor-skip walk</h2>
+<p>
+Squash and merge replay only the commits cur doesn't already have; rebase-one finds the next un-absorbed commit by walking the source's first-parent chain.
+</p>
+<ul>
+<li>Squash and merge replay only commits not already reachable from cur via parent ∪ foster.</li>
+<li><code>picked</code> trailers are dedup-only and do not participate in reachability.</li>
+<li>Rebase-one walks <code>?br</code>'s first-parent chain and stops at the first sha already reachable from cur.</li>
+</ul>
+<h2>Weave merge</h2>
+<p>
+PATCH never refuses on dirty files: it runs a 3-way WEAVE with the absorbed commit on the theirs side and the wt's current bytes on the ours side, so PATCH-on-PATCH composes by construction.
+</p>
+<ul>
+<li>The ours side is the wt's current bytes, including user edits and any prior output, so a prior absorption reads as an edit.</li>
+<li>Unresolvable conflicts are marked token-level with 4-char delimiters (<code>&lt;&lt;&lt;&lt;</code>/<code>&gt;&gt;&gt;&gt;</code>), not git's 7-char line markers.</li>
+<li><code>git mergetool</code> and existing UIs won't recognize the token-level markers — hand-edit, or enumerate via a <code>diff:?</code> view.</li>
+</ul>
+<h2>Path-scoped PATCH</h2>
+<p>
+A non-empty path slot scopes the absorption to those paths, but records no provenance — a partial absorption is not a faithful DAG commit.
+</p>
+<ul>
+<li>Path-scoped <code>be patch file.c?feat</code> lands theirs bytes for those paths only.</li>
+<li>A path-scoped row carries the path but no <code>&amp;theirs</code> slot, so <a href="POST.html">POST</a> emits no provenance header and counts zero commits.</li>
+<li>Use a full (no-path) PATCH shape if you want POST to record provenance.</li>
+</ul>
+<h2>Reporting and status</h2>
+<p>
+Every PATCH prints a ULOG-style report — one line per applied commit and touched file, <code>&lt;verb&gt; &lt;status&gt; &lt;path-or-uri&gt;</code> — so the patch-test-post loop stays auditable.
+</p>
+<ul>
+<li><code>applied</code>: the file was clean (baseline or stamped) and overlaid with theirs bytes, no merge needed.</li>
+<li><code>merged</code>: the file had non-baseline bytes and theirs touched it, and WEAVE integrated both sides cleanly.</li>
+<li><code>mod</code>: ours diverged from the merge base but theirs didn't touch this path, so the bytes are kept as-is (fork-relative).</li>
+<li><code>conflict</code>: non-baseline bytes theirs touched but WEAVE couldn't resolve, leaving markers in the file and a non-zero exit.</li>
+</ul>
+<h2>Open questions</h2>
+<p>
+Two PATCH-side formats are still unsettled, both about how downstream tools read PATCH's output.
+</p>
+<ul>
+<li>The token-level 4-char conflict delimiters need a stable wire format for bro, graf-resolve, and a <code>git mergetool</code> adapter.</li>
+<li>A &quot;partial picked&quot; trailer naming <code>&lt;sha&gt;:&lt;path&gt;</code> for path-scoped forensics is a possible future extension.</li>
+</ul>
+</body>
+</html>

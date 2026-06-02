@@ -1,0 +1,28 @@
+#   Buffers: own a range as past, live, free
+
+A buffer is four pointers dividing one memory range into three slices: PAST (consumed), DATA (live), and IDLE (free). Feeding appends to DATA out of IDLE; draining consumes DATA into PAST; each move grows the adjoining slice, so a buffer tracks its own fill level and no length ever travels beside it. A buffer owns its backing memory — heap, mmap, arena, or stack — and the verb that created it decides who frees it. Pass a buffer down the call stack by pointer; never copy one.
+
+##  The three slices
+
+`buf[0..3]` bound PAST `[0,1)`, DATA `[1,2)`, and IDLE `[2,3)`. Reads and writes move the inner borders, so the buffer always knows what is live and what is free.
+
+ -  Get the live span with `u8bData` / `u8bDataC`, the free span with `u8bIdle`; sizes via `u8bDataLen` / `u8bIdleLen`.
+ -  Append with `u8bFeed` / `u8bFeed1`; clear with `u8bReset`; trim the DATA end with `u8bShed`.
+
+##  Ownership
+
+A buffer's backing comes from exactly one source, and you release it with the matching verb. Provenance lives in the caller's head, not the buffer's type — match create to release at every site.
+
+ -  `u8bAllocate` ↔ `u8bFree` (heap); `u8bMap` ↔ `u8bUnMap` (mmap, files).
+ -  `u8bAcquire` from an arena ↔ arena rewind (no per-buffer free); `a_pad` ↔ scope exit (stack).
+
+##  Buffers as arenas
+
+A buffer can dispense slices to other code, LIFO along the call tree. This removed most need for malloc: build records in place, then rewind to reclaim them all at once.
+
+ -  `u8aMark` / `u8aRewind` bracket a borrow; `u8bAcquire` rents a whole sub-buffer for the duration.
+ -  Typed slice rentals: `a_lign` then `a_cquire` to build incrementally, `a_ren` for a one-shot copy.
+ -  The process-wide instance of this pattern is [BASS]; the spans buffers feed and drain are [Slices].
+
+[BASS]: BASS.mkd "the scratch arena"
+[Slices]: Slices.mkd "the slice model"
