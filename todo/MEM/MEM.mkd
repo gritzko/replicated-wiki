@@ -1,0 +1,53 @@
+#   MEM: memory-safety audit digest
+
+Digest of the 2026-06-05 whole-codebase memory-safety audit: 11 dogs / ~78k LOC swept by per-shard finders, each finding adversarially verified by two lenses, 67 confirmed defects clustered into 36 tickets (11 high, 23 medium, 2 low). One bullet per ticket below; fix each via the [Issues] loop, repro-first.
+
+##  High
+Reachable OOB / overflow / UAF / type-confusion on a plausible path.
+
+ -  [MEM-001](MEM-001.mkd) abc/BSD.c — BSDPatch untrusted-patch int overflows defeat bounds → OOB write (ASan-reproduced).
+ -  [MEM-002](MEM-002.mkd) abc/INT.c — i64decdrain reads `x` uninitialized when u64decdrain rejects input.
+ -  [MEM-003](MEM-003.mkd) abc/SORT.c — SORTu64 clamps the wrong (heap-reordered) chunk → OOB read of trailing partial.
+ -  [MEM-004](MEM-004.mkd) abc/TLV.c — TLVprobe huge length wraps the `hlen+blen<=len` check → wild value slice.
+ -  [MEM-005](MEM-005.mkd) dog/HUNK.c — renderers index hk->text by unvalidated wire token offsets → OOB reads.
+ -  [MEM-006](MEM-006.mkd) bro/BRO.c — BROSearchNext uses packed offset|pass as a raw byte index → ~16MB OOB read.
+ -  [MEM-007](MEM-007.mkd) js/io.cpp,utf8.cpp — file.write writes from an advanced slice + frees an interior pointer.
+ -  [MEM-008](MEM-008.mkd) graf/REBASE.c — per-iteration tm_merge/PatchId carves never rewound → BASS exhaustion.
+ -  [MEM-030](MEM-030.mkd) woof/CONN.c — serve_static leaks mmap+fd when the body exceeds the conn ring (BNOROOM).
+ -  [MEM-032](MEM-032.mkd) js/convert.cpp — JABCu8bImport builder overflow + JSC string/propname ref leaks.
+ -  [MEM-033](MEM-033.mkd) js/main.cpp — JABCReport casts an exception OBJECT to JSStringRef (type confusion).
+
+##  Medium
+Unsafe under plausible conditions or a missing guard; mostly leaks, recursion, latent OOB.
+
+ -  [MEM-009](MEM-009.mkd) abc/TCP.c,UDP.c — listen/bind socket fd leaked on bind() failure.
+ -  [MEM-010](MEM-010.mkd) abc/CURL.c — unchecked calloc/easy_init null-deref + easy-handle & slist leaks.
+ -  [MEM-011](MEM-011.mkd) abc/FILE.c — FILEFlush grows DATA into uninitialized IDLE → re-flush/disk garbage.
+ -  [MEM-012](MEM-012.mkd) abc/ROCK.c — ROCKmerge_full int overflow defeats the stack/heap selector.
+ -  [MEM-013](MEM-013.mkd) abc/POL.c — POLLoop mutates a stale poller slot after a re-entrant callback.
+ -  [MEM-014](MEM-014.mkd) abc/LISTx.h — LISTinsert writes an unvalidated `next` index (release-build OOB).
+ -  [MEM-015](MEM-015.mkd) abc/PACK.c — PACKCreate/PACKOpen leak PAGE + index mmap on open() failure.
+ -  [MEM-016](MEM-016.mkd) dog/ULOG.c — ULOGOpenBooked/RO leak the booked log map on scratch-alloc failure.
+ -  [MEM-017](MEM-017.mkd) dog/DOG.h — DOGRepoFromBe `/.be/` scan reads one byte past the slice.
+ -  [MEM-018](MEM-018.mkd) graf/BLAME,DIFFREF,BRAM — per-step BASS carves not rewound → arena exhaustion.
+ -  [MEM-019](MEM-019.mkd) graf/MERGE,MAP,LOG,REBASE — call() early-return skips mmap/handle cleanup.
+ -  [MEM-020](MEM-020.mkd) bro/BRO.exe.c — BROExec leaks a mmap (and keeper) on arena overflow before BRODefer.
+ -  [MEM-022](MEM-022.mkd) keeper/KEEP.c — KEEPGetPacked OFS_DELTA underflow + deep cross-file recursion DoS.
+ -  [MEM-023](MEM-023.mkd) keeper/KEEP.c,WALK.c — tree-walk recursion holds a 1MB buffer per level, no cap.
+ -  [MEM-024](MEM-024.mkd) keeper/WIRECLI.c — push-side walk holds 1MB mmap per frame; errors swallowed.
+ -  [MEM-025](MEM-025.mkd) keeper/WIRECLI.c — first_name slice dangles into the compacted advert buffer.
+ -  [MEM-026](MEM-026.mkd) sniff/GET,SNIFF,LS — bare call() leaks 256MB mmaps / open ULOG on error paths.
+ -  [MEM-027](MEM-027.mkd) sniff/PATCH.c — patch_walk unbounded BASS carving (~29MB/level) exhausts the arena.
+ -  [MEM-029](MEM-029.mkd) spot/LESS.c — LESSDefer drops (leaks) mmap+tokens when the map table is full.
+ -  [MEM-031](MEM-031.mkd) woof/CONN.c — WOOFApiOpen leaks dogs/buffers on a later open failure (gated close).
+ -  [MEM-034](MEM-034.mkd) js/main.cpp — script slurp: unchecked ftell/malloc/fread → heap-underflow OOB write.
+ -  [MEM-035](MEM-035.mkd) js/io.cpp — io.mmap/netConnect callbacks miss argc / NULL / fd-bounds guards.
+ -  [MEM-036](MEM-036.mkd) graf/WEAVE.c — EDL fallback raw `*edlg[1]++` writes overflow on BRAM NOROOM.
+
+##  Low
+Latent / extreme-input only; defensive hardening.
+
+ -  [MEM-021](MEM-021.mkd) abc — latent bounds/overflow hardening (SKIPfeed, MMAP round/resize, DNSNameText, utf8 INT64_MIN).
+ -  [MEM-028](MEM-028.mkd) sniff/POST.c — post_cascade_walk reads recs[-1] after a skip-without-append (n==0).
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

@@ -1,0 +1,22 @@
+#   GET-002: secondary worktree from a clone is left detached
+
+`be get <clone>` / `be get file:<store>?<branch>` wires a secondary worktree but pins its checkout to `?<hashlet>` (detached at the tip sha) instead of attaching to the branch the anchor names. A follow-up `be post` then refuses with POSTDET, even though the user cloned a branch. The goal is a branch-resolved secondary wt landing attached, so commits work without a manual `be get ?<branch>`. See [GET], [Submodules]. Repro: `BEroundtrip` step 5 (the wt from step 3 is detached).
+
+##  Issues
+The worktree-layout arm of `BEGetWorktree` detaches even when a branch is known.
+
+ -  `BEGetWorktree` (`beagle/BE.cli.c`) rewrites the downstream URI to `?<hashlet>` (detached) for the worktree-layout source.
+ -  The row-0 anchor already carries `?/<title>/<branch>#<hash>` (DIS-001), so the branch is known — only the checkout detaches.
+ -  The store-direct arm (added with the synthetic-branch work) already attaches via `?<query>`; the worktree arm lags.
+
+##  Blockers
+None. Keep `be get ?<sha>` and gitlink-pin mounts detached on purpose; this is only the branch-resolved clone/sibling case.
+
+##  Planned
+Attach the branch-resolved secondary wt instead of detaching.
+
+ -  When the anchor resolves a branch, rewrite the checkout URI to that branch (`?/<title>/<branch>`), not `?<hashlet>`.
+ -  Guard the worktree.sh detached-on-sha cases; keep `BEroundtrip` as the regression.
+
+[GET]: ../wiki/GET.mkd "GET verb"
+[Submodules]: ../wiki/Submodules.mkd "submodules"

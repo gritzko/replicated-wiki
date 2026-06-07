@@ -1,0 +1,25 @@
+#   MEM-026: bare call() leaks owned buffers/ULOG on error paths (sniff)
+
+Three sniff functions acquire owned OS resources (256MB mmaps, heap buffers, an open ULOG mmap) then hit a bare `call()` whose return-on-error bypasses the function's own cleanup. `GET.c:1414 HOMEBranchDir` leaks 4×256MB mmaps + the subs heap buffer past `GET_BUFS_FREE()`. `SNIFF.c:219 PATHu8bFeed` leaks the just-opened wtlog mmap and leaves the singleton half-initialized (no `ULOGClose`/`zerop`), unlike every sibling arm; RW opens also skip `FILETrimBook`, leaving on-disk pad bytes. `LS.c:271-272` leak the `c.text` mmap (and `c.toks`) when a later allocation fails. The goal is to route every error path through existing cleanup.
+
+##  Issues
+Bare `call()` early-returns skip the function's own resource cleanup.
+
+ -  `sniff/GET.c:1414` bare `call(HOMEBranchDir,…)` returns past `GET_BUFS_FREE()`, leaking 4×256MB mmaps (noop/unlinks/merges/blob) + subs heap.
+ -  `sniff/SNIFF.c:219` bare `call(PATHu8bFeed, h->root, sb)` returns with no `ULOGClose`/`zerop`; leaks open wtlog mmap, leaves SNIFF singleton half-open.
+ -  `sniff/SNIFF.c:219` RW opens skip `FILETrimBook` on this exit, leaving trailing page-pad bytes on disk for the next reader.
+ -  `sniff/LS.c:271` `call(u32bAllocate c.toks)` failing after `u8bMap c.text` leaks the 4MB `c.text` mmap (cleanup at :310-312 unreached).
+ -  `sniff/LS.c:272` `call(u8bAllocate c.dir_seen)` failing leaks both `c.text` mmap and `c.toks` heap in non-recurse mode.
+
+##  Blockers
+None.
+
+##  Planned
+Single cleanup path per function.
+
+ -  Repro tests FIRST (CLAUDE.md §17): inject HOMEBranchDir/PATHu8bFeed/alloc failure on each path; assert no mmap/heap/ULOG leak under ASan.
+ -  `sniff/GET.c:1414`: capture the result and `GET_BUFS_FREE()`+return on non-OK, or make it non-fatal via `try()`+`__=OK` like the adjacent `REFSAppendVerb`.
+ -  `sniff/SNIFF.c:219`: route failure through `ULOGClose(s->log_data,&s->log_idx,s->log_rw); zerop(s); return`, mirroring the other early-return arms.
+ -  `sniff/LS.c:270-272`: acquire all three buffers then unwind already-acquired ones on first failure, or carve via BASS `a_carve` so scratch auto-releases.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

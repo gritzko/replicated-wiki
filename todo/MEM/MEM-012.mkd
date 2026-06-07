@@ -1,0 +1,21 @@
+#   MEM-012: ROCKmerge_full int overflow defeats stack/heap selector (abc/ROCK.c)
+
+`ROCKmerge_full` computes `int total = num_operands + (existing?1:0)` in signed `int`; a large RocksDB `num_operands` wraps `total` negative so the `total > 64` guard is false and the code keeps the 64-element `stack_recs`, while the fill loops still write `1+num_operands` entries — a stack buffer overflow. The output-size estimate (`cap += $len(...); cap *= 2`) is also unguarded size_t arithmetic feeding `malloc`. The goal is overflow-safe sizing and a size_t selector.
+
+##  Issues
+Signed-int total and unguarded cap.
+
+ -  `abc/ROCK.c:99-140` — `int total = num_operands + …` can wrap; `if (total>64)` then keeps `stack_recs[64]` while loops write `num_operands` entries past it.
+ -  Same range — `cap *= 2` over summed operand lengths can overflow size_t, yielding an undersized `malloc` the callback overruns (only a post-hoc `wrote>cap` check exists).
+ -  Note: verifiers split (real/uncertain) on reachability of an INT_MAX operand count via RocksDB; treat as defensive hardening.
+
+##  Blockers
+None. Reachability depends on the RocksDB merge path supplying a huge `num_operands`.
+
+##  Planned
+Size in size_t with explicit guards.
+
+ -  Repro first: unit-call `ROCKmerge_full` with a large `num_operands` (and pathological operand lengths); confirm stack overrun / undersized alloc.
+ -  Validate `num_operands >= 0`; compute `total` as size_t; pick stack vs heap by size_t compare (`total <= 64`); guard `cap` against size_t overflow before `malloc`.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

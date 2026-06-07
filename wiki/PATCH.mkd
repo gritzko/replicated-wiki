@@ -36,6 +36,14 @@ Squash and merge replay only the commits cur doesn't already have; rebase-one fi
  -  `picked` trailers are dedup-only and do not participate in reachability.
  -  Rebase-one walks `?br`'s first-parent chain and stops at the first sha already reachable from cur.
 
+##  Merge base: full stack vs single commit
+
+The shapes split by merge base, which lets one verb be git's merge, rebase, and cherry-pick: squash and merge weave the full `fork..tip` stack against auto-LCA(cur, theirs), while cherry-pick and rebase-one weave one commit against its parent.
+
+ -  Squash and merge use auto-LCA(cur, theirs) and replay the full not-yet-reachable stack — git's `merge` / `pull --squash`.
+ -  Cherry-pick and rebase-one use the base parent(theirs), weaving that one commit's diff — git's `cherry-pick`/`rebase`.
+ -  All four are merge-then-[POST]; only the base and the recorded provenance differ, so one verb covers four git commands.
+
 ##  Weave merge
 
 PATCH never refuses on dirty files: it runs a 3-way WEAVE with the absorbed commit on the theirs side and the wt's current bytes on the ours side, so PATCH-on-PATCH composes by construction.

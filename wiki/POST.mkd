@@ -49,7 +49,7 @@ POST picks the commit message in a fixed order, and a squash never auto-supplies
 
 ##  File classification
 
-Every sniff row stamps the files it touched with its `ts`; at POST time each on-disk file's mtime is looked up to decide KEEP vs REWRITE, in selective or implicit (commit-all) mode.
+Every sniff row stamps the files it touched with its `ts`; at POST time each on-disk file's mtime is looked up to decide KEEP vs REWRITE, in selective or implicit (commit-all) mode — the [Worktree] page is the full treatment.
 
  -  KEEP: mtime `< last_get_ts`, or the file is owned by a `get`/`post` row (baseline content) — in both modes.
  -  REWRITE: owned by a `patch` row (merged bytes) or a `put` row (current bytes) — in both modes.
@@ -95,3 +95,4 @@ The provenance-trailer wire format is the one POST-side detail still unsettled.
 [PUT]: PUT.mkd "PUT verb"
 [HEAD]: HEAD.mkd "HEAD verb"
 [GET]: GET.mkd "GET verb"
+[Worktree]: Worktree.mkd "worktree state"

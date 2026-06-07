@@ -1,0 +1,22 @@
+#   DIS-022: `be log` is empty in a detached / submodule worktree
+
+`be log` in a submodule worktree (detached at the gitlink pin, or on a synthetic branch) prints nothing though the worktree has a real tip and history. Log resolves an ordinary branch ref that comes up empty instead of resolving the worktree's CURRENT BASE the way the other verbs do. The goal: `be log` lists history from the current base whether attached or detached, reusing the shared cur-tip resolver — no bespoke logic. See [GET], [Graf].
+
+##  Issues
+Log's tip resolution diverges from the shared current-base path.
+
+ -  `be log` from a sub (cur = `?<sha>` detached or `.<parent>` synthetic) returns no rows; the same store has the commits (a push from it walks 39 commits).
+ -  Log resolves a branch ref, not the worktree's current base, so a detached/synthetic cur yields nothing.
+
+##  Blockers
+None.
+
+##  Planned
+Resolve the current base via the SHARED utility the other verbs use; write no new resolution logic.
+
+ -  Make `graf/LOG.c` obtain the start tip from the same shared cur-tip resolver (`SNIFFAtTailOf` / the at-tip helper) that GET/status use, honouring detached `?<sha>` and synthetic branches.
+ -  Do NOT add a custom branch-walk; reuse the existing shared fn (CLAUDE.md §13).
+ -  Repro test: in a detached/sub worktree with N commits, `be log` lists them.
+
+[GET]: ../wiki/GET.mkd "GET verb"
+[Graf]: ../wiki/Graf.mkd "history + merge dog"

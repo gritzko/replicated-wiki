@@ -1,0 +1,22 @@
+#   DIS-007: magic refs `?null` / `?back` unimplemented
+
+[Home] §"URI structure" and [URI] list `?null` (no-branch) and `?back` (previous-branch) as live ref shapes, but no code path interprets them — they resolve as ordinary branch names and fail as a missing ref. The goal is to honour the two documented magic refs (or, if abandoned, strike them from the spec). See [URI], [Home].
+
+##  Issues
+`?null`/`?back` are treated as literal branch names everywhere; there is no magic-ref interception.
+
+ -  `keeper/RESOLVE.c` `resolve_branch_path` (~`:63`) does a literal REFS lookup for `null`/`back` → `RESLVNONE`; `KEEPResolveRef` (~`:228`) has no special case.
+ -  `dog/DOG.c` `DOGNormalizeArg`/`DOGCanonURI` do not rewrite `null`/`back`; a grep across beagle/dog/keeper/graf/sniff finds zero magic-ref code (only tokenizer keyword tables).
+ -  `be get ?back` therefore fails as "missing ref" instead of switching to the previous branch; `?null` cannot detach to no-branch.
+
+##  Blockers
+Needs a user ruling: implement the two magic refs, or remove them from [Home]/[URI] as never-built.
+
+##  Planned
+Decide, then either add the intercept or strike the spec lines.
+
+ -  If kept: intercept `null`/`back` in `DOGCanonURI` (or `KEEPResolveRef`); `back` reads the prior get/post row's `?branch` from the wtlog, `null` maps to the detached/no-branch state.
+ -  Add table cases: `be get ?back` after a switch returns to the prior branch; `?null` detaches.
+
+[URI]: ../wiki/URI.mkd "URI structure"
+[Home]: ../wiki/Home.mkd "store/worktree resolution"

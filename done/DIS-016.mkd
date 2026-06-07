@@ -1,0 +1,22 @@
+#   DIS-016: HEAD opens the wire on a cached `//host` (no transport scheme)
+
+[URI]/[Verbs] state the scheme alone flips cached vs network: a bare `//host` reads the cache, `ssh://host` opens the wire. GET honours this (gates on `URI_SCHEME|URI_AUTHORITY`), but HEAD gates on authority alone, so `be head //origin?*` hits the network despite no transport scheme — contradicting HEAD's "cached by default" contract. The goal is HEAD matching GET's cached-vs-wire gate. See [HEAD], [URI].
+
+##  Issues
+HEAD's plan and keeper's get both ignore the scheme.
+
+ -  `beagle/DISPATCH.c:257` — `BE_PLAN_HEAD` gates `BEActKeeperGet` on `URI_AUTHORITY` alone, whereas `BE_PLAN_GET` (`DISPATCH.c:283`) correctly requires `URI_SCHEME|URI_AUTHORITY`.
+ -  `keeper/KEEP.exe.c:568` (`keeper_get`) calls `KEEPGetRemote` whenever authority is present; `keeper_remote_uri` (`KEEP.exe.c:359`) resolves a bare alias to a transport URI and fetches.
+ -  So `be head //origin` reads from the wire instead of the cache; only HEAD is affected (GET proves the intended gate exists).
+
+##  Blockers
+None.
+
+##  Planned
+Repro, then align HEAD's gate to GET's.
+
+ -  Repro: `be head //origin` with no transport scheme must read the cache only (no network); today it fetches.
+ -  Add `URI_SCHEME` to the `BE_PLAN_HEAD` network arm (and/or gate `keeper_get`'s remote path on a transport scheme).
+
+[HEAD]: ../wiki/HEAD.mkd "HEAD verb"
+[URI]: ../wiki/URI.mkd "URI structure"

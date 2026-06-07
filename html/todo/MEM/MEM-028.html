@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-028</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-028: post_cascade_walk reads recs<a href="">-1</a> after skip-without-append (sniff/POST.c)</h1>
+<p>
+<code>post_cascade_one</code> returns OK without incrementing <code>cc-&gt;n</code> on its REFSNONE skip (<code>POST.c:1308</code>), but <code>post_cascade_walk</code> then unconditionally reads <code>cc-&gt;recs[cc-&gt;n-1].new_tip</code> (<code>POST.c:1461</code>) to drive recursion. When the skipped child is the first at its level, <code>cc-&gt;n</code> is still 0, so <code>recs[-1]</code> reads out of bounds across the preceding field into adjacent stack memory; the garbage sha becomes <code>branch_new_tip</code> for the descent. Reachable if a branch resolves OK at the pre-check (:1448) but REFSNONE inside <code>post_cascade_one</code> (:1307) — a REFS mutation in that window. A leaf flock serializes writers, narrowing reachability, but the index itself is unguarded. The goal is to index <code>recs</code> only after a record was actually appended.
+</p>
+<h2>Issues</h2>
+<p>
+Index <code>recs[cc-&gt;n-1]</code> used after a path that didn't append.
+</p>
+<ul>
+<li><code>sniff/POST.c:1308</code> <code>post_cascade_one</code> returns OK without incrementing <code>cc-&gt;n</code> on the <code>cr==REFSNONE</code> skip path.</li>
+<li><code>sniff/POST.c:1461</code> reads <code>cc-&gt;recs[cc-&gt;n-1].new_tip</code> unconditionally; with <code>cc-&gt;n==0</code> this is an OOB read of <code>recs[-1]</code>.</li>
+<li><code>sniff/POST.c:1456-1461</code> <code>cascade_rec</code> is wider than a pointer, so <code>recs[-1]</code> reads backward past the front of <code>cascade_ctx</code> into adjacent stack.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Only read after an append.
+</p>
+<ul>
+<li>Repro FIRST (CLAUDE.md §17): force <code>post_cascade_one</code> to take the REFSNONE skip on the first child (<code>n==0</code>); run under ASan/UBSan to catch <code>recs[-1]</code>.</li>
+<li>Have <code>post_cascade_one</code> report whether it appended (out-param or distinct status).</li>
+<li>In <code>post_cascade_walk</code> only read <code>recs[cc-&gt;n-1]</code> when a record was added; otherwise continue (skip recursion for that child).</li>
+</ul>
+</body>
+</html>

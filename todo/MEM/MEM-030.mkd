@@ -1,0 +1,24 @@
+#   MEM-030: serve_static leaks mmap on full conn ring (woof/CONN.c)
+
+`serve_static` maps the whole static asset via `FILEMapRO` and only releases it at `:326 FILEUnMap`. The intervening `call(static_envelope)` and `call(u8bFeed)` feed the file-sized body into the ~3MB conn out ring; `u8bFeed` returns BNOROOM when ring idle < body and PRO.h `call()` returns from `serve_static` before `FILEUnMap`, leaking one file-sized VMA plus fd per request. Repeatable and attacker-triggerable for any larger-than-ring static file, exhausting address space / fds. The goal is to never let a `call()` between map and unmap escape — unmap on every path.
+
+##  Issues
+A fallible `call()` sits between `FILEMapRO` and `FILEUnMap`.
+
+ -  `woof/CONN.c:313` `FILEMapRO` maps the entire asset (no size cap) into `mapped`.
+ -  `woof/CONN.c:322-323` `call(static_envelope)`/`call(u8bFeed)` can return BNOROOM (`abc/Bx.h:269` ring idle < body, buffer untouched).
+ -  `abc/PRO.h:85-88` `call()` returns immediately on non-OK, skipping `woof/CONN.c:326 (void)FILEUnMap(mapped)`.
+ -  Net: `GET /static/<file>` for a >~3MB asset leaks one VMA + fd per request; repeats exhaust address space/fds.
+ -  `static_segs_ok` (`woof/CONN.c:294`) guards traversal/dotfile only, not size; no `try()`/cleanup arm exists.
+
+##  Blockers
+None.
+
+##  Planned
+Unmap on every exit.
+
+ -  Repro FIRST (§17): place a >ring static asset under `<root>/.be/static`, GET it, assert no VMA/fd leak (map/fd count before/after).
+ -  Restructure so post-`FILEMapRO` steps unmap on every exit: `callsafe(..., (void)FILEUnMap(mapped))` for envelope+feed, or capture results then unmap unconditionally before propagating.
+ -  Ensure no plain `call()` remains between `FILEMapRO` (:313) and `FILEUnMap`; re-run repro + woof tests.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

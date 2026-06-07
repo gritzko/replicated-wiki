@@ -1,0 +1,206 @@
+#   DIS-025: `be patch` squash uses the target's PARENT as merge base — silently drops commits when cur is behind the target
+
+**HIGH — silent data loss. STAGE 1 LANDED (`a31c7fbd`); data loss FIXED.**
+Remaining: the `KEEPResolveURI` funnel consolidation (Stage 2/3 below) — a
+separate session.  Original report follows.  `be patch ?<target>` computes the
+squash merge base as `LCA(target's parent-branch tip, target)`, which for a
+target commit resolves to the target's **immediate parent**.  That is correct
+only when cur is a *descendant* of that fork (the intended "absorb a feature
+branch's stack into its parent" case).  When **cur is an ancestor of the fork**
+— i.e. cur is *behind* the target (reconciling a stale clone, or patching a
+trunk commit that is ahead of cur) — every commit in `(cur .. fork]` is NOT in
+cur, yet the per-file classifier treats it as already-in-base and **silently
+drops it**.  `be patch` exits **0**, `failed=0`.  (`be get`'s reconcile hits a
+related but distinct symptom on the same inputs — `sniff: merge failed … (graf
+err)` — see "Related" below.)
+
+##  Repro (be patch only — confirmed, instrumented)
+Trunk: `eb1945fb` (base) → … → `50722656` (SUBS-008, edits `beagle/SUBS.c`) →
+`50724d9a` (SUBS-009, target).  cur is a branch at `eb1945fb`.
+ 1. `be put ?ours#eb1945fb`; `be get ?ours` (cur = `eb1945fb`).
+ 2. `be patch ?50724d9a`.
+ 3. Result: exit 0; `beagle/SUBS.c` reported `mod`, on-disk == cur's bytes;
+    **008's `FILErmrf` is gone**.  Only `50724d9a`'s own last-commit delta
+    (SUBS-009) was absorbed; SUBS-002/006/007/008/010 (in `eb1945fb..50722656`)
+    were dropped.
+
+##  Root cause (confirmed by instrumenting `fork_sha`)
+`sniff/PATCH.c` ~L1533-1543:
+```
+resolve_parent_tip(&parent_tip, reporoot, target_query);   // → target's parent branch
+GRAFLca(&fork_sha, &parent_tip, &thr_sha);                  // → 50722656 (target's PARENT)
+if (sha1empty(&fork_sha)) GRAFLca(&fork_sha, &our_sha, &thr_sha);  // fallback only if EMPTY
+```
+Instrumented output for the repro:
+```
+DBGFORK our=eb1945fb  thr=50724d9a  fork=50722656
+```
+The fork is `50722656` (target's parent), **not** the true base `eb1945fb`
+(cur).  The per-file 3-way classifier `patch_walk` (sniff/PATCH.c:591) then
+sees, for `SUBS.c`, `fork-blob == theirs-blob` (both `949938ea`, the post-008
+version) while ours differs → branch `!o_eq_l && t_eq_l` → `mod` ("only ours
+changed; theirs didn't touch"), keeping cur's stale bytes.  The same fork
+explains every file in the run: `PUT.c` (fork==ours, theirs≠) → `take-theirs`;
+`CMakeLists` (all three differ) → `merged`.
+
+The code's assumption (its own comment): the parent-tip LCA "excludes ancestor
+commits already in cur's history."  That holds only when cur ⊇ `[fork..parent_tip]`.
+**It does not validate that `fork` is an ancestor of cur.**  When cur is behind
+the fork, the "excluded" commits are genuinely absent from cur and are lost.
+
+##  Why blobs / earlier probes did NOT reproduce it (history-dependent)
+ -  `graf merge base ours theirs` (blob-only `GRAFMerge3Bytes`) merges the same
+    three blobs **correctly** (645 lines, both sides) — the WEAVE merge core is
+    sound.
+ -  `be diff:SUBS.c?eb1945fb#50724d9a` shows 008's add correctly; `graf get
+    SUBS.c?50724d9a` (blob) and `graf get beagle/?50724d9a` (tree-entry sha
+    `949938ea`) are both correct.  Weave construction, blob and tree
+    reconstruction are all fine.
+ -  The defect is purely the **fork/merge-base selection**, which depends on the
+    branch topology (where the target sits relative to cur) — not on the file
+    bytes.  Two blobs cannot reproduce it.
+
+##  Expected
+The 3-way merge base for absorbing `theirs` into cur must be a common ancestor
+of **cur** and theirs: `LCA(our_sha, thr_sha)`.  Anything in `(base..theirs]`
+that is absent from cur must be absorbed (or surfaced as a `conflict`), never
+silently dropped with exit 0.
+
+##  Deeper root cause (refined; reconciled against URI.mkd)
+The fork came out as the target's parent because `be patch ?<sha>` resolves the
+bare sha to the canonical detached query `/<project>//<sha>` — an **empty branch
+segment** (`//`) between project and pin.  Per the authoritative spec this form
+is **correct, not malformed**:
+
+> URI.mkd §"Resolution boundary": *A detached or branchless target (tag
+> checkout, `?null`, bare sha) has an empty branch slot: a double slash
+> `/<project>//<full-hash>`.*
+
+So `be` emits exactly the right canonical string.  The bug is **downstream
+parsing** that refuses it.  `dog/DOG.h` `DOGCanonQueryParse` (~L494-499)
+explicitly **rejects** the empty-branch form:
+
+```
+//  zero-segment (e.g. "/proj//sha") is rejected as malformed.
+if (branch_start >= branch_end)      return NO;
+```
+
+Because the canonical parser returns NO, `DOGRefSplitPin` drops to its manual
+fallback, which hands the whole `/<project>/` back as the *branch* and the sha as
+the pin.  The cherry-locate detector (sniff/PATCH.c ~L1444) then misreads this
+detached **SQUASH** target as a `?<branch>/<sha>` **cherry-locate** and promotes
+it (`cherry = YES`); cherry-pick sets `fork = parent(sha)` — hence the dropped
+intermediate commits.  Confirmed: `target_query=[/30-cur-behind-target//<sha>]`,
+`shape=SQUASH cherry=1`.  Both the short hashlet and a full 40-hex bare sha trip
+it; an explicit `?<branch>/<sha>` (single slashes, non-empty branch) is
+unaffected.
+
+The earlier "stop emitting `//`" idea was **backwards**: the spec *requires* the
+`//` form; the emitter is correct and the parser is wrong.
+
+##  Fix plan: one canonical resolver, empty-branch contract first-class
+Reference resolution is currently scattered across three layers that each
+re-derive structure from the URI string — `dog` (`DOGNormalizeArg`,
+`DOGCanonQueryParse`, `DOGRefSplitPin`, `DOGRefIsBranch`), `keeper/RESOLVE`
+(`KEEPResolveRef` → bare sha, **kind discarded**), and per-verb ad-hoc splitting
+(PATCH's `//` cherry detector).  DIS-025 is the symptom of that duplication: the
+*kind* (branch vs tag vs detached-hash) is computed, thrown away, then guessed
+again downstream — wrongly.
+
+**Target architecture — a single keeper-owned funnel.**  Resolution moves behind
+one entry point that turns raw user URI text into fully-canonical absolute URI
+text, reading cwd + `struct home` for context:
+
+```c
+//  keeper-level: the only layer that sees home + REFS + pack index.
+ok64 KEEPResolveURI(home *h, u8s abs_uri, u8cs rel_uri);
+//  three contextual arms resolved at once:
+//    path  — cwd-relative (./f, ../d, bare f)  → project-root-relative
+//    ref   — ?., ?.., ?back, bare, tag, hashlet, empty-branch detached
+//            → /<project>/<branch>/<40-hex>   (// when branch empty)
+//    auth  — //alias → full transport URL      (folds in REFSResolve grep)
+ok64    REFSResolveURI(home *h, u8s abs_ref, u8cs rel_ref);  // ref-only sub-step
+refkind REFSQueryKind(u8csc canon);   // cheap kind probe, no alloc/lookup
+```
+
+`home` already carries everything the context arms need (`project`,
+`cur_branch`, `cur_sha`).  Text-in/text-out makes the funnel a table-testable
+string→string canonicalizer; bareword promotion (verb-specific) stays upstream in
+`be`/dog, so `rel_uri` always arrives marker-bearing and the funnel is
+verb-agnostic.  The embedded pin doubles as the concurrency guard, retiring the
+separate `--at #sha`.  `KEEPResolveRef`/`KEEPResolveHex` shrink to wrappers;
+`REFSResolve`'s alias grep becomes the `//auth` arm; the DIS-025 trio
+(`DOGCanonQueryParse` empty-branch reject + `DOGRefSplitPin` fallback + PATCH's
+`//` cherry guard) all collapse into one canonical producer + one parser that
+treats `/<project>//<sha>` as first-class detached.
+
+**Staged implementation.**
+ 1. **Empty-branch contract (foundational, fixes DIS-025). — LANDED.**
+    Commits `b4c6397f` (test hermeticity, see below) + `a31c7fbd` (the fix) on
+    `beagle` trunk.  Two changes:
+      - `dog/DOG.h` `DOGCanonQueryParse`: `branch_start >= branch_end` → `> ` so
+        the empty middle segment `/<project>//<pin>` parses as (project, EMPTY
+        branch, pin) instead of being rejected as malformed; only a single-slash
+        `/proj/sha` (no branch slot) is malformed now.
+      - `sniff/PATCH.c` canonic-peel (~L1405): a parse with an empty branch +
+        pin (detached) reduces `target_query` to the **bare pin** (not the empty
+        branch).  `resolve_target` then sha-looks-up the full 40-hex, and because
+        `resolve_parent_tip` bails on a 40-hex first chunk (L978) the squash base
+        falls to the existing `LCA(cur, theirs)` fallback — absorbing all of
+        `(cur..sha]`.
+    Note vs the earlier draft: **no `REFSQueryKind` and no fork-ancestor guard
+    were needed** — the peel emits a full 40-hex, so the existing `resolve_parent_tip`
+    40-hex bail already yields the correct base.  Verified: repro
+    `test/patch/30-cur-behind-target` RED (a.c kept at v0, C1 dropped) → GREEN;
+    all 21 `be-patch-*` green; full debug suite 232/232.
+ 2. **`KEEPResolveURI` + `REFSResolveURI` + `REFSQueryKind`** with a hermetic
+    table test (path arm, ref arm, auth arm; empty-branch detached among the
+    cases).  Wire PATCH's target resolution through it (replaces the canonic-peel
+    + `DOGRefSplitPin` cherry detector at `sniff/PATCH.c` ~L1405/L1435).
+ 3. **Caller migration.**  Route GET / POST / `be` dispatch through
+    `KEEPResolveURI`; retire `DOGRefSplitPin` and the scattered re-derivation.
+
+###  Stage 2 starting points (for a cold session)
+  - **New code home:** `keeper/RESOLVE.c` (body — already depends on `KEEP` for
+    pack lookups) declared in `keeper/REFS.h`; pure-syntactic `REFSQueryKind`
+    can sit in `keeper/REFS.h` inline (no KEEP dep).  `KEEPResolveRef`/
+    `KEEPResolveHex` (`keeper/RESOLVE.c:228/286`) become wrappers over the new
+    funnel (take `.sha`).
+  - **Context source:** `struct home` (`dog/HOME.h:44-90`) already holds
+    `project`, `cur_branch`, `cur_sha` — no wtlog re-read needed.  `home_walk_up`
+    (`dog/HOME.c:723`) gives the wt root; cwd→root delta is the one new helper
+    the path arm needs (HOMEFind sets `h->root` but not the relative prefix).
+  - **Building blocks to reuse (don't reimplement):** `DOGCanonQueryParse`
+    (now empty-branch-correct) + `DOGRefSplitPin` (`dog/DOG.c:389`) for the
+    canonical split; `DPATHBranchResolveRel` (used in `sniff/PATCH.c:863`
+    `absolutise_query`) for `?./x`/`?..`; `REFSResolve` (`keeper/REFS.h:135`)
+    for the `//auth` alias grep; `KEEPResolveRef`'s hashlet/tag/branch arms
+    (`keeper/RESOLVE.c`) for the ref pin.  `uri` struct + `URILexer` in
+    `abc/URI.h`.
+  - **Test pattern:** table-driven, hermetic via `dog/test/TESTBE.h`
+    `TESTBEmkdtemp` (now strips a stray `/tmp/.be`).  Cases: input URI string →
+    expected canonical `/<project>/<branch-or-empty>/<40-hex>` (path arm,
+    ref-relative, tag, hashlet, empty-branch detached, `//auth`).
+  - **Caller list for Stage 3:** `sniff/PATCH.c` (canonic-peel + cherry
+    detector), `sniff/GET.c` (its own `DOGCanonQueryParse` call), `sniff/POST.c`,
+    `beagle/DISPATCH.c` / `be` argv path.  Keep `DOGNormalizeArg` /
+    `DOGPromoteBareword` (verb-specific bareword promotion) upstream — they must
+    NOT move into keeper.
+
+##  Related (separate, not yet root-caused)
+The original reconcile used `be get` (which bases on `LCA(our, theirs)` =
+`eb1945fb`, the correct base) and still failed — `sniff: merge failed for
+beagle/SUBS.c (graf err)`, leaving ours untouched.  That is a *distinct* failure
+in `GRAFMergeWtFileTunable`'s weave apply on a correct base (it errors loudly
+rather than dropping silently); track separately if it recurs.  The landed
+`7d37f90f` is correct only because that reconcile was completed out-of-band
+(`git merge-file`) and verified token-for-token.
+
+##  Severity / blast radius
+Any `be patch ?<target>` where cur is behind the target's parent-branch fork —
+the exact shape of the serialized fix-and-land loop (a clone cut at an older
+trunk, patching/reconciling a newer trunk commit).  Same data-loss class as
+SUBS-001; worse because it is silent (exit 0).
+
+[Issues]: ../rule/Issues.mkd "fix-and-land loop"
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

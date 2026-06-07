@@ -1,0 +1,52 @@
+#   SUBS-006: POST git-remote push aborts NOBRANCH on a clean nested sub (LANDED)
+
+**MEDIUM — LANDED `414d9f96` (2026-06-06).**  A clean detached nested sub
+forwarded `be post -q ?/<sub>/.<parent>/<branch>` with no msg/patch rows, hitting
+`POSTPromote`'s missing-target arm which unconditionally returned `NOBRANCH`,
+aborting the whole git-peer push (157).  A *dirty* detached sub instead routes
+through `POSTCommit` (which auto-creates the synthetic branch at the pin), so
+anything reaching the missing-branch arm from a detached wt is by definition a
+clean sub with nothing to promote.  Fix `sniff/POST.c`: detached wt → `POSTNONE`
+(no-op, `-q`-swallowed); an attached wt still refuses `NOBRANCH` (DIS-020
+preserved).  Added `test/post/29` repro.
+
+**MEDIUM.**  A `be post ssh://<host>/<parent>.git?master` (git-peer remote)
+recurses the local-commit step into mounted subs, but when it reaches a
+**clean, detached** nested sub whose synthetic branch
+(`?/<sub>/.<parent>/<branch>`) does not yet exist, sniff fails
+`?/<sub>/.<parent>/<branch> does not exist — be put ?<branch> first`
+(`NOBRANCH`), which propagates as `be post: aborting parent commit — sub
+recursion failed` (exit 157).  A clean nested sub should be a **no-op**, not
+abort the whole push.
+
+##  Repro
+ 1. Depth-3 forest (parent → vendor/sub → vendor/sub/.../leaf), leaf clean.
+ 2. Make a local parent commit.
+ 3. `be post ssh://localhost/<rel>/parent.git?master`.
+ 4. Recursion descends to the clean leaf, forwards
+    `post ?/leaf/.sub/.parent/master`; the branch is absent → NOBRANCH → 157.
+
+##  Expected
+Per spec: "`be post` on a detached sub auto-creates that branch at the pin"
+and a clean sub with nothing to commit should no-op.  The remote-push recursion
+must not refuse on a clean sub merely because the synthetic branch has not been
+materialised yet.
+
+##  Actual
+Clean nested sub aborts the parent push with NOBRANCH.  (Note: for a
+beagle/`file:` peer the push itself recurses; the `.git` suffix here routes it
+as a git peer, so only the local-commit fall-through runs — that fall-through
+is what trips.)
+
+##  Fix sketch
+In the post recursion's clean-sub branch, treat a missing synthetic branch on a
+clean detached sub as a no-op (skip), or auto-create it at the pin before the
+push as the spec promises — rather than surfacing NOBRANCH.  Distinguish
+"clean sub, nothing to push" from "dirty sub, branch genuinely required".
+
+##  Tests
+Covered by `test/all/01-subs-all-verbs` (remote-push leg) and the post depth-3
+path; a dedicated `test/post` case can be added once SUBS-001 unblocks the
+post-order commit path.
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

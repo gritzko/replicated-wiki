@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Invariants</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>Invariants: the load-bearing rules every verb upholds</h1>
+<p>
+The design invariants are the load-bearing rules every <a href="Verbs.html">Verbs</a> and dog upholds — the small set of guarantees that keep the command language unambiguous and the store safe. The goal is to state them in one place so a change that would break one is easy to spot. The method: a handful of write-path, branching, and resolution invariants, plus the open edges still being settled; the per-verb pages and <a href="Store.html">Store</a> carry the detail, this page carries the contract.
+</p>
+<h2>Write-path invariants</h2>
+<p>
+The write path has exactly one commit-maker and one ref-writer, a linear first-parent spine, and a strict fast-forward rule, so history stays simple and safe.
+</p>
+<ul>
+<li>POST is the only commit-maker, PUT the only ref-writer: <a href="POST.html">POST</a> advances cur; <a href="PUT.html">PUT</a> writes a <code>refs</code> row but never a commit.</li>
+<li>First-parent linear, multi-parent at POST: first parent is cur's prior tip; <code>parent</code>/<code>foster</code>/<code>picked</code> come from patch rows.</li>
+<li>POST is fast-forward only, PUT unconstrained: POST refuses non-FF advance or push; PUT force-writes any ref on either side.</li>
+</ul>
+<h2>Branch and worktree invariants</h2>
+<p>
+Branches are cheap one-row entries, speculative work forks preventively, and one store backs many worktrees, with detach the one explicit escape hatch.
+</p>
+<ul>
+<li>Cheap branches, mkdir/cd split: a branch is a one-row reflog entry; <code>be put ?./A</code> creates it, <code>be get ?./A</code> enters it.</li>
+<li>Eager branching replaces stash: speculative work happens on a preventively-forked sub-branch, never on cur (see <a href="Worktree.html">Worktree</a>).</li>
+<li>One store, many worktrees: per-wt state lives in the wtlog; secondaries point <code>.be</code> at the primary (see <a href="Worktree.html">Worktree</a>).</li>
+<li>Detached mode is explicit: a <code>?&lt;sha&gt;</code> checkout with no branch detaches, and POST and <a href="PATCH.html">PATCH</a> refuse on a detached wt.</li>
+</ul>
+<h2>Resolution and interop invariants</h2>
+<p>
+URI shape alone fixes the resource, remotes are cached unless a transport scheme is named, projectors never mutate, and git peers see a flat byte-faithful namespace.
+</p>
+<ul>
+<li>Verb × URI shape is unambiguous: a ref-only URI targets the branch, a path+ref URI a file, a projector only reshapes output.</li>
+<li>Cached vs transport: a bare <code>//host</code> reads cached refs only; <code>scheme://host</code> opens the wire (the cache refresh, see <a href="Store.html">Store</a>).</li>
+<li>Projector schemes are read-only: they never mutate, so they compose safely with any verb (see <a href="Projector.html">Projector</a>).</li>
+<li>Git-peer interop is byte-faithful, topology-flat: branch paths roundtrip as slashy refs, tree flattens, trunk maps to <code>main</code>.</li>
+</ul>
+<h2>Open edges</h2>
+<p>
+A few cross-cutting contracts are still unsettled; the per-verb pages carry their own TBDs, this section the architectural ones.
+</p>
+<ul>
+<li>Conflict-marker wire format: PATCH's token-level 4-char delimiters need a stable format for <a href="Bro.html">Bro</a> and a <code>git mergetool</code> adapter.</li>
+<li>Provenance trailers: the <code>picked:</code> cherry-pick key and a possible path-scoped <code>&lt;sha&gt;:&lt;path&gt;</code> trailer are both still TBD.</li>
+<li>Real squash and repack: today GC is &quot;drop a branch&quot;; consolidating a branch's <code>refs</code> into one commit is still TODO.</li>
+<li>Bulk fetch <code>?*</code> orders parents-before-children over the delta DAG; the bare <code>be head</code> summary output format is still TBD.</li>
+</ul>
+</body>
+</html>

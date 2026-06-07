@@ -1,0 +1,167 @@
+#   URI-001: Unify branch/commit naming machinery
+
+**Status: DONE — all 5 stages LANDED / CONFIRMED.**  Branch-vs-commit-hash
+disambiguation WAS scattered across `dog` /
+`keeper` / `sniff` / `graf`, each re-deriving ref structure from the string
+heuristically; the canonical resolved form was unsettled (the DIS-025
+pin-in-query shape fought ULOG dedup — see "Canonical form" below); and hash
+length was hardcoded to 40 (sha1), so nothing was sha256 ready.  This ticket
+unified all of it behind one keeper-owned rule: `DOGRefSplitPin` is gone,
+`DOGIsHashlet`-as-disambiguator is replaced by branch-first `GRAFRefIsName` /
+`KEEPResolveRef`, and the `len==40` recognizers route through `DOGIsFullSha`.
+
+##  The one rule
+Disambiguation lives **only in keeper**, is **branch-first**, and is
+**hash-length-agnostic**:
+
+ 1. Does the ref name a **branch** (REFS lookup)?  → branch / trunk.
+ 2. Else, is the ref **all hex** AND does that **hash exist** (pack index)?
+    → hashlet (detached).  The index knows sha1 (40) vs sha256 (64); callers
+    never test a length.
+ 3. Else → not found.
+
+**Remote exception:** a ref requested *from* a peer (`ssh:`/`be:`) is NOT
+disambiguated locally — the raw ref is sent and the remote keeper resolves it.
+
+##  Chaos inventory (retire / keep)
+RETIRE — heuristic, scattered, or sha1-hardcoded:
+  - `dog/DOG.h` `DOGRefSplitPin` — guesses "is the last segment a 6..40-hex
+    hashlet?"; powers the located-cherry `?<br>/<sha>` shape.  Callers:
+    `sniff/GET.c` (3×, branch-switch locator), `sniff/PATCH.c` (located-cherry
+    detector), `sniff/AT.c`, `sniff/SNIFF.exe.c`.
+  - `dog/DOG.h` `DOGIsHashlet` used as a *disambiguator* (graf BLAME/INDEX/
+    GRAF.exe/DIFFREF; the splits above).
+  - Every `u8csLen(x)==40 && DOGIsHashlet(x)` "is this a full sha" recognizer —
+    `sniff/AT.c`, `sniff/LS.c`, `sniff/POST.c`, `sniff/SNIFF.exe.c`,
+    `sniff/GET.c`.  Hardcoded 40 ⇒ breaks sha256.
+  - `keeper/RESOLVE.c` `KEEPResolveRef` HEX-FIRST ordering (40→sha, 6+→hashlet,
+    then branch) — invert to branch-first.
+  - The located-cherry `?<br>/<sha>` shape itself.  Cherry-pick is `#<sha>`
+    (the flat object pool makes the bare form work; `be-patch-11`'s
+    "needs a flat pool we don't have" comment is STALE).
+
+KEEP (already principled):
+  - `dog/DOG.h` `DOGCanonQueryParse` — the canonic parser of the *resolved*
+    form `/<project>/<branch>/<pin>` → (project, branch, pin).  (Now also
+    accepts the single-slash trunk waypoint.)
+  - `keeper/REFS.h` `REFSQueryKind` — syntactic kind probe over the canonical
+    query (TRUNK / DETACHED / BRANCH).
+  - `keeper/RESOLVE.c` `REFSResolveURI` / `KEEPResolveURI` — the keeper-owned
+    funnel; the unified machinery is built ON these.
+
+##  Canonical form (revised 2026-06-07, LANDED `b2b4ff9e`)
+The earlier DIS-025 plan put the resolved hash in a query **pin**
+(`?/<proj>/<branch>/<sha>`, detached `?/<proj>//<sha>`).  It collides twice:
+ULOG dedup keys on the row text **before `#`** (so the tip sha must stay in the
+REFS *fragment* — every tip-move of one ref shares a dedup key, `dog/ULOG.c:663`),
+and in argv URIs the fragment is already **verb payload** (PATCH squash/merge/
+rebase mode, GET `#~N`/`#sha`).  So the funnel canonicalises the **SCOPE only**
+and NEVER pins a tip into query or fragment:
+
+  - `?/<proj>`             — trunk scope.
+  - `?/<proj>/<branch>`    — branch scope (may nest).
+  - `?/<proj>/<full-sha>`  — DETACHED: a bare commit, no branch (branch-first:
+                            the segment is a branch, else the commit).
+
+The resolved sha pin lives ONLY in `--at` (`<root>?/<proj>/<branch>#<sha>`,
+read from the wtlog) and REFS storage (`?heads/main#<sha>`, UNCHANGED — keeps
+ULOG dedup intact).  Downstream dogs re-resolve the scope to a tip themselves
+(`KEEPResolveRef`), so the argv fragment stays free for the verb.
+
+Decisions (2026-06-07): (1) `--at`'s fragment is ALWAYS the resolved sha,
+NEVER a commit message; the message is a query-less `#msg` URI (or `-m`).
+(2) A future fragment-locator (`?/<proj>/<branch>#<hashlet|msg>` selecting a
+SPECIFIC commit in scope, unifying sha / hashlet / message-search) is DEFERRED
+— today the fragment is left as verb payload.
+
+ZERO on-disk churn: resolver/emitter change only.
+
+##  Staged plan (test after each)
+ 1. **Keeper branch-first.** ✓ LANDED `fb55301d`.  Inverted `KEEPResolveRef`
+    (branch lookup first, hex fallback only on miss) and made
+    `REFSResolveURI` resolution-driven (dropped the `HEXu8sValid && len>=4`
+    shortcut — DETACHED now requires a branch miss + an existing all-hex
+    object).  A branch whose name is all-hex (`?dead`, `?c0ffee`) now wins
+    over a same-spelled hashlet.  No format change.  Repro cases added to
+    `keeper/test/RESOLVEURI.c`; 307/307 green under ASan.
+ 2. **Length-agnostic.** ✓ LANDED `887da35d`.  Added `DOGIsFullSha(u8cs)`
+    (all-hex && width 40/64) and routed 22 `len==40 && hex` "is-this-a-full-sha"
+    recognizers across sniff/keeper/graf through it; collapsed a hand-rolled
+    hex loop in `KEEP.exe.c` want-by-hash.  Table test in `dog/test/DOG.c`;
+    sha1 behavior unchanged, 307/307 green.  DELIBERATELY left: the two sites
+    paired with a 20-byte sha1 decode (`GET.c:498`, `POST.c:834` — converting
+    is a latent sha256 bug until the decode buffer widens), the `DOGIsHashlet`
+    chain (`graf/INDEX.c`, `DOGQueryBranchOnly` — Stage 4), the const-param
+    `sane()` preconditions (`KEEP.c:2646/2679`), and `AT.c:805` (already
+    `sizeof`-based).
+ 3. **Scope-only canonical form.** ✓ LANDED `b2b4ff9e`.  The funnel
+    canonicalises the SCOPE only (`?/proj`, `?/proj/branch`, detached
+    `?/proj/<full-sha>`) — no tip pinned into query/fragment (see "Canonical
+    form").  Changed: `REFSResolveURI` emitter + `KEEPResolveURI` (preserve
+    verb fragment) + `REFSQueryKind` scope classification (`keeper/`);
+    `GRAFResolveVersion` — the LIVE be-side resolver and the real leftover
+    pin-in-query producer — now scope-only (`graf/GRAF.c`); two consumers that
+    relied on the pin via `REFSResolve`'s canonic short-circuit re-routed
+    through `KEEPResolveRef`: keeper subs ref resolution (`keeper/KEEP.exe.c`,
+    project-strip) and graf head target (`graf/LOG.c`); `sniff/PATCH.c` peel
+    splits scope from any pin; tests `RESOLVEURI`/`REFKIND` updated.  307/307
+    green under ASan.  NO REFS on-disk change.
+ 4. **Retire the guessers.** ✓ LANDED.
+    - 4a ✓ LANDED `51e264e9` — located cherry-pick (`?<br>/<sha>`) retired;
+      cherry-pick is bare `#<sha>` only.  Removed the `cherry_locator`
+      promotion (`sniff/PATCH.c`) + located-cherry classification in
+      `at_patch_row_shape` (`sniff/AT.c`); migrated patch-11/14/19, post-07;
+      dropped the stale `be-patch-11` flat-pool comment.  307/307 green.
+    - 4b ✓ LANDED — `DOGRefSplitPin` DELETED (`dog/DOG.{c,h}` + its
+      `dog/test/DOG.c` case).  Merge/rebase patch rows are now BARE
+      (`?<sha>#<msg>` / `?<sha>#`) — the `row_locator` machinery
+      (`sniff/PATCH.c`) and the whole locator plumbing went: `sniff/AT.c`
+      `at_patch_row_sha_hex` reads the bare query sha (no split),
+      `at_patch_row_locator` + the `sniff_pe.locator` field + the
+      keeper/graf locator-switch blocks in `sniff/POST.c` are gone (the
+      flat per-project pool makes every foster/picked/replayed body
+      readable from cur's shard, so the switch was a vestigial no-op).
+      The four remaining branch-switch / POST-target sites (`sniff/GET.c`
+      ×3, `sniff/SNIFF.exe.c`) pass the query straight to the probe-gated
+      `SNIFFMaybeSwitch*`, which no-ops on a non-branch.  307/307 green.
+    - 4c ✓ LANDED — `DOGIsHashlet`-as-disambiguator routed branch-first.
+      New `GRAFRefIsName(ref)` (`graf/GRAF.c`, decl `graf/GRAF.h`) probes
+      REFS first (branch / tag / wire-prefixed name) so a ref whose name
+      is all-hex (`c0ffee`) wins over a same-spelled hashlet; wired into
+      `graf/BLAME.c` (`blame_read_blob` `#`-vs-`?`), `graf/DIFFREF.c`
+      (`diffref_compose_ref_uri`), and `graf/GRAF.exe.c` (the two
+      branch-switch guards + the `diff:?<hashlet>` commit-show gate).
+      The length-gated `len==N && DOGIsHashlet` recognizers (NOT
+      disambiguators) became `DOGIsFullSha`: `graf/INDEX.c`, `sniff/AT.c`,
+      `dog/DOG.h::DOGQueryBranchOnly`; the stale `sniff/GET.c` comment
+      fixed.  Repro test `test/diff/07-hex-named-branch` (a clone of 02
+      with `fix2`→`c0ffee`, byte-identical want files) — verified RED
+      before the fix, GREEN after.  308/308 green.
+ 5. **Remote delegation.** ✓ CONFIRMED — no code change needed.  The wire
+    path never invokes the local branch-first machinery on a remote ref:
+    `KEEP.exe.c` takes `want_ref = g->query` raw (only `DOGQueryStripProject`
+    scope-normalisation — NOT a sha resolve / branch-vs-hash guess), then
+    `WIREFetch` → `wcli_match_advert` matches the ref NAME against the PEER's
+    advertisement via `wcli_refname_match` (pure `wcli_wire_to_be` /
+    `GITParseRef` name+kind translation); the peer's advertised refs supply
+    the sha.  No `KEEPResolveRef` / `DOGIsHashlet` / `GRAFRefIsName` runs on a
+    `ssh:`/`be:` ref.  The `?<40hex>` arm (`DOGIsFullSha`) is a
+    present-object short-circuit to skip a wire round-trip, not a
+    disambiguator.  Covered by `keeper/test/WIRE_CLIENT.c` (incl. the
+    zero-refs `want <40-hex pin>` case).  This is the §"Remote exception" of
+    "The one rule", now verified end-to-end.
+
+##  Foundation (already landed, all 302 tests green under ASan)
+  - DIS-025 Stage 1 — squash data-loss fix (`a31c7fbd`).
+  - DIS-025 Stage 2 — `REFSQueryKind` (`keeper/REFS.h`, + `keeper/test/REFKIND.c`)
+    and `REFSResolveURI` / `KEEPResolveURI` (`keeper/RESOLVE.c`, +
+    `keeper/test/RESOLVEURI.c`); PATCH target resolution wired through them.
+  - DIS-025 Stage 3 (partial, SUPERSEDED by Stage 3 above) — `DOGCanonQueryParse`
+    accepts the single-slash trunk waypoint; `BEActResolveRef` emitter migrated
+    to the funnel emitting the pin-in-query forms (trunk `?/proj/<sha>`,
+    detached `?/proj//<sha>`, branch `?/proj/<br>/<sha>`); `be_abs_branch`
+    deleted.  The pin-in-query SHAPE is now being rolled back to the
+    fragment-locator form (Stage 3); the funnel wiring itself stays.
+
+[DIS-025]: DIS-025.mkd "squash merge-base / resolver-funnel origin"
+[URI]: ../wiki/URI.mkd "URI grammar + ref shapes"

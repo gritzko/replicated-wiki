@@ -1,0 +1,23 @@
+#   MEM-024: push-side recursive walk holds 1MB mmap per frame (keeper/WIRECLI.c)
+
+On the push path `wpush_walk_commit` and `wpush_walk_tree` mmap a 1MB buffer and recurse *before* unmapping, so a long linear commit chain or deep tree stacks one C frame plus one live mmap per level. The dedup count caps bound distinct objects, not single-chain depth: haveset-build callers pass `out==NULL` so no count cap applies at all, and pack mode's cap (65536) far exceeds the ~8MB C stack. A deep/force-pushed history → stack-overflow SIGSEGV; the discarded recursive return also drops errors. (Category is unbounded recursion — the NORESERVE mmap is reclaimed on unwind, not leaked.) The goal is to bound depth and stop holding the buffer across recursion.
+
+##  Issues
+Recursion per parent/subtree with a 1MB mmap live across the call; caps don't bound depth.
+
+ -  `keeper/WIRECLI.c:1182` `wpush_walk_commit` recurses on each parent with `cbuf` (mmap 1MB at :1144) still mapped until :1186; no depth guard → linear chain stacks N frames → stack overflow.
+ -  Count cap `*n>=cap` (cap=WPUSH_MAX_OBJS=65536, :1136) bounds only emitted shas; haveset callers (:1561,:1657) pass `out=NULL` so even that is skipped → depth = full chain length.
+ -  Recursive return discarded at `keeper/WIRECLI.c:1182` (errors swallowed).
+ -  `keeper/WIRECLI.c:1102` `wpush_walk_tree` same pattern: `tbuf` mmap 1MB (:1077) held live across subtree recursion until :1113 (lower risk; trees usually shallow).
+
+##  Blockers
+None.
+
+##  Planned
+Bound depth, release before recursing, propagate errors.
+
+ -  Repro first: build a long unshared linear commit chain (and a deep tree) and `WIREPush` it; assert bounded failure rather than SIGSEGV.
+ -  Capture parent list + tree_sha by value and unmap `cbuf`/`tbuf` BEFORE recursing; or convert to an explicit bounded work-stack so only O(1) maps/frames are live.
+ -  Check/propagate the recursive return at :1182; add a depth cap fired in both `out!=NULL` and `out==NULL` modes.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

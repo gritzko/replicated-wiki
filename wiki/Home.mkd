@@ -10,7 +10,7 @@ Beagle is a revision control system for modern workflows: a comfortable client f
 
 ##  The `be` command language
 
-The dispatcher is `be`. It uses standard [URI] arguments and the [Verbs] of the HTTP dictionary, which cover every data maneuver — not a zoo of flags. The verbs are orthogonal: one verb cannot supplement another through creative use.
+The dispatcher is `be`. It uses standard [URI] arguments and the [Verbs] of the HTTP dictionary, which cover every data maneuver — not a zoo of flags. The verbs are orthogonal — one cannot supplement another — and uphold the [Invariants].
 
  -  Read-only: [GET] fetches or checks out a version/branch/project; [HEAD] is its dry-run, listing what would change.
  -  Read-write: [POST] advances the current branch — commit or fast-forward — writing worktree→repo.
@@ -23,7 +23,7 @@ The dispatcher is `be`. It uses standard [URI] arguments and the [Verbs] of the 
 Every non-flag argument is one [URI], `scheme:host/path?query#fragment`, and each component reflects one aspect of the command. Changing the URI shape changes the semantics — `patch` becomes merge, rebase, or cherry-pick depending on the shape.
 
  -  `scheme` is the app/protocol, `host` a remote, `path` a file path relative to the project root.
- -  `query` selects the project/branch/tag/commit; Beagle is multi-project — one [Store] hosts many projects, each a branch tree.
+ -  `query` selects project/branch/tag/commit; Beagle is multi-project — one [Store] hosts many projects, each keyed by [Title].
  -  `fragment` is free-form payload: a commit-message body, a line jump, an extension filter.
  -  Branch shapes: `?/project/branch/tag` absolute, `?branch/` relative branch, `?v1.2.3` tag, `?./fix`/`?..` branch-relative.
  -  More shapes: `?abc1234` sha-prefix, `?free text` message search, `?null`/`?back` magic (no-branch / prev-branch).
@@ -43,11 +43,11 @@ The common loop is clone or switch, edit the worktree, stage, commit, then push 
 
 ##  Projections
 
-Apart from verbs, Beagle has projections — read-only, presentation-only verbless views. Projections accept URIs of any shape and never mutate, so they compose freely with the rest of the language.
+Apart from verbs, Beagle has projections — read-only, presentation-only verbless views. Projections accept URIs of any shape and never mutate, so they compose freely with the rest of the language; the full set is the [Projector] catalog.
 
  -  `be diff:?other_branch` diffs against a branch; `be log:file.c` shows a file's history.
  -  `be grep:TODO` does literal search; `be spot:#FuncName` does structural search across the repo.
- -  Projections compose with any URI shape, e.g. `be diff://host/file.c?remote_branch`.
+ -  Projections compose with any URI shape, e.g. `be diff://host/file.c?remote_branch`; the [Projector] page lists every scheme.
 
 ##  The dogs
 
@@ -56,7 +56,7 @@ The repo is structured into dogs — each with its purview, the data and functio
  -  [Bro] — interactive syntax-highlighted pager and viewer.
  -  [Spot] — structural code search, grep, regex and replace across a repo; maintains a trigram index.
  -  [Graf] — token-level diffing, 3-way merges and history navigation; maintains a history index.
- -  [Sniff] — serves the worktree and detects changes via one append-only wtlog.
+ -  [Sniff] — serves the [Worktree] and detects changes via its one append-only wtlog.
  -  [Keeper] — stores data (blobs, trees, commits) in one flat [Store] pool per project; branches and tags are refs into it.
  -  [Mark] — renders the [StrictMark] wiki to HTML and lints its [WikiWeb] structure and size budgets.
 
@@ -99,6 +99,10 @@ Beagle stands on prior art for its indexing, scanning and storage layers.
 [PATCH]: PATCH.mkd "PATCH verb"
 [Dog]: Dog.mkd "the dog convention"
 [Store]: Store.mkd "repo layout"
+[Worktree]: Worktree.mkd "worktree state"
+[Projector]: Projector.mkd "read-only views"
+[Invariants]: Invariants.mkd "design invariants"
+[Title]: Title.mkd "project title"
 [Bro]: Bro.mkd "the bro dog"
 [Spot]: Spot.mkd "the spot dog"
 [Graf]: Graf.mkd "the graf dog"

@@ -1,0 +1,23 @@
+#   MEM-033: JABCReport casts exception OBJECT to JSStringRef (js/main.cpp)
+
+`JABCReport` reports a thrown JS exception. In the message branch (`JSValueIsObject` && has message), it fetches `ref=message` (a real JSStringRef) into `page`, overwrites the NUL with newline, then calls `JSStringGetUTF8CString((JSStringRef)exception, page+len, PAGESIZE-len)` — but `exception` is a JS OBJECT, not a string. Casting an object to `JSStringRef` makes JSC reinterpret the object's heap layout as a `StringImpl`, reading a bogus length and char pointer: type confusion / OOB-garbage read into a stack buffer, reachable from any uncaught `Error` with a message. The sibling Stack branch correctly uses `(JSStringRef)ref`, confirming a copy-paste defect. The goal is to use `ref`, bound by remaining `page`, and re-terminate.
+
+##  Issues
+Object reinterpreted as a string; weak bounds/termination around it.
+
+ -  `js/main.cpp:140-141` `JSStringGetUTF8CString((JSStringRef)exception,…)` casts a `JSObjectRef` to `JSStringRef` → JSC type confusion / OOB read.
+ -  `js/main.cpp:139` `page[len-1]='\n'` relies on `len>=1` and leaves `page` unterminated for `fprintf`.
+ -  `js/main.cpp:140` `page+len` with `len==PAGESIZE` is one-past-end; only JSC's size-0 short-circuit avoids an OOB write.
+ -  `js/main.cpp:163` `JABCExecute` forwards any uncaught exception, so the branch is script-reachable via `throw new Error('x')`.
+
+##  Blockers
+None.
+
+##  Planned
+Use the message ref; bound and terminate.
+
+ -  Repro FIRST: eval `throw new Error('x')`, run `JABCReport` under ASan; assert no type-confusion read/OOB.
+ -  Replace `(JSStringRef)exception` at :140 with the already-fetched `ref` (the message JSStringRef).
+ -  Bound the second write by remaining `page` space and re-append a NUL before `fprintf`/`printf`.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

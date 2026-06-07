@@ -1,0 +1,45 @@
+#   SUBS-007: `be head` omits sub working-tree dirty state (LANDED)
+
+**MEDIUM — LANDED `3ab50efd` (2026-06-06).**  Fixed in `beagle/BE.cli.c`
+`behead_recurse_cb`: after relaying the sub's committed `be head ?` diff it
+now also relays the sub's bare status via `BERelaySub(..., {NULL,NULL})` (the
+same read-only path bare `be` uses, path-prefixed; a clean sub returns
+`*NONE`), so a dirtied sub file now adds a `mod`/`dirty` line.  Repro
+`test/head/21-sub-dirty-reported` added (off `WILL_FAIL`); the head/04
+false-positive was tightened to require a `mod`/`dirty` marker.
+
+**MEDIUM.**  Submodules.mkd line 20 promises `be head` recurses pre-order
+"reporting ahead/behind AND dirty state per sub".  In practice `be head`'s
+per-sub section only ever lists committed ahead/behind; its output is
+**byte-identical** whether or not a sub file is dirty — no `dirty`/`mod`/`clean`
+keyword appears anywhere.  The information is reachable (bare `be`, the status
+path, DOES relay the sub's `mod core.c`), it is simply not wired into HEAD's
+per-sub report.
+
+##  Repro
+ 1. `be get <parent>?master`.
+ 2. `be head '?' > clean.out`.
+ 3. Append a line to `vendor/sub/core.c`.
+ 4. `be head '?' > dirty.out`; `diff clean.out dirty.out` → **empty**.
+
+##  Secondary: head/04 is a false-positive test
+`test/head/04-sub-dirty` PASSES, but only because it greps the combined output
+for `core.c`, which appears in HEAD's committed ahead/behind file list (`+
+core.c`) regardless of the dirty edit.  It does not actually exercise the
+dirty-state contract it documents.  The new `test/head/21-sub-dirty-reported`
+asserts the real contract (diff must change) and is `WILL_FAIL` until fixed.
+
+##  Expected
+A dirtied sub file changes the per-sub HEAD report (a `mod`/`dirty` line, as
+bare `be` already produces in the status path).
+
+##  Fix sketch
+Wire HEAD's per-sub aggregation to include the sub's working-tree status (reuse
+the bare-`be` status relay that already surfaces `mod core.c`), not only the
+committed pin-vs-trunk ahead/behind.  Then correct head/04 (or fold it into
+head/21) so it fails when dirty state is absent.
+
+##  Tests
+`test/head/21-sub-dirty-reported` (`WILL_FAIL` until fixed).
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

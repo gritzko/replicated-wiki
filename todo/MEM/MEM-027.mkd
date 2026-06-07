@@ -1,0 +1,22 @@
+#   MEM-027: patch_walk unbounded BASS carving exhausts the arena (sniff/PATCH.c)
+
+Recursive `patch_walk` `a_carve`s ~29MB per directory level (3×4MB trees + 16MB blob + entry arrays) and recurses into every subdir with no depth bound; the plain recursive call keeps each parent's carve live for the whole subtree, so a tree ~34 levels deep overflows the 1GB ABC_BASS. The leaf loop also issues `(void)fetch_blob` / `(void)GRAFMerge3Bytes` / `(void)GRAFMergeWtFileTunable` as plain calls, so any callee BASS scratch is never rewound per iteration and accumulates with file count. `a_carve` returns BNOROOM (graceful, no OOB), so this is resource exhaustion that fails deep/large trees unpredictably. The goal is to bound depth and reclaim per-leaf scratch.
+
+##  Issues
+Per-level carve held across recursion; per-leaf scratch never rewound.
+
+ -  `sniff/PATCH.c:507` `patch_walk_inner` recurses into `patch_walk` via a plain call with no depth guard; ~29MB/level stays live for the whole subtree.
+ -  `sniff/PATCH.c:798-814` each frame `a_carve`s 3×4MB trees + 16MB blob + 3× entry arrays; ~34 nested levels overflow 1GB ABC_BASS (BNOROOM).
+ -  `sniff/PATCH.c:553,629,636,670,695,765` leaf `(void)fetch_blob`/`GRAFMerge*` are plain calls; callee scratch not rewound per iteration, scales with file count.
+
+##  Blockers
+None.
+
+##  Planned
+Bound depth; rewind per leaf.
+
+ -  Repro FIRST (CLAUDE.md §17): drive `PATCHApply` against a deeply nested tree (and a wide many-file tree); assert no BNOROOM at sane depth.
+ -  Add an explicit recursion-depth bound to `patch_walk` and surface a clear error past it.
+ -  Wrap the per-leaf `fetch_blob`/`GRAFMerge*` in `call()`/`try()` or bracket the leaf-loop body with a BASS mark/rewind so each iteration's scratch is reclaimed.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

@@ -1,0 +1,30 @@
+#   SUBS-003: GET status report stamped DDMon not HH:MM (FIXED)
+
+**MEDIUM — FIXED this session** (uncommitted, per session rules).  `be get`'s
+clone/checkout status report rendered every file row's time column as a date
+(`06Jun`) instead of the wall-clock `HH:MM` that bare `be`/put/post emit.  The
+skew made the long-standing `test/get/05-submodule-from-ssh` and
+`test/get/07-submodule-nosub` failures (their assertion greps `[0-9:]+` for the
+time column, which never matches `06Jun`).
+
+##  Root cause
+`dog/HUNK.c` `hunk_feed_status_plain` / `hunk_feed_status_color` decode a
+RON60 `hk->ts` to a `struct tm` via `RONToTime`, then call `mktime(&tm)`.  The
+`tm` is zero-initialised, so `tm_isdst == 0`; in a DST-active zone (CEST,
+UTC+2) `mktime` interprets the local wall-clock as standard time (UTC+1),
+yielding an epoch **one hour in the future**.  A 23:19 stamp thus rolls past
+midnight to `00:19 06Jun`, and `now - ts < 0` falls out of
+`DOGutf8sFeedDate`'s same-day/HH:MM window into its DDMon branch.  GET hits
+this because its hunks carry a live `hk->ts` (`sniff/GET.c` per-file rows);
+put/post leave `hk->ts == 0` so they render `now` directly.
+
+##  Fix
+Set `tm.tm_isdst = -1` before `mktime` in both renderers (let mktime resolve
+DST from the wall-clock).  Two-line change in `dog/HUNK.c`.
+
+##  Verification
+`be-get-05-submodule-from-ssh` and `be-get-07-submodule-nosub` flip from FAIL
+to PASS; full submodule suite 35/35 and broader get/post/head/patch/put/delete/
+diff/spot sweep 150/150 stay green — no regressions.
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

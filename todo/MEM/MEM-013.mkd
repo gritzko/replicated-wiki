@@ -1,0 +1,21 @@
+#   MEM-013: POLLoop mutates a stale poller slot after re-entrant callback (abc/POL.c)
+
+`POLLoop` captures `idx = POLFind(fd)` and `at = *data + idx` from the pre-callback heap, runs `at->callback(...)`, then tests/clears/ejects via the now-stale `at`/`idx` — but the callback may call `POLTrackEvents`/`POLIgnoreEvents`/`POLAddTime`, which `sUp`/`sDown`-swap or eject heap elements, so the post-callback code operates on whichever poller now occupies that slot (possibly past the shrunk `$len`). Because `POL_QUEUE` is fixed-cap it stays in-allocation (no UAF), but it reads/writes the wrong poller and can double-eject. The goal is to re-resolve by fd after the callback.
+
+##  Issues
+Heap reorder under a re-entrant callback invalidates the captured slot.
+
+ -  `abc/POL.c:237-255` — `at`/`idx` captured before `at->callback`; the same `at`/`idx` used to test/clear/eject afterward.
+ -  Same shape in the timeout loop (callback at :187, `at` deref at :189/195-197).
+ -  Verifiers split (real/refuted): not OOB/UAF (fixed-cap buffer), but wrong-slot mutation and possible double-eject/skip.
+
+##  Blockers
+None. Triggered only by callbacks that mutate the poll set for a different fd mid-loop.
+
+##  Planned
+Re-fetch after the callback.
+
+ -  Repro first: a callback that ignores/tracks another fd during `POLLoop`; assert the intended fd's removal/clear is applied to the right slot.
+ -  Re-run `POLFind(fd)` and re-validate `idx < $len(data)` before mutating/ejecting, or snapshot the fd set and apply removals after the callback pass.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

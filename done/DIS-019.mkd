@@ -1,0 +1,24 @@
+#   DIS-019: direct `be post ssh://…/<sub>` forges a funny ref `refs/heads/.beagle/`
+
+A mounted beagle submodule's current branch is the synthetic dot-coordinate `?/<sub>/.<parent>[/<br>]` (be-only; see [Submodules]). Posting that worktree DIRECTLY to a git remote derives the dot-branch as the wire refname, so keeper sends `refs/heads/.beagle/` and the peer rejects it ("refusing to update funny ref") — after a full pack build, ending in `WIRECLFL`/`BEDOGEXIT`. Recursion already strips the transport for subs (`beagle/BE.cli.c:2086`, commit `8e2a5b2a`); the direct top-level post of a sub is unhandled. The goal: a dot-branch never reaches a git wire. See [POST], [Submodules].
+
+##  Issues
+The push refname is taken from `cur_branch` with no check that a dot-coordinate is be-only.
+
+ -  `keeper/KEEP.exe.c:818-825` derives `local_branch` from `h->cur_branch` (= `.beagle/`) when the URI has no `?ref`.
+ -  `wcli_be_to_wire` (`keeper/WIRECLI.c:314`) → `GITFeedRef` wraps it blindly: `refs/heads/.beagle/`, no refname validation.
+ -  Repro: `cd` into a mounted beagle sub (cur = dot-branch), `be post ssh://localhost/src/dogs/<sub>` → funny-ref reject.
+
+##  Blockers
+None.
+
+##  Planned
+Skip the wire push when the branch is a synthetic dot-coordinate and the remote is a git transport — local commit (sniff) already happened, nothing to push to a git peer.
+
+ -  Add shared `DOGIsGitTransport(u8cs)` to `dog/DOG.c`/`DOG.h` (ssh/https/http/git) beside `DOGIsTransport`.
+ -  In `keeper_post` (after `branch` is computed, before remote-URI/pack build): if `branch[0][0]=='.'` AND the resolved remote scheme is a git transport, print a one-line note and return OK — build NO pack.
+ -  Keep `be://` dot-branch pushes working (beagle remote is not a git transport) and normal-branch git pushes unchanged.
+ -  Repro test under `test/post/`: sub on a dot-branch + `be post ssh://…/<sub>` exits clean, no funny-ref, no pack.
+
+[POST]: ../wiki/POST.mkd "POST verb"
+[Submodules]: ../wiki/Submodules.mkd "submodules"

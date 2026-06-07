@@ -1,0 +1,22 @@
+#   DIS-017: GET bareword cannot restore a deleted tracked file
+
+[GET] promises `be get file.c` restores one file from cur's baseline, "resurrecting if deleted", and [Verbs] says a bareword promotes to the path slot when it "names a tracked file". The impl decides path-vs-branch by on-disk `stat`, not by tracked status, so a deleted tracked file misses the stat, promotes to `?branch`, and `be get file.c` attempts a branch switch instead of resurrecting the file. The goal is bareword classification by tracked status. See [GET], [Verbs].
+
+##  Issues
+Bareword promotion keys on existence, not on tracking.
+
+ -  `beagle/BE.cli.c:2344-2350` decides path-vs-branch via `FILEStat`; the comment itself concedes "Deleted-file restore needs the explicit `./` form since stat misses it."
+ -  A deleted tracked file therefore fails the stat → bareword promotes to `?branch` (`def='q'`) → `be get file.c` tries to switch to branch `file.c`, contradicting [GET]:18 ("resurrecting if deleted").
+ -  Secondary: an *untracked* on-disk file is treated as a restore target, vs the spec's "tracked entry" wording.
+
+##  Blockers
+None; needs a baseline-tree tracked-path probe available to the bareword classifier (the same lookup DIS-004 wants for the delete hash check).
+
+##  Planned
+Repro, then classify by tracked status.
+
+ -  Repro: track `file.c`, delete it, `be get file.c` must resurrect it; today it errors as a missing branch.
+ -  In `DOGPromoteBareword`/`BE.cli.c`, promote to path when the token matches a baseline-tracked entry even if absent on disk; fall back to `?branch` otherwise.
+
+[GET]: ../wiki/GET.mkd "GET verb"
+[Verbs]: ../wiki/Verbs.mkd "the verbs hub"

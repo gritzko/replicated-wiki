@@ -1,0 +1,20 @@
+#   HEAD-001: be head prints no ahead/behind summary
+
+`be head ?br` / `be head ssh://host/path` is the read-only "what changed and what would change" verb, but it currently prints an **empty** summary: the fetch + cache update happen and it exits 0, yet stdout carries no ahead/behind counts and no differing-file list. The divergence of `~/beagle` (cur) from `ssh://localhost/src/dogs` was invisible at the CLI — the non-FF only surfaced later as a cryptic `WIRECLNFF` on POST, and the gap had to be read out of `.be/<proj>/refs` by hand. VERBS.md already flags the exact format as TBD (§"Open edges": "Bare `be head` output shape").
+
+##  Issues
+HEAD resolves the remote/branch tip and caches it, but emits no human-facing diff, so a diverged or behind branch looks identical to an up-to-date one.
+
+ -  No ahead/behind commit counts cur-vs-target; no list of differing paths.
+ -  Empty output reads as "nothing to do", masking a divergence that POST then rejects non-FF (`WIRECLNFF`) with git's "remote end hung up".
+ -  Cross-check: `be head --nosub ssh://localhost/src/dogs` exits 0 with empty stdout despite a 9aabd863-vs-f2e097da divergence.
+
+##  Planned
+Define and emit the summary: `ahead N, behind M` plus one `<status>\t<path>` row per differing file, matching bare `be`'s ULOG-style report shape. Drive it off the weave/merge-base already computed for the cache update.
+
+##  Landed
+Root cause was the dispatch table, not the summary engine: `graf head` (`graf/LOG.c`) already emits the ahead/behind + path rows, but `beagle/DISPATCH.c::BE_PLAN_HEAD`'s only `BEActGrafHead` row excluded `URI_SCHEME`, so transport HEAD fetched+reindexed yet never ran the summary. Fix reuses the existing weave/merge-base; no recompute, no second wire trip.
+
+ -  `beagle/DISPATCH.c`: two transport-gated `BEActGrafHead` rows (scheme+authority, scheme-only) placed after the keeper/spot/graf-get rows so they read the freshly-fetched cache; the no-scheme cached row stays exclusive (no double-emit). graf head's `REFSResolve` is authority-substring, ignoring the leading scheme.
+ -  `test/head/22-transport-summary`: hermetic offline `file://` repro (git→B1, keeper-clone B1→B2, advance B1, assert `be head file://B1?master` prints the summary); failed-before / passes-after; auto-globbed.
+ -  Full `ctest` WITH_SSH green (290/290, all ssh head-recursion cases incl. the new one); posted `eb1945fb`.

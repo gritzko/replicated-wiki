@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-003</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>POST-003: recursive POST skips a freshly-added submodule</h1>
+<p>
+<code>be post '#msg'</code> should commit a dirty sub and bump its gitlink even when the sub was added this session (<code>.gitmodules</code> staged via <code>be put</code>, mount via <code>sniff sub-mount</code>) rather than present in the last committed tree. Today the parent commits but never recurses: the sub's tip stays at its pin, no gitlink bump. The goal is add-then-post descending like an already-tracked sub. See <a href="../wiki/Submodules.html">Submodules</a>, <a href="../wiki/POST.html">POST</a>. Repro: <code>post/15-sub-add-then-post</code> (deterministic).
+</p>
+<h2>Issues</h2>
+<p>
+Post-time enumeration misses a sub that is mounted + declared-in-wt but absent from the committed baseline tree.
+</p>
+<ul>
+<li><code>BEActSubsPost</code> → <code>BESubsHere</code> emits no entry for the new sub, so <code>bepost_recurse_cb</code> never fires (no <code>be: post &lt;sub&gt;</code>).</li>
+<li>The sub is present: its <code>.be</code> anchor exists and <code>.gitmodules</code> is staged, yet enumeration keys on the committed tree.</li>
+<li>With synthetic-branch commit landed, only pre-existing subs commit; a same-session <code>submodule add</code> silently no-ops.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Independent of the detached-sub synthetic-branch POST work (landed); this is purely the enumeration source at recursion time.
+</p>
+<h2>Planned</h2>
+<p>
+Enumerate from the wt's declared+mounted set, not only the committed baseline tree.
+</p>
+<ul>
+<li>Union mounted-on-disk subs with staged <code>.gitmodules</code> declarations in <code>BESubsHere</code> (or its post caller), dedupe by path.</li>
+<li>Keep <code>post/15</code> as the regression once green.</li>
+</ul>
+</body>
+</html>

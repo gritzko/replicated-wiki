@@ -1,0 +1,128 @@
+#   DIS-024: flat→sharded store-layout migration (retire the top-level `.be/refs`)
+
+**Store-layout migration — large, deliberate, single-session.**  [STORE]
+specifies one layout: `.be/wtlog` (default-wt log) + `.be/<project>/{refs,
+*.keeper,*.idx}` (project shard).  The codebase still carries a *legacy flat*
+layout — when `h->project` is empty, every shard path collapses to the
+top-level `.be/` and `.be/refs` becomes the live ref log.  The directed end
+state (prior-session handoff) is: `HOMEOpen` resolves the project so
+`h->project` is **never empty**, then the top-level `.be/refs` creation +
+all accesses + the empty-project `HOMEBranchDir` branch are deleted.
+
+##  Why this is NOT a small change (measured 2026-06-06)
+A first attempt — basename-derive in `HOMEOpen` (derive `h->project` from the
+wt-root basename when empty) — was implemented and reverted.  Findings:
+ -  **Blast radius is the whole flat-layout corpus: 60+ tests fail**, not the
+    ~5 first estimated (the estimate came from a broken awk that mislabeled
+    1142 of 1199 `HOMEBranchDir` empty-project firings).  Empty-`project`/flat
+    is the *common* test layout, established by `test/lib/repo-setup.sh`'s
+    empty-`.be/` shield.
+ -  **For flat stores `.be/refs` is LIVE, not vestigial.**  E.g.
+    `be-post-nonff` poisons `.be/refs` and the non-ff check reads it; moving
+    the code to `.be/<project>/refs` desyncs it from every fixture that
+    manipulates the flat path.  The handoff premise ("top-level `.be/refs` is
+    meaningless") only holds *after* the migration, not before.
+ -  **Shield-escape hazard.**  Creating a `.be/<project>/` shard subdir inside
+    a shield `.be/` flips `home_dir_no_subdirs()` (dog/HOME.c) from YES
+    (shield) to NO (populated store), breaking the shield so store discovery
+    escapes up to the real `$HOME/.be`.  During the attempt a non-hermetic
+    test escaped and wrote `?fix1`/`?fix2` rows into `$HOME/.be/wtlog`, which
+    then **hung every `be` bootstrap under `$HOME`** (the documented
+    "`~/.be/wtlog` self-anchor hangs" hazard).  Recovered by restoring the
+    pre-session row-0 anchor; see `$HOME/.be/wtlog.subs-session-polluted.bak`.
+
+##  Coupled pieces (all must move together)
+ 1. `dog/HOME.c` `home_open_inner` — project derivation so `h->project` is
+    never empty for a colocated/default wt (basename-derive, or scan the
+    single shard subdir, or fixture-side anchoring — see Planned).
+ 2. `dog/HOME.c` `HOMEBranchDir` — drop the `if (!u8csEmpty(proj))` empty-
+    project branch (lines ~408-409); project becomes mandatory.
+ 3. `dog/HOME.c` `home_ensure_markers` — stop creating the top-level
+    `.be/refs` marker (keep `.be/wtlog`); per-project `refs` is keeper's job.
+ 4. `dog/HOME.c` `home_dir_no_subdirs` + `home_walk_up` — the shield test must
+    survive a store that legitimately has ONE project-shard subdir (today a
+    subdir ⇒ "populated store, keep walking").
+ 5. `test/lib/repo-setup.sh` — shields/fixtures must seed a project-anchored
+    store (or the derivation must make the shield resolve to a stable project)
+    so flat-layout fixtures migrate consistently.
+ 6. Every fixture/assertion that reads/writes a *flat* `.be/refs`,
+    `.be/*.keeper`, `.be/*.idx` path (grep the corpus) — repoint to
+    `.be/<project>/`.
+
+##  Planned (staged; each stage ends green)
+ 0. **Hermetic guard FIRST — DONE (2026-06-06, via FIREWALL, not a ceiling).**
+    `repo-setup.sh` drops an empty `.be` FILE at the test scratch base
+    (`$HOME/tmp`, parent of every per-run dir).  A walk that escapes a broken
+    wt shield hits it and returns NOTAWT instead of ascending into the dev
+    box's real `$HOME/.be`.  Rides the existing empty-`.be`-file → NOTAWT
+    refusal (HOMEtest "secondary empty .be file"); no env var, no discovery
+    code change.  `rs_firewall` in `test/lib/repo-setup.sh`; suite 230/230.
+    (An earlier `BE_CEILING` env-var attempt was reverted in favour of this.)
+ 1. **Derivation source — DECIDED & LANDED (2026-06-06): SINGLE-SHARD
+    SCAN, project read FROM THE STORE.**  Two cases, matching
+    `home_anchor_resolve`'s file/dir split:
+      - Secondary wt (`.be` is a FILE): project from row 0's
+        `?/<project>/<branch>` anchor — already implemented
+        (`home_anchor_proj_branch`); no change.
+      - Primary wt (`.be/` is a DIR): when row 0 yields no project,
+        scan `<root>/.be/` for its SINGLE shard subdir and adopt that
+        name (`home_single_shard`).  Zero shards (flat) or >1 (ambiguous)
+        → project stays empty → flat layout.
+    NOTE — basename(`h->wt`) was tried first and REVERTED: the suite
+    pervasively copies a store into a differently-named wt
+    (`cp -r src/.be/. .be/`), so the wt dir name ≠ the store's project;
+    basename-derive mismatched (48 fails).  Reading the name from the
+    store's own shard is copy-safe.  Landing point: `home_open_inner`
+    after wt/root/anchor resolution.  Test: `HOMETestProjectDerive`
+    (flat → empty; single shard → shard name; two shards → empty).
+    Also landed `#4`: `home_dir_shieldlike` (was `home_dir_no_subdirs`)
+    now anchors a `.be/` with ≤1 subdir (a single-project store), only
+    multi-project (>1) keeps walking.  Suite 230/230 green.
+ 2. Born-sharded BOOTSTRAP — LANDED (2026-06-06).  The in-place post
+    bootstrap (`sniff/SNIFF.c::sniff_write_repo_row`) now mints the
+    project (Title = wt basename when `be` hasn't already set one via
+    `--at`), lays down the `<wt>/.be/<project>/` shard, and writes the
+    colocated row-0 anchor `file:<wt>/.be/<project>` (abc/PATH for the
+    path, abc/URI `URIMake`→`URIutf8Drain` for the URI).  So `sniff`/
+    `keeper`-direct now match `be`: sharded, no flat top-level objects.
+    NOTE — the obvious mint-in-`HOMEOpen` was tried and reverted: it
+    fires for EVERY fresh rw open and collides with `keeper receive-pack`
+    /clone (which create a *named* project → `BEPRJDUP`, a production
+    bug).  The bootstrap (sniff) is the right layer — clone/receive-pack
+    keep their own project creation.  Repointed flat-path assertions in
+    `sniff/test/{post-ff,branchdel,cross-post}.sh` (→ `$RS_SHARD/refs`,
+    exported by `repo-setup.sh`) and `sniff/test/SNIFF.c`
+    (`SNIFFAtHelpers`/`SNIFFAtProjectStrip` → absolute `?/<project>`,
+    `SNIFFCheckoutCommit` pre-creates its shard).  Suite 230/230.
+ 3. Top-level `.be/refs` creation — DROPPED from
+    `home_ensure_markers` (keeps only `.be/wtlog`); `refs` is the
+    shard's (`HOMEtest` asserts no top-level refs).  ALSO landed:
+    `keeper get` (direct, no `be`) derives the project Title from the
+    SOURCE URL (`DOGTitleFromUri`) so fetched objects land sharded
+    (`KEEP.cli.c`); `verify-canonical-refs.sh` reads the shard's refs.
+    Remaining flat `.be/refs` only appears for project-LESS bare opens
+    (keeper/graf C unit tests + some be-* remote/submodule flows).
+    WITH-INET suite (`build/`) 298/298 green.
+ 4. Make the project MANDATORY — ATTEMPTED 2026-06-06, REVERTED (too
+    large).  Dropping the empty-project `HOMEBranchDir` branch (hard
+    error OR basename-default) cascades far past the keeper unit tests:
+      - `BEEnsureProjectRepo`'s fresh-init gate keys on the row-0 anchor;
+        a basename-default `HOMEBranchDir` diverts `be get ?/proj` to
+        `.be/<wt-basename>/` so the named `.be/proj/` shard is never laid
+        down (`be-get-19/25/31/33/35/36`, `be-head-19/20`, `be-post-23`).
+      - ~10 bare keeper/graf C tests (`WALK/UNPK/REFADV/WIRE/UPLOADPACK/
+        WIRECLIENT/RECEIVEPACK/REBASE01/02/MERGEWT01`) open a store with
+        no project source and hit the requirement.
+    So "forbid flat entirely" needs per-flow project resolution
+    (BEEnsureProjectRepo gate + receive-pack Title derive + a C-test
+    sharded-store helper), each sub-step kept green — a focused
+    follow-up, NOT a one-shot.  Current tree stays at the step-3 baseline
+    (flat fallback retained in `HOMEBranchDir`), 298/298 green.
+
+##  Independently landable now
+The `BEActResolveRef` project band-aid (`beagle/BE.cli.c` ~2719-2726) is
+**confirmed dead** (0 firings across 230 tests + live dogfood resolves) and
+removable without any layout change — but it is the only piece that is.
+
+[STORE]: ../wiki/URI.mkd "URI/store model (STORE.md lives in the beagle code repo)"
+[Plan]: ../wiki/Plan.mkd "the live planning page"

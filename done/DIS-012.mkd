@@ -1,0 +1,22 @@
+#   DIS-012: same-title + no-common-ancestor clash is not refused
+
+[Title] §"Same title, different history is an error" requires a hard refusal when an incoming clone shares a title with an existing shard but has no common ancestor — "the user overrides one title to give it a distinct shard". No code enforces this: a `be get` of an unrelated repo under a colliding title silently co-mingles objects into the existing `~/.be/<title>/` shard. The goal is the documented clash refusal. See [Title], [Store].
+
+##  Issues
+The title is derived but never validated against the existing shard's history before writing.
+
+ -  `DOGTitleFromUri` (`dog/DOG.h:417`) derives the title; no consumer checks an incoming clone's roots against an existing same-title shard before ingesting.
+ -  There is no title-clash error code (only `PATCHURELT` for patch merges and `RECVNOTFF` for wire ref FF); no test asserts the refusal.
+ -  Effect: two unrelated histories under one basename merge into one object pool instead of refusing — violating the "same title ⇒ same project" invariant.
+
+##  Blockers
+None; needs an ancestry probe (incoming root commits vs the shard's existing roots) at clone/ingest, and a new error code (`TITLECLSH` or similar, ron60-coded per CLAUDE.md rule 7).
+
+##  Planned
+Repro first, then add the gate.
+
+ -  Repro: clone repo A as title `t`, then clone unrelated repo B forcing title `t` — must refuse, currently co-mingles.
+ -  At ingest, if the shard exists and shares no root/ancestor with the incoming tips, refuse with the new code and point at the `?/<title>` override.
+
+[Title]: ../wiki/Title.mkd "project title"
+[Store]: ../wiki/Store.mkd "the store layout"

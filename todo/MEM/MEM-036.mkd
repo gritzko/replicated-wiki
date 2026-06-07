@@ -1,0 +1,23 @@
+#   MEM-036: WEAVE EDL fallback raw writes can overflow on BRAM NOROOM (graf/WEAVE.c)
+
+`weave_diff_core`'s BRAM-failure fallback does `edlg[1]=edlg[0]` then two raw `*edlg[1]++` writes with no capacity check. The gauge convention (`DIFFx.h:14-22`) is `[0]`=write cursor, `[1]`=cap end, `[2]`=base; `BRAMu64s` shares the same gauge and advances `edl[0]` via `DIFFu64AddEntry`, leaving `edl[0]==edl[1]==edlbuf[3]` on DIFFNOROOM. The fallback then writes AT `edlbuf[3]` = heap OOB. The `olen>0`/`nlen>0` early-returns only ensure cap≥2 from base, not that BRAM left 2 free slots. The goal is to make the fallback use the checked DIFF path so it cannot overflow, and to fix the dropped-write logic bug.
+
+##  Issues
+Raw pointer-arith writes after BRAM may have consumed the buffer.
+
+ -  `graf/WEAVE.c:540-542` fallback resets `edlg[1]=edlg[0]` then `*edlg[1]++` twice with no room check; raw pointer-arith forbidden by ABC style.
+ -  `BRAMu64s` shares the `edlg` gauge and advances `edl[0]` (`DIFFu64AddEntry`, `abc/DIFFx.h:21-22`); on DIFFNOROOM `edl[0]==edl[1]==edlbuf[3]`, so the first `*edlg[1]++` writes at the cap end = OOB.
+ -  Degenerate guards `graf/WEAVE.c:511,521` ensure only `edl_sz>=2` from base; not that BRAM left room before failing.
+ -  Logic bug: fallback writes via `slot[1]` but never advances `edl[0]`; `NEILCanon` (`graf/NEIL.c:602`) reads `n=edl[0]-edl[2]`, so the DEL/INS pair is silently dropped.
+
+##  Blockers
+None.
+
+##  Planned
+Use the checked DIFF path; advance the cursor.
+
+ -  Repro FIRST: drive `weave_diff_core` down the BRAM-failure path with an `edlbuf` BRAM fills to NOROOM; assert no OOB (ASan) and that the DEL/INS fallback is emitted.
+ -  Replace the two `*edlg[1]++` writes with checked `DIFFAddEntry`/`DIFFu64AddEntry` against `edlbuf` so NOROOM propagates instead of overflowing.
+ -  Advance `edl[0]` (not just `edl[1]`) so `NEILCanon`'s `n=edl[0]-edl[2]` sees the entries; drop the manual `edlg[1]=edlg[0]` reset. If raw writes are kept, add `must(edlg[0]+2 <= edlbuf[3], …)`.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

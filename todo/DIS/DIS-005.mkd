@@ -1,0 +1,24 @@
+#   DIS-005: sha1/projector single-scheme URI grammar doc note
+
+A URI carries exactly one `scheme:` by grammar, so `sha1:ssh://host?ref` is not a valid shape — `sha1:` IS the scheme. Projectors are read-only views; transport schemes (ssh/https/be/file) imply the wire. Fetch-then-project is two commands. This is not a bug; the goal is a doc note so [Verbs] §"View projectors" does not read as if `scheme:scheme:` were possible. User clarified 2026-05-28.
+
+##  Issues
+The current [Verbs] text "all four URI slots compose; any combination is valid" reads as if a projector could stack on a transport scheme.
+
+ -  Only one `scheme:` per URI; `sha1:` is the scheme, so `sha1:ssh://…` cannot parse.
+ -  To sha1 a remote-resolved ref: `be head ssh://host?ref` (refresh cache via wire), then `be sha1://host?ref` (cached read).
+ -  Projectors (`sha1:`, `blob:`, `tree:`, `log:`, …) are read-only and never open a wire; transport schemes always do.
+
+##  Blockers
+None.
+
+##  Planned
+A small doc edit, no code.
+
+ -  Add a sentence to [Verbs] §"View projectors": one scheme per URI; projector and transport do not stack; pipeline via two commands.
+
+##  Landed
+Nothing yet.
+
+[Verbs]: ../wiki/Verbs.mkd "the be verb/URI language"
+[Plan]: ../wiki/Plan.mkd "the master plan"

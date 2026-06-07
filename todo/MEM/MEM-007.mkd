@@ -1,0 +1,24 @@
+#   MEM-007: file.write(string) writes from advanced slice, invalid-frees interior pointer (js/io.cpp)
+
+`JABCioFileWrite`'s string branch calls `JABCutf8CopyStringValue`, which advances the slice HEAD past the written data (`utf8.cpp:68` `into[0]+=fact`); on return `ta[0]` points after the decoded string. The code then `write(fd, ta[0], $len(ta))` (reads the uninitialized tail with the *leftover* length) and `$u8free((u8csp)ta)` frees `ta[0]` — an interior pointer, not the allocation base. The goal is to keep the written range and the allocation base distinct.
+
+##  Issues
+Slice-head advance corrupts both the write source and the free.
+
+ -  `js/io.cpp:94-124` — after the copy, `ta[0]` is `base+fact`; `write(fd, ta[0], $len(ta))` (:111) reads uninitialized tail and uses leftover capacity as length.
+ -  `js/io.cpp:124` — `$u8free((u8csp)ta)` frees an interior pointer (head advanced by `fact`): invalid free / heap corruption.
+ -  `js/utf8.cpp:65-67` — `JSValueToStringCopy` may return NULL (JABsane is a no-op); NULL passed to `JSStringGet*` → deref.
+ -  `js/utf8.cpp:18-21` — `JABCutf8Encode` never `JSStringRelease(str)` (leak per call); `malloc(maxSize)` unchecked (NULL write under OOM).
+ -  Trigger: any JS `file.write("…")` with a non-empty string.
+
+##  Blockers
+None.
+
+##  Planned
+Describe written data, free the base.
+
+ -  Repro first: add a JS test writing a non-empty string to a file; confirm invalid-free/heap error under ASan.
+ -  Make `JABCutf8CopyStringValue` leave the slice over WRITTEN bytes (`into[1]=into[0]+fact`, do not advance `into[0]`), or keep a separate `base` in `JABCioFileWrite` for both `write()` (`[base,base+fact)`) and `free()`; add a `if(str==NULL) return` guard.
+ -  In `JABCutf8Encode`: `JSStringRelease(str)` after `JSStringGetUTF8CString`, and check `bytes!=NULL`/throw on alloc failure.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

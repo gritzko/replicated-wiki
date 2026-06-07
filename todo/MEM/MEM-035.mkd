@@ -1,0 +1,23 @@
+#   MEM-035: io.cpp callbacks miss argc/NULL/bounds guards (js/io.cpp)
+
+Two JS-reachable IO callbacks dereference unchecked inputs. `JABCioFileMap` reads `JSValueIsString(ctx,args[0])` with no `argc` guard (every sibling guards `argc` first), so `io.mmap()` with zero args is an out-of-bounds read of the JSC argument vector and passes a garbage `JSValueRef` to `JSValueIsString`. `JABCioNetConnect` calls `JABCioMakeFileObject(cfd,…)`, which returns NULL when `cfd>=POLMaxFiles()` (1024), then immediately passes that NULL into `JSObjectSetProperty` without a NULL check → null deref; worse, `JS_FILES+cfd` is computed and `POLTrackEvents` called before the bound is validated, an OOB into the fixed 1024-entry array. The goal is the missing `argc` guard plus the NULL/bounds checks the file's convention already uses elsewhere.
+
+##  Issues
+Unchecked argc, NULL return, and out-of-range fd index.
+
+ -  `js/io.cpp:419` `JABCioFileMap` reads `args[0]` with no `argc` guard; `io.mmap()` (argc=0) → OOB read of the args vector.
+ -  `js/io.cpp:374-376` `JABCioNetConnect` passes `JABCioMakeFileObject()`'s possible NULL file straight to `JSObjectSetProperty` → null deref.
+ -  `js/io.cpp:367,372` `JS_FILES+cfd` and `POLTrackEvents(cfd,…)` run before the `cfd>=POLMaxFiles()` bound → OOB into the 1024-entry array.
+ -  `js/io.cpp:38-41` `JABCioMakeFileObject` returns NULL on `fd>=POLMaxFiles()`; callers must check.
+
+##  Blockers
+None.
+
+##  Planned
+Add the guards matching the file's convention.
+
+ -  Repro FIRST: call `io.mmap()` with no args, and force `JABCioMakeFileObject` NULL (`fd>=POLMaxFiles`); run under ASan; assert clean exception path.
+ -  `JABCioFileMap`: add `if (argc<1 || !JSValueIsString(ctx,args[0]))` → set exception, return undefined.
+ -  `JABCioNetConnect`: validate `cfd<POLMaxFiles()` before `JS_FILES+cfd`/`POLTrackEvents`; null-check `file`, cleanup the fd, return undefined.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

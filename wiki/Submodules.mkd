@@ -9,6 +9,7 @@ A submodule is a secondary worktree of a separate project: the parent tree's git
  -  Recursion is `BERecurseInto`: fork + chdir(`<wt>/<sub>`) + execvp self, so each child runs against its own HOME.
  -  Pre-order verbs ([GET], [HEAD]) hit the parent then descend; post-order [POST] commits subs first, then bumps the gitlink.
  -  The child reaches the parent's keeper through the row-0 `repo` anchor, so a sub needs no separate object pool of its own.
+ -  Recursion keys on [Title]: clone reads it from `.gitmodules`; later verbs read it from the mount's `.be`/wtlog or shard `refs`.
 
 ##  CLI
 Recursion is the default — every verb descends into mounted subs; `--nosub` opts out for one invocation. Clones flow top-down, commits bottom-up.
@@ -39,11 +40,11 @@ Beagle reads and writes submodules exactly as git does — `160000` gitlinks in 
 ##  Store layout
 A submodule is just another project shard in the parent's store, mounted as a secondary worktree that points back; there is no separate submodule store class.
 
- -  The sub's objects sit in `<parent_root>/.be/<basename>/`, a shard beside the parent's, sharing its keeper (see [Store]).
- -  The basename comes from the clone URL: last path segment, `.git` and trailing `/` stripped (`…/libabc.git` → `libabc`).
+ -  The sub's objects sit in `<parent_root>/.be/<title>/`, a shard beside the parent's, sharing its keeper (see [Store]).
+ -  The shard's [Title] comes from the `.gitmodules` URL basename, `.git` and trailing `/` stripped (`…/libabc.git` → `libabc`).
  -  The mount `<wt>/<path>/.be` is a file holding one row `<ts>\trepo\tfile://<parent_root>/.be/` — the secondary-wt anchor.
  -  Nesting composes: a sub-of-a-sub is another shard, so `<parent>/.be/<sub>/.be/<subsub>/` and deeper share one pool.
- -  For beagle-sourced parents the sub fetches from the same source — url-basename, then path-basename, then the declared URL.
+ -  For beagle-sourced parents the sub is fetched by [Title] from that same remote; the declared `.gitmodules` URL is the fallback.
 
 ##  TLV report aggregation (landed)
 The parent captures each sub's TLV hunk report and relays every hunk into its sequential stream, rebasing only the path prefix — one `be` lists affected files across the whole tree, for every verb.
@@ -56,7 +57,19 @@ The parent captures each sub's TLV hunk report and relays every hunk into its se
  -  Patch recursion is gitlink-diff driven (reuses GET): a sub whose applied pin differs from base is re-got and relayed.
  -  put/delete recurse only the bare stage-all / delete-all form into mounted subs; path-scoped and remote forms don't recurse.
 
+##  Committing detached subs (synthetic branch)
+A mounted sub sits detached at the gitlink pin; a parent [POST] commits it onto a synthetic branch so the new commit is a real ref tip, never a GC-orphan.
+
+ -  Target branch is `?/<subproj>/.<parentproj>[/<parentbranch>]` — the parent's coordinate, dot-marked, as the sub's branch.
+ -  Recursive prepend: each level prepends its parent, so a 3-deep leaf reads `?/leaf/.sub/.proj/br`; trunk → `?/sub/.proj`.
+ -  Why a branch: the commit is a REFS tip, GC-reachable in the sub's shard (see [Store]); a ref-less commit dies at recompaction.
+ -  The `160000` gitlink still pins the raw commit sha; the synthetic branch is just the keep-alive anchor in the sub's shard.
+ -  `be post` on a detached sub auto-creates that branch at the pin and attaches the wt; later posts fast-forward it.
+ -  Remote `be post //host?/proj/br` recurses the push, pushing each sub's `?/subproj/.proj/br`; the parent records the sha.
+ -  A standalone `be post` in a detached sub (no parent driving it) still refuses — no coordinate to derive the branch from.
+
 [Store]: Store.mkd "the store and shards"
+[Title]: Title.mkd "project title"
 [GET]: GET.mkd "GET verb"
 [POST]: POST.mkd "POST verb"
 [HEAD]: HEAD.mkd "HEAD verb"

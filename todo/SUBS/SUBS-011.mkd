@@ -1,0 +1,62 @@
+#   SUBS-011: search projectors (grep/spot/regex) do not descend into submodules (LANDED)
+
+**HIGH — LANDED `7d37f90f` (2026-06-06).**  Two coupled fixes: (1) **index on
+mount** — a sub mount runs a *local* `be get ?<pin>` which doesn't trip the
+transport-gated indexers, so the sub shard had `keeper.idx` but no `.spot.idx`;
+new `BEIndexMount` (`beagle/SUBS.c`) forks `spot get`+`graf get` with cwd=the
+sub mount, called from `BEGetDrainSubs` after each sub checkout.  (2) **projector
+recursion** — new `BEProjectorSubs` (`beagle/BE.cli.c`) enumerates mounts via
+`BESubsHere` and relays the projector into each, path-prefixed via `BERelaySub`;
+`--nosub` honoured.  Applies to grep/spot/regex.  Repro `test/spot/10` off
+`WILL_FAIL`.  (SUBS-012 reuses the same machinery for the object/diff/history
+projectors.)
+
+**HIGH (feature gap — the headline of "seamless interop").**  Repo-wide
+`be grep:`, `be spot:`, `be regex:` search only the parent project's index;
+they never look into a mounted submodule's index.  Two coupled causes:
+
+ 1. **`BEProjector` has zero submodule recursion** (`beagle/BE.cli.c:557`).  It
+    resolves the owning dog (grep/spot/regex → the `spot` dog), forwards the
+    URI + `--at`, and runs it once against the parent store.  Unlike the verb
+    paths it never calls `BESubsHere` / `BERelaySub` / `BERecurseInto`.
+ 2. **A mounted sub is never indexed.**  After `be get` materialises
+    `vendor/sub`, the sub shard `.be/<sub>/` has a `keeper.idx` from the fetch
+    but **no `.spot.idx`** — its content was never trigram-indexed, so even a
+    recursing search would have nothing to query.
+
+##  Repro
+ 1. `be get <parent>?master` (mounts `vendor/sub`; sub `core.c` defines
+    `sub_counter`, `sub_reset`, `sub_inc`).
+ 2. `be grep:.c#sub_counter` → returns nothing (sub-only symbol).
+ 3. `be grep:.c#findme` where the token is in BOTH parent and sub → returns
+    only `main.c`, never `vendor/sub/core.c` / `vendor/sub/helper.c`.
+ 4. `ls .be/sub/*.spot.idx` → none (sub not indexed).
+
+##  Counter-evidence (what already works)
+ -  **Path-scoped** grep into a sub file works: `be grep:vendor/sub/core.c#findme`
+    returns `vendor/sub/core.c#L1 …` — the path-scoped form scans the named
+    file directly (no index needed).  So the bytes are reachable; only the
+    repo-wide index search misses them.
+
+##  Expected
+Per the model ("seamless recursive experience … grep & friends look into
+submodule indexes"): a repo-wide search must descend into every mounted sub,
+querying each sub's own trigram index, and emit hits with the sub path prefix
+(`vendor/sub/core.c#Ln`) in one merged stream — exactly the `HUNKu8sRelay`
+path-prefix pattern the verbs already use.  Path/ext filters should be able to
+scope to or exclude sub paths (`be grep:vendor/sub/#…`, `--nosub`).
+
+##  Fix sketch
+ 1. Index sub content on mount (run the spot indexer over the checked-out sub
+    tree, or have `SNIFFSubMount` trigger the same `sniff_indexer_fanout` that
+    commit uses) so each sub shard gets a `.spot.idx`.
+ 2. Teach `BEProjector` (or a search-specific wrapper) to enumerate mounted
+    subs via `BESubsHere` and relay the search into each, path-prefixing hits
+    with `HUNKu8sRelay` — mirror `BERelaySub`.  Honour `--nosub`.
+Applies to grep, spot, and regex (all served by the `spot` dog).
+
+##  Tests
+`test/spot/10-sub-recurse-search` (repo-wide grep must find a sub-only symbol
+under `vendor/sub/`) — `WILL_FAIL` until fixed.
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

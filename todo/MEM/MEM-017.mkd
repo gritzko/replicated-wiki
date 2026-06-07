@@ -1,0 +1,21 @@
+#   MEM-017: DOGRepoFromBe `/.be/` scan reads one byte past the slice (dog/DOG.h)
+
+`DOGRepoFromBe` sets `end = p[1] - u8csLen(be) - 1` (= `p[1]-4`) but probes the 5-byte `/.be/` pattern via `q[0..4]`, so on the final iteration `q == p[1]-4` and `q[4]` dereferences `*p[1]` — one byte past the end of `[p[0],p[1])`. The over-read fires whenever the path ends in `/.be` (e.g. the documented legacy `/abs/path/.be` anchor); since these slices come from non-NUL-terminated URI/ULOG fields, it is a real 1-byte OOB read under ASan or at an mmap page edge. The goal is to fix the loop bound (and the two siblings).
+
+##  Issues
+Loop end allows a 5th probe past the slice.
+
+ -  `dog/DOG.h:134-137` — `end = p[1]-4` but `/.be/` needs `q[0..4]`; last safe start is `p[1]-5`, so `q[4]` over-reads when input ends in `/.be`.
+ -  Guarded by `q[0..3]=='/.be'`, so reachable on the legacy single-project `/.../.be` anchor; two sibling scanners share the bug.
+ -  Verifiers split (refuted/real): in-bounds for NUL-terminated inputs, OOB for field-sliced (non-terminated) ones.
+
+##  Blockers
+None.
+
+##  Planned
+Correct the bound or use a slice-find helper.
+
+ -  Repro first: `DOGRepoFromBe` on a non-NUL-terminated slice ending in `/.be`; confirm 1-byte OOB under ASan.
+ -  Set `end = p[1] - (u8csLen(be)+2)` (`p[1]-5`), or replace manual `q[i]` probing with `u8csFindS` for the literal `/.be/`; apply to both siblings.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

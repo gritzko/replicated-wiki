@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>SUBS-012: diff / object / history projectors do not cross submodule boundaries (LANDED)</h1>
+<p>
+*<strong>MEDIUM — LANDED <code>7d37f90f</code> (2026-06-06).</strong>*  Reused SUBS-011's machinery in
+two shapes (<code>beagle/BE.cli.c</code>): *<strong>whole-tree fan-out</strong>* (<code>diff:</code>/<code>tree:</code>/<code>refs:</code>
+added to <code>be_projector_recurses</code> — <code>diff:</code> aggregates each sub's path-prefixed
+working-tree changes) and *<strong>path-in-mount routing</strong>* (<code>BEProjectorRouteToMount</code> +
+<code>be_path_in_mount</code> — a path-bearing projector whose path lands inside a mount is
+rewritten mount-relative and relayed into the sub shard).  *<strong>Covered:</strong>* <code>diff:</code>
+(aggregate), <code>tree:&lt;gitlink&gt;</code> (descends), <code>blob:&lt;subpath&gt;?ref</code>, <code>log:</code>/<code>blame:</code>
+on a sub path.  *<strong>Deferred:</strong>* <code>refs:?**</code> sub-shard inclusion — <code>refs:</code> itself
+returns &quot;projector not implemented&quot; in keeper (pre-existing gap), so the
+fan-out hook is wired but has nothing to fan into yet.  Repros <code>test/diff/06</code>,
+<code>test/tree/01</code> added.  (Separate pre-existing parent-side bug found here:
+<code>blob:&lt;path&gt;</code> without <code>?ref</code> → KEEPNONE, filed as <a href="SUBS-015.html">SUBS-015</a>.)
+</p>
+<p>
+*<strong>MEDIUM (feature gap).</strong>*  Beyond search (SUBS-011), the remaining read-only
+projectors are all parent-only at a gitlink boundary — same root cause
+(<code>BEProjector</code> never enumerates subs, and a sub path resolves only in the
+parent shard, which holds a <code>160000</code> gitlink, not the sub's objects).
+</p>
+<h2>Observed (fixture: parent + <code>vendor/sub</code>)</h2>
+<ul>
+<li>*<strong><code>diff:</code></strong>* — a dirty <strong>parent</strong> file shows (<code>+// DIRTYPARENT</code> on <code>main.c</code>),</li>
+</ul>
+<p>
+    but a dirty <strong>sub</strong> file (<code>vendor/sub/core.c</code>) never appears.  <code>be diff:</code>
+    does not aggregate sub working-tree changes.
+</p>
+<ul>
+<li>*<strong><code>tree:vendor/sub?master</code></strong>* → <code>PROJFAIL</code> (does not list the gitlink entry</li>
+</ul>
+<p>
+    nor descend into the sub tree).
+</p>
+<ul>
+<li>*<strong><code>blob:vendor/sub/core.c?master</code></strong>* → <code>KEEPNONE</code> (the path is a gitlink in</li>
+</ul>
+<p>
+    the parent shard; blob resolution does not hop into the sub shard).
+</p>
+<ul>
+<li>*<strong>`refs:?</strong><strong>`</strong>* — lists no sub refs (the sub shard's <code>?/&lt;sub&gt;/.&lt;parent&gt;/…</code></li>
+</ul>
+<p>
+    branches are invisible).
+</p>
+<ul>
+<li>*<strong><code>log:</code> / <code>blame:</code></strong>* — operate on the parent history only; no per-sub or</li>
+</ul>
+<p>
+    sub-path-aware view.
+</p>
+<h2>Expected</h2>
+<ul>
+<li><code>diff:</code> should aggregate each mounted sub's working-tree diff, path-</li>
+</ul>
+<p>
+    prefixed (one merged hunk stream), like the verb reports already do.
+</p>
+<ul>
+<li><code>tree:&lt;gitlinkpath&gt;</code> should either show the <code>160000</code> gitlink line or</li>
+</ul>
+<p>
+    descend into the sub tree when the path points inside a mount.
+</p>
+<ul>
+<li><code>blob:&lt;subpath&gt;?&lt;ref&gt;</code> and <code>log:</code>/<code>blame:</code> on a sub path should resolve in</li>
+</ul>
+<p>
+    the sub shard.
+</p>
+<ul>
+<li><code>refs:?**</code> (recursive) should optionally include sub shard refs.</li>
+</ul>
+<h2>Fix sketch</h2>
+<p>
+Same two-part shape as SUBS-011: (1) make <code>BEProjector</code> sub-aware — for a path
+that lands inside a mount, route to the sub shard; for whole-tree views
+(<code>diff:</code>, <code>tree:</code>, <code>refs:</code>), enumerate mounts and relay/merge path-prefixed;
+(2) honour <code>--nosub</code>.  Lower priority than SUBS-011 (search) but the same
+machinery unlocks all of them.
+</p>
+<h2>Tests</h2>
+<p>
+Documented here; tests follow once the projector-recursion mechanism from
+SUBS-011 lands (the <code>diff:</code> sub-change case is the natural first one).
+</p>
+</body>
+</html>

@@ -1,0 +1,22 @@
+#   DIS-014: StrictMark `\*` escape and 3-dash `---` ruler unimplemented
+
+[StrictMark] lists `\*` escapes as an inline element (second-highest precedence) and `---`/`--- `/`----` as rulers, but the MKDT lexer implements neither: a backslash is plain punctuation and only a four-dash `----` is recognised as a ruler. The goal is conformance with the two documented StrictMark constructs. See [StrictMark], [Mark].
+
+##  Issues
+Two distinct lexer gaps, both confirmed by running `build/bin/mark`.
+
+ -  `\*` escape: `dog/tok/MKDT.c.rl` has no backslash rule and `MARKE` (`mark/MARKE.c.rl`) maps only `& < > "`. Input `a \* b *strong* c` renders `a \* b <strong>strong</strong> c` — the backslash is emitted literally and fails to suppress the following strong span ([StrictMark] §"Inline markup").
+ -  `---` ruler: `dog/tok/MKDT.c:108-124` (`MKDTHRule`) requires exactly four dashes; a `---` line renders as a paragraph, no `<hr>` ([StrictMark] §"Block markup" — "two shorter cases: a 3-backtick code fence and a 3-dash `---` ruler").
+
+##  Blockers
+None; both live in the MKDT ragel/line lexer (regenerate with `ragel -C MKDT.c.rl -o MKDT.rl.c -L`).
+
+##  Planned
+Add the escape rule and the 3-dash ruler, with repro cases first.
+
+ -  Inline: a `\<punct>` escape that emits the literal char and cancels its bracketing role.
+ -  Block: accept a 3-dash `---` (and `--- `) line as a ruler alongside `----`.
+ -  Add `test/MARK.c` cases for `\*` suppression and a `---` `<hr>`.
+
+[StrictMark]: ../wiki/StrictMark.mkd "the markup"
+[Mark]: ../wiki/Mark.mkd "the mark dog"

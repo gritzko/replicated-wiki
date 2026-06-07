@@ -1,0 +1,43 @@
+#   SUBS-010: stale "git source needs `--sub`" gating in comments and the test shim (LANDED)
+
+**LOW — LANDED `cda5c691` (2026-06-06).**  The `--sub`-appending shim was
+removed from `test/lib/submodules.sh` and `test/lib/sub-deep.sh` (tests now
+drive default recursion via the real binary), and the stale "POST-001 phase 2 /
+does NOT recurse by default" narrative was purged from get/05, get/32, get/37,
+post/15, and `beagle/test/be-post-nosub.sh` (redundant `--sub` tokens dropped).
+`rg` confirms no remaining stale narrative; affected test surface stays green.
+
+**LOW (docs / test hygiene).**  Recursion is now default-on for every source
+type, including git/ssh: there is no `CLIHas(c,"--sub")` anywhere in the code,
+only six `--nosub` opt-out sites in `beagle/BE.cli.c` (head 741, get 871, patch
+1007, post 2234/2310, relay 2501).  Several comments and one test shim still
+describe the removed "POST-001 phase 2" rule that a git/ssh parent does NOT
+recurse by default and must opt in with `--sub`.  This is misleading and the
+`--sub` shim masks the real default behavior under test.
+
+##  Stale spots
+ -  `test/lib/submodules.sh` wraps `$BE` in a shim that appends `--sub` to
+    every call (lines ~40-58), with a comment claiming git parents need it.
+    `--sub` is a dead no-op, so the shim is harmless but masks default-recursion
+    coverage — tests that mean to assert DEFAULT behavior should use
+    `$REAL_BE`.
+ -  `test/get/05-submodule-from-ssh` and `test/get/07-submodule-nosub` header
+    comments describe the `--sub` opt-in as load-bearing.
+ -  Any `POST-001` / "phase 2" / "does NOT recurse by default" comments
+    referencing the git-source gate.
+
+##  Action
+ -  Remove the `--sub`-appending shim (or keep it only where a case explicitly
+    wants the no-op flag exercised); default new tests to `$REAL_BE`.
+ -  Update the get/05,07 and submodules.sh comments to state the current rule:
+    recursion default-on for all sources, `--nosub` the only opt-out, `--sub`
+    a tolerated no-op.
+ -  Optionally drop the `--sub` token entirely if no longer wanted as an
+    explicit no-op.
+
+##  Notes
+Not a correctness bug — behavior already matches the desired
+"`--sub` = default, suppressed by `--nosub`" directive.  This ticket is purely
+to remove the stale narrative so future readers are not misled.
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

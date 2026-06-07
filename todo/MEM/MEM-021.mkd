@@ -1,0 +1,26 @@
+#   MEM-021: abc latent low-severity bounds/overflow hardening
+
+Five low-severity, latent defects in abc: unchecked streaming writes, extreme-size integer UB feeding mmap, an array overrun only at astronomic offsets, a munmap-failure leak, and a signed-negation UB in int formatting. None is reachable at realistic sizes today, but each is a real unsafety the style forbids; the goal is defensive hardening (with a repro where feasible).
+
+##  Issues
+Latent unsafety, grouped for one cleanup pass.
+
+ -  `abc/SKIPx.h:45-67` `SKIPfeed` — builds `u8cs` over `off + len` where `len` can reach 41 vs `off[40]`, reading one element past the array (only at ~2^48 data lengths); unlike `SKIPfinish` it does not clamp.
+ -  `abc/MMAP.h:22-34` — `round_power_of_2` does `1UL<<64` (UB) for sizes in (2^63,2^64), shrinking the mapping; `MMAPmayresize` size math can overflow before rounding.
+ -  `abc/MMAP.c:23-31` `MMAPresize` — non-MREMAP path leaks the new mapping if `munmap` of the old region fails.
+ -  `abc/DNS.h:219-237` `DNSNameText` — ignores `u8sFeed1`/`u8sFeed` NOROOM, silently truncating the decoded name with no error (no OOB, but style-mandated check missing).
+ -  `abc/UTF8.c:116-127` `utf8sFeedInt` — `u = -*i` negates `INT64_MIN` (signed-overflow UB); `utf8sDrainInt` already guards the magnitude.
+
+##  Blockers
+None. All require extreme inputs or allocator failure.
+
+##  Planned
+Clamp, validate, and compute magnitudes unsigned.
+
+ -  `SKIPfeed`: cap `len` at `sizeof(off)/sizeof(T)` before forming the slice (mirror `SKIPfinish`).
+ -  `round_power_of_2`/`MMAPmayresize`: reject/clamp inputs where `clz64(a)==0` (>2^62) before the shift/round.
+ -  `MMAPresize`: `munmap(new_mem,new_size)` on old-unmap failure.
+ -  `DNSNameText`: check and propagate `u8sFeed*` return (DNSNOROOM).
+ -  `utf8sFeedInt`: `u = (*i<0) ? (~(u64)*i + 1) : (u64)*i;` (or special-case `INT64_MIN`).
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

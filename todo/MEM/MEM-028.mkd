@@ -1,0 +1,22 @@
+#   MEM-028: post_cascade_walk reads recs[-1] after skip-without-append (sniff/POST.c)
+
+`post_cascade_one` returns OK without incrementing `cc->n` on its REFSNONE skip (`POST.c:1308`), but `post_cascade_walk` then unconditionally reads `cc->recs[cc->n-1].new_tip` (`POST.c:1461`) to drive recursion. When the skipped child is the first at its level, `cc->n` is still 0, so `recs[-1]` reads out of bounds across the preceding field into adjacent stack memory; the garbage sha becomes `branch_new_tip` for the descent. Reachable if a branch resolves OK at the pre-check (:1448) but REFSNONE inside `post_cascade_one` (:1307) — a REFS mutation in that window. A leaf flock serializes writers, narrowing reachability, but the index itself is unguarded. The goal is to index `recs` only after a record was actually appended.
+
+##  Issues
+Index `recs[cc->n-1]` used after a path that didn't append.
+
+ -  `sniff/POST.c:1308` `post_cascade_one` returns OK without incrementing `cc->n` on the `cr==REFSNONE` skip path.
+ -  `sniff/POST.c:1461` reads `cc->recs[cc->n-1].new_tip` unconditionally; with `cc->n==0` this is an OOB read of `recs[-1]`.
+ -  `sniff/POST.c:1456-1461` `cascade_rec` is wider than a pointer, so `recs[-1]` reads backward past the front of `cascade_ctx` into adjacent stack.
+
+##  Blockers
+None.
+
+##  Planned
+Only read after an append.
+
+ -  Repro FIRST (CLAUDE.md §17): force `post_cascade_one` to take the REFSNONE skip on the first child (`n==0`); run under ASan/UBSan to catch `recs[-1]`.
+ -  Have `post_cascade_one` report whether it appended (out-param or distinct status).
+ -  In `post_cascade_walk` only read `recs[cc->n-1]` when a record was added; otherwise continue (skip recursion for that child).
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

@@ -1,23 +1,53 @@
 #   URI: scheme://authority/path?ref#fragment
 
-Every `be` argument is one URI — `[scheme:][//authority][path][?ref][#fragment]` — and each component reflects one aspect of the command. The verb picks the direction; the URI picks the resource. Changing the URI's shape changes the command's semantics: the same [PATCH] becomes a merge, a rebase, or a cherry-pick depending on which slots are filled.
+Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the revision controlled resources (surprise!). URIs address any repos, files, branches, revisions, blobs and any views/projections the system can produce. URI format is `[scheme:][//authority][path][?ref][#fragment]` and each component reflects one orthogonal aspect:
 
- -  `scheme:` is the transport (`ssh:`/`https:`/`file:`) or a read-only projector (`sha1:`/`diff:`/…); none acts locally.
- -  `//authority` is a remote label; bare `//host` reads the cache (no wire, reflog grep), a transport scheme opens the wire.
- -  `path` is a file or dir in the branch's tree; with `file:` it is a filesystem path to another store/wt on this host.
- -  `?ref` is a branch, tag, sha, or commit-message search; the ref shape alone decides which (see Refs).
- -  `#fragment` is free-form payload: a commit-message body, an object hash, a line jump, or an extension filter (`#.c.h`).
+ -  `scheme:` is the transport (`ssh:`/`https:`/`file:`) or a [Projector] view (`sha1:`/`diff:`/…);
+ -  `//authority` is a host, implies a remote repo, e.g. https://github.com;
+ -  `/path` is the file path (normally: within a project, legacy: repo path on a host); 
+ -  `?ref` is a revision specifier: project, branch, tag, or a detached commit sha hash;
+ -  `#fragment` is free-form verb payload: a commit message, a line jump, an extension filter, etc.
 
 ##  Shape changes semantics
 
-Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation — most visibly for [PATCH], where the `?`/`#` shape alone selects the merge mode.
+Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for [PATCH] where the `?`/`#` shape alone selects the merge mode.
 
  -  `be patch ?feat` squashes, `?feat#msg` merges, `?feat#` rebases one, `#sha` cherry-picks — one [PATCH] verb, varied shape.
  -  A bare `//host` reads the cache while `ssh://host` opens the wire — the scheme alone flips cached vs network.
  -  `diff:` vs `diff:?br` vs `diff:?a#b` change the diff from/to sides — projector slots compose like verb slots.
  -  An empty `?` slot in a URI means the project trunk; no `?` slot at all means cur (see Refs rule 0).
 
-##  Argument classification
+##  Relative URIs
+
+URIs as typed by the user can be context-dependent — relative or implied paths, tags, branches. For internal use and storage fully-resolved URIs are safer, so URIs get *resolved* at the entry point, to prevent any later ambiguity.
+
+### Path shapes: legacy, repo-relative, recursive, cwd-relative
+
+URI paths specify paths in the tree objects that lead to the tree/blob/submodule of interest. In some cases (legacy/ssh:/file:), a path may also specify the file system path *to* the repo. (Beagle per se prefers one repo per host.) So, the cases are:
+
+  - legacy paths, e.g. `ssh://git@github.com:gritzko/beagle.git`
+  - repo relative paths, e.g. `dog/DOG.h`
+  - recursive paths that cross into submodules, e.g. `abc/ZINT.h`
+  - relative paths, e.g. `../README.md`
+
+### Ref shapes: resolved, absolute, project- & branch-relative
+
+Beagle branches are tree-structured, the trunk is named as the project e.g. `?/beagle/submods`. Cases are:
+
+ -  `?` project-relative (the trunk),
+ -  `?/project` absolute, some project's trunk,
+ -  `?branch` project-relative, a top level branch (not the trunk),
+ -  `?/project/branch/` absolute, a top level branch,
+ -  `?..` branch-relative, the parent branch,
+ -  `?./fix` branch-relative, a tag or a child branch,
+ -  `?/project/branch/fix` absolute,
+ -  `?7d37f90f` project-relative, detached commit hashlet,
+ -  `?7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee` project-relative, detached, commit hash,
+ -  `?/project/7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee` absolute, detached, commit hash.
+ -  `?/project#7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee` absolute, project trunk, pinned hash.
+ -  `?/project/branch#7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee` absolute, branch, pinned.
+
+##  `be` CLI argument classification
 
 Every non-flag argv token becomes one URI via `DOGNormalizeArg`; the token's markers decide the slot, so the common case needs no punctuation.
 
@@ -27,4 +57,5 @@ Every non-flag argv token becomes one URI via `DOGNormalizeArg`; the token's mar
 
 [PATCH]: PATCH.mkd "the patch verb"
 [Verbs]: Verbs.mkd "the verbs hub"
+[Projector]: Projector.mkd "read-only views"
 [Home]: Home.mkd "Beagle overview"

@@ -1,0 +1,21 @@
+#   DIS-011: `be put ssh://host/path` (no `?ref`) force-pushes instead of logging
+
+[PUT] promises `be put ssh://host/path` with no `?ref` "just logs the URL to the project reflog — no other side-effect", but the PUT dispatch plan fires a force-push on any authority slot regardless of an empty query, so a no-ref ssh URL triggers a destructive remote write — the opposite of the spec. The goal is the documented log-only behaviour. See [PUT].
+
+##  Issues
+The PUT plan gates the push on authority alone, never on the presence of a `?ref`.
+
+ -  `beagle/DISPATCH.c:328` — `BE_PLAN_PUT`'s first arm fires `BEActKeeperPushForce` on `URI_AUTHORITY` with no `URI_QUERY` requirement.
+ -  `URIPattern` sets `URI_AUTHORITY` whenever authority is non-NULL, which a path-bearing `ssh://host/path` has.
+ -  `BEActKeeperPushForce` (`DISPATCH.c:210`) spawns `keeper post --force`; there is no log-only action in the PUT plan or in `sniff/SNIFF.exe.c` PUT dispatch — so a no-ref ssh URL force-pushes cur.
+
+##  Blockers
+None.
+
+##  Planned
+Repro first, then split the push arm on `?ref` presence.
+
+ -  Repro: `be put ssh://host/path` (no `?ref`) must append a `set //host#<url>` row and touch nothing else; today it pushes cur.
+ -  Gate `BEActKeeperPushForce` on `URI_AUTHORITY|URI_QUERY`; route authority-without-query to a log-only alias write.
+
+[PUT]: ../wiki/PUT.mkd "PUT verb"

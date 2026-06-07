@@ -1,0 +1,30 @@
+#   GET-001: weave merge of long-history files exhausts BASS (BNOROOM)
+
+[GET]'s checkout weave-merges every wt-dirty file the incoming commit also touched; on a large file with long history the merge aborts with BNOROOM, so GET prints `merge failed … (graf err)` and leaves that file unmerged. The cause is in [Graf]: the per-file history-replay loop calls `WEAVEFromBlob` / `WEAVEDiff` directly with no per-version [BASS] rewind, so the per-call `WEAVE_DECODE` scratch — sized off the weave's TLV, which grows each version — accumulates across all versions until the 1 GB arena overflows. The goal is to reclaim that scratch per version. See [GET], [Graf], [BASS].
+
+##  Issues
+A direct (un-`call`ed) replay loop accumulates BASS scratch quadratically.
+
+ -  `sniff/GET.c:687` calls `GRAFMergeWtFile`; on its error (`:690`) it prints `merge failed … (graf err)` and keeps the wt file — the user-visible symptom, with the actual code (BNOROOM) swallowed.
+ -  `graf/GET.c:546-571` (`build_tip_weave_tunable`) replays every version of the path; `:560` `WEAVEFromBlob` and `:562` `WEAVEDiff` are invoked directly — no `call()`/`try()` boundary, so [BASS] is never rewound between iterations.
+ -  `graf/WEAVE.c:278-294` (`WEAVE_DECODE`) `BACQ`-acquires 7 BASS buffers sized off `_tl`, the weave's TLV byte length; `WEAVEDiff` (`:563`) decodes both src and nu, and `_tl` grows each version as history piles into the accumulator weave.
+ -  Total BASS use ≈ Σ over versions of O(TLV) ≈ O(versions² × tokens); the 1 GB arena (`abc/PRO.h:37`) overflows and the next `a_carve` returns BNOROOM — at `build_tip_weave_tunable:488` or `:520`, whichever carve tips it over.
+
+##  Repro
+Confirmed against the live store (base `10e0bebd`, tgt `c54a8c72`) via a harness calling `GRAFMergeWtFile` directly.
+
+ -  `beagle/BE.cli.c` (81 KB, 93 versions) and `sniff/test/SNIFF.c` (35 KB, 45 versions) both fail with BNOROOM; small or short-history files merge fine.
+ -  The existing `graf/test/MERGEWT01.c` cases use tiny 2-3 line files and pass — the bug needs scale (large file × long history), so current tests miss it.
+
+##  Blockers
+None; the fix is local to `build_tip_weave_tunable` in `graf/GET.c`.
+
+##  Planned
+Give each replay step a `call()` boundary so its scratch is reclaimed per version; verified to turn both files' merges from BNOROOM into OK.
+
+ -  Move the `WEAVEFromBlob` + `WEAVEDiff` pair into a helper invoked via `call()`/`try()`, so [BASS] rewinds each version — `wsrc`/`wdst`/`wnu` keep their state in their own mmaps and are unaffected.
+ -  Add a MERGEWT01 case with a many-version large file that overflows the unfixed loop, to lock the regression.
+
+[GET]: ../wiki/GET.mkd "GET verb"
+[Graf]: ../wiki/Graf.mkd "the graf dog"
+[BASS]: ../wiki/BASS.mkd "scratch arena"

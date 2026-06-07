@@ -1,0 +1,21 @@
+#   MEM-018: graf walkers carve BASS per step without rewind (graf/BLAME.c, DIFFREF.c, BRAM.c)
+
+Three graf walkers carve ABC_BASS scratch inside per-step/recursive helpers that are invoked by plain call (no `call()`/`try()` and no mark/rewind), so the scratch accumulates across the walk instead of dying per iteration; on large inputs the 1GB arena is exhausted, after which `a_carve` returns `NOROOM`, the work silently truncates (some via a `(void)` cast), and a misleading "auto-rewound at the caller's boundary" comment masks it. The goal is to rewind per iteration. (REBASE's variant is MEM-008.)
+
+##  Issues
+Per-iteration carves outlive the iteration.
+
+ -  `graf/BLAME.c:108-148` — `blame_fetch_author` does `u8bAcquire(ABC_BASS,cbuf,1<<20)` per folded commit; `GRAFFileWeave` calls the step cb via raw fn-ptr (:484/:541), so 1MB/commit never rewinds.
+ -  `graf/DIFFREF.c:304-308` — `diffref_wt_step` directly calls `GRAFDiffWtFile` (16MB `a_carve`) per changed path; `ULOGMergeWalk` cb is unwrapped, so ~16MB/file leaks until `NOROOM`, then `(void)` drops remaining diffs.
+ -  `graf/BRAM.c:104-118` — `bram_region`/recursive `BRAMu64s` carve region-sized scratch at every recursion level with no rewind.
+
+##  Blockers
+None. Graceful `NOROOM` (no OOB), but silent truncation + arena exhaustion.
+
+##  Planned
+Rewind around each iteration/descent; fix the comments.
+
+ -  Repro first: blame a many-commit file / `be diff:` a many-file dirty tree; assert BASS high-water stays bounded.
+ -  `try(GRAFDiffWtFile,…)` per path; read commits into a reused `GRAF.obj_buf` in `blame_fetch_author`; invoke `bram_region` via `call()`/mark-rewind and bound recursion depth.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

@@ -1,0 +1,21 @@
+#   MEM-004: TLVprobe huge-length overflow → wild value slice (abc/TLV.c)
+
+For huge TLV records `TLVprobe` reads a full attacker-controlled 64-bit body length and bounds it only with `(*hlen + *blen) <= $len(data)` computed in u64; a `*blen` near `u64max` makes `9 + *blen` wrap below `$len(data)` and pass, after which callers build `value[1] = value[0] + blen` and advance `from[0] += hlen + blen`, yielding wildly out-of-bounds pointers handed to downstream readers. The goal is an overflow-safe length check.
+
+##  Issues
+Additive length guard wraps for huge-record lengths.
+
+ -  `abc/TLV.c:19-27` — `*blen = *(u64*)(*data+1)`; only guard is `(*hlen+*blen) <= $len(data)`, which wraps for large `*blen`.
+ -  `_TLVu8sDrain:36` `value[1]=value[0]+blen` and `TLVDrain$:112` `rec[1]=from[0]+hlen+blen` then form OOB slices; `from[0]+=hlen+blen` desyncs the stream.
+ -  Trigger: untrusted TLV with a huge-type byte (`'!'..':'`) + 8-byte length where `9+blen` wraps below `$len(data)`.
+
+##  Blockers
+None.
+
+##  Planned
+Compare against remaining room without adding.
+
+ -  Repro first: add a `TLV` probe/drain test row with a huge-type byte and `blen=u64max-4`; confirm wild slice under ASan.
+ -  Guard as `if (*blen > (u64)$len(data) - *hlen) return TLVNODATA;` after ensuring `$len(data) >= *hlen` (or check `*blen` and `*hlen` separately so the sum cannot wrap).
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

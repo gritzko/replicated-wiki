@@ -1,0 +1,20 @@
+#   MEM-015: PACKCreate/PACKOpen leak PAGE + index mmap on open failure (abc/PACK.c)
+
+`PACKCreate` acquires resources mid-function — `PAGECreate` maps a PAGE, then `mmap` maps the index, then `open` opens the file; if `open` fails, `test(p->fd>=0, PACKFAIL)` returns immediately (PRO.h `test`/`fail` do no cleanup) with `p->writing` still 0, leaving the PAGE and the `idxsize` index mapping allocated. A caller that treats a failed Create as "nothing to clean up" leaks both. `PACKOpen` has the same shape (fd + idx mmap). The goal is to release on the failure path or contract callers to `PACKClose` a failed handle.
+
+##  Issues
+Resources taken below the failing check are never released.
+
+ -  `abc/PACK.c:9-42` `PACKCreate` — `open` fail at :34 returns with PAGE (`:21`) and index mmap (`:25`) leaked; `p->writing` set only at :39.
+ -  Same range — `PACKOpen` leaves fd + idx mmap open when a later `test` fails.
+
+##  Blockers
+None. Currently only safe if callers always `PACKClose` a failed handle (undocumented).
+
+##  Planned
+Cleanup on failure, mirrored in both entry points.
+
+ -  Repro first: `PACKCreate` with an unwritable path after PAGE+idx map succeed; assert no mmap/PAGE leak under ASan, without a caller `PACKClose`.
+ -  Use explicit cleanup (`PAGEClose(p->pg)` + `munmap(idx)`) on the `open`-failure path, or document+guarantee callers must `PACKClose`; apply the same to `PACKOpen`.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

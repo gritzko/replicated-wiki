@@ -1,0 +1,39 @@
+#   SUBS-004: bare `be put` with only the sub dirty exits 206/PUTNONE
+
+**MEDIUM.**  When only a mounted submodule is dirty (parent clean), bare
+`be put` correctly recurses and stages the sub blob, but the aggregate command
+exits **206/PUTNONE** because the parent sniff's `PUTNONE` ("no changes")
+propagates as the command exit.  The relay (`BEActSubsRelay`) runs AFTER the
+parent's put action in `BE_PLAN_PUT` and its `-q` only swallows the SUB's NONE,
+not the parent's.  DELETE has no such asymmetry — a parent-only bare delete is
+a lenient exit-0 no-op, so a sub-only delete returns 0 (see SUBS-005 contrast).
+
+##  Repro
+ 1. `be get <parent>?master`.
+ 2. Edit only `vendor/sub/core.c` (leave parent files clean).
+ 3. `be put`.
+ 4. stdout lists `put vendor/sub/core.c` and the sub's wtlog gains a real
+    `put core.c` row (sub blob IS staged) — but exit is 206/PUTNONE.
+
+##  Expected
+Exit 0.  The sub blob was staged, so the bare put did real work; spec: "A clean
+sub returns `*NONE`; recursion passes `-q` and treats it as a no-op, so it
+never fails a bare `be put`/`delete`."  Symmetrically, a *dirty* sub under a
+*clean* parent should make the aggregate succeed.
+
+##  Actual
+Exit 206/PUTNONE; the parent's empty-stage `PUTNONE` masks the successful sub
+stage.  (Both-dirty works: exit 0 with both blobs staged — confirming the bug
+is purely the parent-empty + sub-nonempty combination.)
+
+##  Fix sketch
+Make the aggregate exit OK when any sub relay staged work, even if the parent
+side is `PUTNONE` — mirror DELETE's lenient parent-empty handling, or have the
+top-level `becli` NONE-swallow apply when a sub did real work.  Care: a truly
+empty bare put (parent clean AND all subs clean) must still surface PUTNONE.
+
+##  Tests
+`test/put/09-sub-only-dirty-exit` (`WILL_FAIL` until fixed);
+`test/put/08-sub-stage-all-both-dirty` (passing control).
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

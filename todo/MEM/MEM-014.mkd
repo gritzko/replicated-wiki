@@ -1,0 +1,20 @@
+#   MEM-014: LISTinsert writes to an unvalidated `next` index (abc/LISTx.h)
+
+`LISTinsert` bounds-checks only `prev` (`if (len<prev) return LISTBADNDX`); the successor `next = bAtP(list,prev)->_list.next` is then used directly in `bAtP(list,next)->_list.prev = len`, and `bAtP` guards only with an `assert(p<buf[3])` that is compiled out in release, so a corrupt/caller-controlled `next` produces an out-of-bounds write past the buffer in release builds. The goal is to validate `next` before dereferencing it.
+
+##  Issues
+Successor index trusted without a bound.
+
+ -  `abc/LISTx.h:11-23` — `next` (from `bAtP(list,prev)->_list.next`, :17) used at :21 with no range check; `bAtP` (`abc/Bx.h`) only asserts (release: absent) and checks capacity, not data length.
+ -  Trigger: `prev == len` (so `next` is the new entry's caller-set `.next`) or a list with corrupt/uninitialized `.next` links, in a release build.
+
+##  Blockers
+None.
+
+##  Planned
+Bounds-check the successor.
+
+ -  Repro first: `LISTinsert` with `prev==len` and an out-of-range `entry->next` (release-style build); confirm OOB write under ASan.
+ -  `if (next > len) return LISTBADNDX;` (and reject `prev==len` for non-head inserts), or use a bounds-checked accessor returning an error instead of asserting.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

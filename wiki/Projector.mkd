@@ -1,0 +1,44 @@
+#   Projector: read-only verbless views over any resource
+
+A projector is a read-only, presentation-only verbless view: a scheme like `sha1:`/`diff:`/`spot:` that renders a resource without ever mutating it. The goal is one uniform way to inspect any object — sha, bytes, tree, history, or a search hit — composing with the same [URI] slots as the [Verbs]. The method: each projector is its own verb that emits a `dog/HUNK` stream for [Bro] to page; all four URI slots compose, so `be spot:/graf?feature#HASHu64Put` is a structural search under `/graf` on `feature`.
+
+##  Projectors compose and never mutate
+
+Every projector accepts URIs of any shape and only renders, so projectors are safe to combine with any URI slot and with each other; each is its own read-only verb, not a mutating verb dressed in a scheme.
+
+ -  All four URI slots compose: `be diff://host/file.c?remote_branch` reads a remote file's diff — any slot combination is valid.
+ -  Read-only by construction: a projector emits HUNK bytes and never writes, so `be post sha1:?feat` is not a thing.
+ -  A projector scheme is the whole scheme: `sha1:ssh://…` is not valid — fetch with a transport scheme first, then project.
+
+##  Object projectors
+
+These inspect a single object the `?ref`/`#sha` resolves to — its id, bytes, listing, body, size, or type.
+
+ -  `sha1:` emits the 40-hex sha of the resource — `be sha1:?feat` is `git rev-parse`, `be sha1:file.c?` the tracked blob sha.
+ -  `blob:` emits a blob's raw bytes — `be blob:file.c?123abc` is `git cat-file -p <sha>:file.c`.
+ -  `tree:` emits a tree listing of mode, sha, and name — `be tree:src/?feat` lists one dir at a branch tip.
+ -  `commit:` emits a commit object's body, headers then message — `be commit:?123abc`.
+ -  `size:` emits the resource's byte size — `be size:?#abc1234`; `type:` emits the object type (commit/tree/blob/tag).
+
+##  History projectors
+
+These render history: the commit log, the ref namespace, and the token-level diff between any two states.
+
+ -  `log:` emits the `refs` tail newest-first, one commit per line; `#N` caps to N — `be log:?feat#20` ≈ `git log -n 20 feat`.
+ -  `refs:` lists refs under a dir, `**` recursive — `be refs:?**` is `git branch -a`.
+ -  `diff:` emits a weave-based unified diff, changed state on the right — `be diff:file.c`, `be diff:?main`, `be diff:?v1#v2`.
+
+##  Search projectors
+
+These search the repo's content; the query body rides the `#fragment` with an optional `.ext` filter, delegated to [Spot] and [Graf].
+
+ -  `spot:` does syntax-aware structural search — `be spot:#'u8sFeed( a, b )'.c` finds that call shape across `.c` files.
+ -  `grep:` does literal-substring search — `be grep:#u8sFeed.c`.
+ -  `regex:` does PCRE search — `be regex:#'u\d+sFeed'.c`.
+
+[Verbs]: Verbs.mkd "the verbs hub"
+[URI]: URI.mkd "URI structure"
+[Bro]: Bro.mkd "the bro dog"
+[Spot]: Spot.mkd "the spot dog"
+[Graf]: Graf.mkd "the graf dog"
+[Home]: Home.mkd "wiki entry page"

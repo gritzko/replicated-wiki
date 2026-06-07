@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>BE-001: red leaks into non-conflict code render and ulog statuses</h1>
+<p>
+Red is reserved for conflict statuses (the <code>conf</code> / <code>modl</code> PATCH reports, <a href="../done/DIS-018.html">DIS-018</a>). Some tokens in code-block render and some ulog status rows are coloured red when they are NOT conflicts — regular text in those cases must be the default/black, never red. The goal: red appears ONLY for genuine conflict statuses; everything else renders in the normal colour. See <a href="../wiki/Mark.html">Mark</a>, <a href="../wiki/Sniff.html">Sniff</a>.
+</p>
+<h2>Issues</h2>
+<p>
+Two render sites over-apply the red palette entry.
+</p>
+<ul>
+<li>Code render: some code tokens come out red (observed in <code>be</code> code-block output) though they are ordinary text, not conflicts.</li>
+<li>Ulog statuses: some status rows render red though they are not <code>conf</code>/<code>modl</code> — regular <code>ok</code>/<code>mod</code>/etc. must be default-coloured.</li>
+<li>The conflict-only red contract comes from <a href="../done/DIS-018.html">DIS-018</a> (PATCH <code>conf</code>/<code>modl</code> are bright red, exit OK); nothing else should reuse that colour.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Restrict red to conflict statuses; default the rest.
+</p>
+<ul>
+<li>Locate the palette sites (the code-render colour map — <code>mark/</code> / <code>dog/tok</code> — and the sniff status row printer/palette).</li>
+<li>Map only the conflict statuses (<code>conf</code>/<code>modl</code>) to red; route every other token/row to the normal/default colour.</li>
+<li>Repro test: render a code block and a clean status; assert no red escape on non-conflict tokens/rows (and that <code>conf</code>/<code>modl</code> stay red).</li>
+</ul>
+</body>
+</html>

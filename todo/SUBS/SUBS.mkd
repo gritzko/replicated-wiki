@@ -1,0 +1,51 @@
+#   SUBS: submodule-recursion tickets
+
+Audit of `be`'s submodule recursion across all verbs (2026-06-05).  Model
+and spec in [Submodules].  Recursion is **default-on for every source type**
+(git/ssh included); `--sub` is a dead no-op, `--nosub` is the only opt-out
+(verified: no `CLIHas(c,"--sub")` anywhere, six `--nosub` sites in
+`beagle/BE.cli.c`).  HEAD, GET (checkout/clone/force/prune), and POST
+topology (post-order, synthetic dot-branch `?/<sub>/.<parent>/<branch>`,
+gitlink bumps, detached-refuse) all work.  The gaps below are the deltas.
+
+| Ticket | Sev | Verb | One-line |
+|--------|-----|------|----------|
+| [SUBS-001] | HIGH (LANDED `97de77b8`) | post | a level's own tracked edits silently dropped when that level also has a dirty sub (selective-mode flip from the recursion's gitlink-bump put-row) — fixed via option (a): `sniff/POST.c` `post_pd_cb` no longer flips `any_pd` on sub-bump put rows |
+| [SUBS-002] | HIGH (LANDED `a31bdfcf`) | patch | unusable on any gitlink-bearing parent — fixed: `BE_PLAN_PATCH` no longer excludes `BEActSubsPatch` on transport URIs (mask→0, `beagle/DISPATCH.c`); spurious `bad ref ''` silenced; patch/28+29 added |
+| [SUBS-003] | MED (FIXED) | get | clone status report stamped `DDMon` not `HH:MM` (mktime DST round-trip); broke get/05,07 — fixed in `dog/HUNK.c` |
+| [SUBS-004] | MED (LANDED `5fb56d6f`) | put | bare `be put` with only the sub dirty exited 206/PUTNONE — fixed: `be_recurse_capture` propagates a child `*NONE` as the NONE class (no longer collapsed to OK) and `BEActSubsRelay` returns `BESTOP` (→OK) when a sub staged work, clearing the parent's stale PUTNONE; a truly-empty bare put still surfaces PUTNONE |
+| [SUBS-005] | MED (LANDED `9aabd863`) | delete | path-scoped delete of a sub / sub-interior file false-positived DELDIRTY — fixed: `sniff/DEL.c` `del_sub_classify` recognises gitlink + sub-interior paths and skips with a sub-aware message instead of DELDIRTY (full unmount deferred to [SUBS-008]) |
+| [SUBS-006] | MED (LANDED `414d9f96`) | post | git-remote push aborts NOBRANCH on a clean nested sub whose synthetic branch does not yet exist — fixed: detached wt returns POSTNONE (no-op) from POSTPromote's missing-branch arm (`sniff/POST.c`); post/29 added |
+| [SUBS-007] | MED (LANDED `3ab50efd`) | head | `be head` omits sub working-tree dirty state (spec L20); head/04 is a false-positive test — fixed: `behead_recurse_cb` now relays each sub's bare status (`beagle/BE.cli.c`); head/21 added, head/04 tightened |
+| [SUBS-008] | LOW (LANDED `50722656`) | get | gitlink-removed target unmounts the `.be` anchor but orphans the sub's worktree files on disk — fixed: `BEGetSubUnmount` FILErmrf's the whole mount dir (`beagle/SUBS.c`); be-get-sub-unmount-clean added |
+| [SUBS-009] | LOW (PARTLY LANDED `50724d9a`) | put | sub-add via `be put` — fixed the misleading PUTNONE with an actionable refusal naming the `sniff sub-mount` step (`sniff/PUT.c`); full git-submodule-add parity (URL+pin) → [SUBS-013]. put/11 added |
+| [SUBS-010] | LOW (LANDED `cda5c691`) | docs | stale "git source needs `--sub`" comments/shim (`test/lib/submodules.sh`, get/05,07) describe removed gating — fixed: shim dropped, phase-2 narrative purged, tests now drive default recursion |
+| [SUBS-011] | HIGH (LANDED `7d37f90f`) | grep/spot/regex | search projectors don't descend into subs — fixed: index-on-mount (`BEIndexMount`) + `BEProjectorSubs` recursion (`beagle/SUBS.c`,`BE.cli.c`); spot/10 added |
+| [SUBS-012] | MED (LANDED `7d37f90f`) | diff/tree/blob/refs/log/blame | projectors parent-only at a gitlink — fixed: whole-tree fan-out (diff:/tree:) + path-in-mount routing (blob:/tree:/log:/blame:); diff/06, tree/01 added. `refs:?**` deferred (refs: unimplemented in keeper) |
+| [SUBS-013] | LOW | put | full `git submodule add` parity: stage a new `160000` gitlink + `.gitmodules` from `be put` — needs a chosen URL source + pin grammar (escalated from SUBS-009) |
+| [SUBS-014] | LOW | put | misleading "does not exist — skipped" PUTNONE fires for ANY plain untracked dir named without a trailing slash (not sub-specific); wants a "did you mean `dir/`?" hint |
+| [SUBS-015] | LOW | blob | `blob:<path>` WITHOUT `?ref` returns KEEPNONE even in the parent (pre-existing, not sub-related) |
+
+Tests added this audit: `test/put/08-10`, `test/delete/07-09`, `test/patch/28-29`,
+`test/post/26-27`, `test/head/21`, `test/all/01-subs-all-verbs` (bug repros
+registered `WILL_FAIL` until the owning ticket lands).  `test/post/26-27`
+landed green with SUBS-001 (`97de77b8`) and are off `WILL_FAIL`.  `test/put/09`
+landed green with SUBS-004 (`5fb56d6f`) and `test/delete/08` with SUBS-005
+(`9aabd863`).  The rest stay `WILL_FAIL` pending their tickets.
+
+[SUBS-001]: SUBS-001.mkd
+[SUBS-002]: SUBS-002.mkd
+[SUBS-003]: SUBS-003.mkd
+[SUBS-004]: SUBS-004.mkd
+[SUBS-005]: SUBS-005.mkd
+[SUBS-006]: SUBS-006.mkd
+[SUBS-007]: SUBS-007.mkd
+[SUBS-008]: SUBS-008.mkd
+[SUBS-009]: SUBS-009.mkd
+[SUBS-010]: SUBS-010.mkd
+[SUBS-011]: SUBS-011.mkd
+[SUBS-012]: SUBS-012.mkd
+[SUBS-013]: SUBS-013.mkd
+[SUBS-014]: SUBS-014.mkd
+[SUBS-015]: SUBS-015.mkd
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

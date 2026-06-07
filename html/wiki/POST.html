@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>POST</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>POST: the only commit-maker — advance cur, FF labels, push</h1>
@@ -70,7 +63,7 @@ POST picks the commit message in a fixed order, and a squash never auto-supplies
 </ul>
 <h2>File classification</h2>
 <p>
-Every sniff row stamps the files it touched with its <code>ts</code>; at POST time each on-disk file's mtime is looked up to decide KEEP vs REWRITE, in selective or implicit (commit-all) mode.
+Every sniff row stamps the files it touched with its <code>ts</code>; at POST time each on-disk file's mtime is looked up to decide KEEP vs REWRITE, in selective or implicit (commit-all) mode — the <a href="Worktree.html">Worktree</a> page is the full treatment.
 </p>
 <ul>
 <li>KEEP: mtime <code>&lt; last_get_ts</code>, or the file is owned by a <code>get</code>/<code>post</code> row (baseline content) — in both modes.</li>

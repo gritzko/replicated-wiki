@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Home</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>Beagle: git-compatible revision control, reworked</h1>
@@ -27,7 +20,7 @@ Beagle is a revision control system for modern workflows: a comfortable client f
 </ul>
 <h2>The <code>be</code> command language</h2>
 <p>
-The dispatcher is <code>be</code>. It uses standard <a href="URI.html">URI</a> arguments and the <a href="Verbs.html">Verbs</a> of the HTTP dictionary, which cover every data maneuver — not a zoo of flags. The verbs are orthogonal: one verb cannot supplement another through creative use.
+The dispatcher is <code>be</code>. It uses standard <a href="URI.html">URI</a> arguments and the <a href="Verbs.html">Verbs</a> of the HTTP dictionary, which cover every data maneuver — not a zoo of flags. The verbs are orthogonal — one cannot supplement another — and uphold the <a href="Invariants.html">Invariants</a>.
 </p>
 <ul>
 <li>Read-only: <a href="GET.html">GET</a> fetches or checks out a version/branch/project; <a href="HEAD.html">HEAD</a> is its dry-run, listing what would change.</li>
@@ -42,7 +35,7 @@ Every non-flag argument is one <a href="URI.html">URI</a>, <code>scheme:host/pat
 </p>
 <ul>
 <li><code>scheme</code> is the app/protocol, <code>host</code> a remote, <code>path</code> a file path relative to the project root.</li>
-<li><code>query</code> selects the project/branch/tag/commit; Beagle is multi-project — one <a href="Store.html">Store</a> hosts many projects, each a branch tree.</li>
+<li><code>query</code> selects project/branch/tag/commit; Beagle is multi-project — one <a href="Store.html">Store</a> hosts many projects, each keyed by <a href="Title.html">Title</a>.</li>
 <li><code>fragment</code> is free-form payload: a commit-message body, a line jump, an extension filter.</li>
 <li>Branch shapes: <code>?/project/branch/tag</code> absolute, <code>?branch/</code> relative branch, <code>?v1.2.3</code> tag, <code>?./fix</code>/<code>?..</code> branch-relative.</li>
 <li>More shapes: <code>?abc1234</code> sha-prefix, <code>?free text</code> message search, <code>?null</code>/<code>?back</code> magic (no-branch / prev-branch).</li>
@@ -60,12 +53,12 @@ The common loop is clone or switch, edit the worktree, stage, commit, then push 
 </code></pre>
 <h2>Projections</h2>
 <p>
-Apart from verbs, Beagle has projections — read-only, presentation-only verbless views. Projections accept URIs of any shape and never mutate, so they compose freely with the rest of the language.
+Apart from verbs, Beagle has projections — read-only, presentation-only verbless views. Projections accept URIs of any shape and never mutate, so they compose freely with the rest of the language; the full set is the <a href="Projector.html">Projector</a> catalog.
 </p>
 <ul>
 <li><code>be diff:?other_branch</code> diffs against a branch; <code>be log:file.c</code> shows a file's history.</li>
 <li><code>be grep:TODO</code> does literal search; <code>be spot:#FuncName</code> does structural search across the repo.</li>
-<li>Projections compose with any URI shape, e.g. <code>be diff://host/file.c?remote_branch</code>.</li>
+<li>Projections compose with any URI shape, e.g. <code>be diff://host/file.c?remote_branch</code>; the <a href="Projector.html">Projector</a> page lists every scheme.</li>
 </ul>
 <h2>The dogs</h2>
 <p>
@@ -75,7 +68,7 @@ The repo is structured into dogs — each with its purview, the data and functio
 <li><a href="Bro.html">Bro</a> — interactive syntax-highlighted pager and viewer.</li>
 <li><a href="Spot.html">Spot</a> — structural code search, grep, regex and replace across a repo; maintains a trigram index.</li>
 <li><a href="Graf.html">Graf</a> — token-level diffing, 3-way merges and history navigation; maintains a history index.</li>
-<li><a href="Sniff.html">Sniff</a> — serves the worktree and detects changes via one append-only wtlog.</li>
+<li><a href="Sniff.html">Sniff</a> — serves the <a href="Worktree.html">Worktree</a> and detects changes via its one append-only wtlog.</li>
 <li><a href="Keeper.html">Keeper</a> — stores data (blobs, trees, commits) in one flat <a href="Store.html">Store</a> pool per project; branches and tags are refs into it.</li>
 <li><a href="Mark.html">Mark</a> — renders the <a href="StrictMark.html">StrictMark</a> wiki to HTML and lints its <a href="WikiWeb.html">WikiWeb</a> structure and size budgets.</li>
 </ul>

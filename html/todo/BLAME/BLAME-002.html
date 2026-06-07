@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLAME-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>BLAME-002: materialise tree entries in the DAG index for inflate-free descent</h1>
+<p>
+blame's path descent must inflate keeper objects because the DAG index records only <code>(COMMIT,commit_h)→(TREE,tree_h)</code> root-tree edges and <code>(COMMIT,commit_h)→(COMMIT,parent_h)</code> parent edges (graf/DAG.c:847-863); the <code>DOG_OBJ_TREE</code>/<code>DOG_OBJ_BLOB</code> cases are explicit no-ops (graf/DAG.c:869-876, graf/INDEX.c:16-18). The graf/DAG.h header's &quot;materialising every tree entry&quot; claim is stale. Adding <code>(tree,name)→child</code> records lets graf descend a path via in-memory binary searches with zero keeper inflate, collapsing blame's descent to O(<code>nord</code>·depth) lookups + a blob fetch only on change. This is the structural complement to the keeper-side win in <a href="../todo/BLAME-001.html">BLAME-001</a>. See <a href="../wiki/Plan.html">Plan</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The index cannot descend a path; every blame commit re-inflates trees from keeper.
+</p>
+<ul>
+<li>Only four edge kinds are emitted, all <code>(COMMIT,*)</code>-keyed (graf/DAG.c:847); no <code>(TREE,*)</code> key exists; tree/blob ingest is a no-op (:869).</li>
+<li>graf/DAG.h header comment (&quot;materialis<a href="">es</a> every tree entry&quot;) contradicts the code — fix the spec while adding the records.</li>
+<li>Descent therefore hits keeper per segment (graf/BLOB.c <code>GRAFTreeStep</code>→<code>KEEPGetExact</code>), the cost <a href="../todo/BLAME-001.html">BLAME-001</a> measured.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None hard. Reindex is required to populate the records; old stores stay correct (descent falls back to keeper on index miss).
+</p>
+<h2>Planned</h2>
+<p>
+Encode <code>(tree,name)→child</code> as ordinary wh128 records, emit them once per distinct tree at ingest, descend index-first with keeper fallback.
+</p>
+<ul>
+<li>Encoding: key=<code>DAGPack(DAG_T_TREE, DOGChildPathHash(name, tree_h60))</code>, val=<code>(child_type, child_h60)</code>; <code>DOGChildPathHash</code> (dog/DOG.h, rapidhash seeded by parent) already exists.</li>
+<li>Collisions (60-bit) are detected via the equal-key span (<code>DAGRange</code>) and survived by falling back to keeper for that one step — never silent.</li>
+<li>Ingest (graf/DAG.c commit path): walk each tree with <code>GITu8sDrainTree</code>, emit child edges; dedup with a per-run seen-tree set on <code>dag_ingest</code> so each distinct tree is walked once.</li>
+<li>Descent: <code>GRAFTreeStepIndexed</code>/<code>GRAFPathDescendIndexed</code> in graf/BLOB.c, threading hashlets; fall back to the existing keeper descent on any miss (legacy/un-indexed stores).</li>
+<li>Format: no version bump — same 16-byte wh128, and readers already type-filter (<code>DAGAllCommits</code> graf/DAG.c:344 even skips &quot;(TREE,*)&quot; edges); <code>graf index</code> rebuild populates them.</li>
+<li>Size grows by ≈ distinct tree-entries across history (E×16 B); the seen-tree dedup is load-bearing to avoid a C×E blowup — measure via <code>graf status</code> entry count.</li>
+</ul>
+<h2>Landed</h2>
+<p>
+None yet.
+</p>
+</body>
+</html>

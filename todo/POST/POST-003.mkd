@@ -1,0 +1,22 @@
+#   POST-003: recursive POST skips a freshly-added submodule
+
+`be post '#msg'` should commit a dirty sub and bump its gitlink even when the sub was added this session (`.gitmodules` staged via `be put`, mount via `sniff sub-mount`) rather than present in the last committed tree. Today the parent commits but never recurses: the sub's tip stays at its pin, no gitlink bump. The goal is add-then-post descending like an already-tracked sub. See [Submodules], [POST]. Repro: `post/15-sub-add-then-post` (deterministic).
+
+##  Issues
+Post-time enumeration misses a sub that is mounted + declared-in-wt but absent from the committed baseline tree.
+
+ -  `BEActSubsPost` → `BESubsHere` emits no entry for the new sub, so `bepost_recurse_cb` never fires (no `be: post <sub>`).
+ -  The sub is present: its `.be` anchor exists and `.gitmodules` is staged, yet enumeration keys on the committed tree.
+ -  With synthetic-branch commit landed, only pre-existing subs commit; a same-session `submodule add` silently no-ops.
+
+##  Blockers
+None. Independent of the detached-sub synthetic-branch POST work (landed); this is purely the enumeration source at recursion time.
+
+##  Planned
+Enumerate from the wt's declared+mounted set, not only the committed baseline tree.
+
+ -  Union mounted-on-disk subs with staged `.gitmodules` declarations in `BESubsHere` (or its post caller), dedupe by path.
+ -  Keep `post/15` as the regression once green.
+
+[Submodules]: ../wiki/Submodules.mkd "submodules"
+[POST]: ../wiki/POST.mkd "POST verb"

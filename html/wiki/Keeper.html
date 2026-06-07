@@ -4,36 +4,29 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Keeper</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>Keeper: the local git object store</h1>
 <p>
-Keeper is the object-store dog: its purview is git object storage, and it owns those objects — append-only <code>NNNNN.keeper</code> pack logs, their <code>NNNNN.keeper.idx</code> kv64 indexes, and per-branch <code>refs</code> reflogs, one shard per project. The goal is a store trivially git-exchangeable yet never rewriting packs, so packs copy verbatim and a branch dir drops wholesale. The method: address by 60-bit hashlets, append to pack logs, index as sorted kv64 runs, resolve deltas up a branch-dir DAG.
+Keeper is the object-store dog: its purview is git object storage, and it owns those objects — append-only <code>NNNNN.keeper</code> pack logs, their <code>NNNNN.keeper.idx</code> kv64 indexes, and a project <code>refs</code> reflog, one flat shard per project. The goal is a store trivially git-exchangeable yet never rewriting packs, so packs copy verbatim and a dropped branch costs only a <code>refs</code> tombstone. The method: address by 60-bit hashlets, append to pack logs, index as sorted kv64 runs, resolve deltas within the single project pool.
 </p>
 <ul>
 <li>Pack logs are append-only, git-encoded but not valid packfiles (no trailing checksum); offsets stay stable, never moved.</li>
-<li>OFS_DELTA bases are pack-local (a stable earlier offset); REF_DELTA bases resolve by hashlet walking up the branch-dir DAG.</li>
+<li>OFS_DELTA bases are pack-local (a stable earlier offset); REF_DELTA bases resolve by hashlet within the one project pool.</li>
 <li>The kv64 index sorts <code>hashlet60|type4</code> keys, so a hash-prefix lookup is one range query spanning all object types.</li>
-<li>Branch dirs form a DAG: a leaf drops wholesale without breaking a surviving REF_DELTA — this replaces git-style repack.</li>
-<li>Refs and host aliases live in per-branch <code>refs</code> reflogs; a branch's refs is authoritative — resolution does not walk up.</li>
+<li>Dropping a branch is a <code>refs</code> tombstone, not a dir delete: objects linger in the shard until an epoch recompaction.</li>
+<li>Refs and host aliases live in the project <code>refs</code> reflog; a branch's refs is authoritative — resolution does not walk up.</li>
 </ul>
 <h2>API</h2>
 <p>
 Keeper follows the <a href="Dog.html">Dog</a> three-call contract plus an incremental pack writer; objects are read by hashlet or URI and written through the pack API.
 </p>
 <ul>
-<li><code>KEEPOpen</code> / <code>KEEPOpenBranch</code> / <code>KEEPClose</code> — open the store, add a branch's shard to the view, then close all shards.</li>
+<li><code>KEEPOpen</code> / <code>KEEPOpenBranch</code> / <code>KEEPClose</code> — open the store, select a branch's tips within the one shard, then close it.</li>
 <li><code>KEEPExec(state, cli)</code> — run a parsed verb plus URIs against the open store.</li>
 <li><code>KEEPGet</code> / <code>KEEPGetByURI</code> — read an object by hashlet or by a full URI into a buffer.</li>
-<li><code>KEEPLookup</code> — range-query the kv64 index, returning <code>(dir, file_id, offset)</code> for the first hit.</li>
+<li><code>KEEPLookup</code> — range-query the kv64 index across the project pool, returning <code>(file_id, offset)</code> for the first hit.</li>
 <li><code>KEEPHas</code> / <code>KEEPGetSize</code> — existence and size probes by hashlet.</li>
 <li><code>KEEPPackOpen</code> / <code>KEEPPackFeed</code> / <code>KEEPPackClose</code> — incremental pack writer; <code>Feed</code> appends one object and returns its sha.</li>
 <li><code>KEEPResolveRef</code> / <code>KEEPResolveHex</code> — resolve a <code>?ref</code> or a hex prefix to a full sha.</li>
@@ -63,21 +56,21 @@ Each index entry is 16 bytes — a u64 key and u64 val — sorted by hashlet the
 </p>
 <ul>
 <li><code>key = hashlet60 | obj_type4</code> (commit/tree/blob/tag in the low 4 bits); <code>val = offset40 | file_id20 | flags4</code>, wh64 layout.</li>
-<li><code>file_id</code> is the store-wide <code>NNNNN</code> of the pack log; the dir holding it is recovered from the index run that hit.</li>
-<li>Index runs are per-dir sorted kv64 files: write sorts and flushes, read binary-searches, compact merges on invariant breach.</li>
+<li><code>file_id</code> is the store-wide <code>NNNNN</code> of the pack log; it resolves to a file in the single project shard, no per-dir search.</li>
+<li>Index runs are per-project sorted kv64 files: write sorts and flushes, read binary-searches, compact merges on breach.</li>
 </ul>
-<h2>Delta-dependency DAG</h2>
+<h2>Delta dependencies and branch drop</h2>
 <p>
-Branch dirs form a DAG rooted at the store; an object may delta only against a base in the same or an ancestor dir, which makes a branch-dir drop safe by construction.
+All of a project's objects share one flat pool; a REF_DELTA may delta against any earlier object in that pool, with no cross-project base, which keeps each shard self-contained.
 </p>
 <ul>
-<li>REF_DELTA resolves by hashlet lookup up the dir chain; never delta against a sibling/descendant base — materialize it.</li>
-<li>A leaf dir drops wholesale (packs, indexes, reflog) without invalidating any surviving REF_DELTA; this replaces git repack.</li>
-<li>Resolution: range-query this dir's index, walk up on miss, read at <code>(dir, file_id, offset)</code>, chase deltas bottom-up.</li>
+<li>REF_DELTA resolves by hashlet lookup in the single project pool; never delta against another project's object — forbidden.</li>
+<li>Dropping a branch is a <code>refs</code> tombstone: objects linger in the shard; GC is an out-of-band epoch recompaction, not a delete.</li>
+<li>Resolution: range-query the project index, read at <code>(file_id, offset)</code>, chase the delta chain bottom-up — no walk-up.</li>
 </ul>
 <h2>Refs and aliases</h2>
 <p>
-A <code>&lt;branch-dir&gt;/refs</code> is an append-only reflog (a <code>dog/ULOG</code>) scoped to that one branch; the verb is always <code>set</code> and the key/val pair is packed into one URI.
+The project <code>&lt;project&gt;/refs</code> is an append-only reflog (a <code>dog/ULOG</code>) holding every branch, tag, and host alias as rows; the verb is always <code>set</code> and the key/val pair is packed into one URI.
 </p>
 <ul>
 <li>A row is <code>&lt;ron60-ms&gt;\tset\t&lt;from-uri&gt;#?&lt;40-hex-sha&gt;</code>; <code>REFSLoad</code> splits on <code>#</code> to return <code>{key,val}</code>, ts monotonic.</li>

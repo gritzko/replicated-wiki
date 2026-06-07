@@ -1,0 +1,20 @@
+#   MEM-009: TCP/UDP socket fd leaked on bind failure (abc/TCP.c, abc/UDP.c)
+
+In both `TCPListen` and `UDPBind` the resolve loop opens a socket, then on a failing `bind()` the error branch traces, frees the addrinfo, and returns the failure code without `close(sfd)`; the loop's normal `close(sfd)` is unreachable past the early return, so every bind failure (port in use, permission denied) leaks a descriptor. The goal is to close the socket on the failure path.
+
+##  Issues
+Identical leak in two siblings.
+
+ -  `abc/TCP.c:50-55` — `bind()` fails → return `TCPFAIL` with `sfd` still open; `close(sfd)` at :58 never reached.
+ -  `abc/UDP.c:19-24` — same shape: `bind()` fails → return `UDPFAIL`, `close(sfd)` at :27 never reached.
+
+##  Blockers
+None.
+
+##  Planned
+Close before failing.
+
+ -  Repro first: bind to an in-use port and assert the fd count does not grow across calls.
+ -  `close(sfd)` before the early return in each bind-failure branch (or `close(sfd); continue;` and fail only after the loop).
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

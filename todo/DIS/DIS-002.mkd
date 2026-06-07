@@ -1,0 +1,31 @@
+#   DIS-002: be patch over a transport drops freshly-fetched commits
+
+`be patch ssh://host?<branch>` fetches the remote branch but the merge never applies theirs's added files — the just-fetched commit is not indexed into graf's DAG, so the merge walk sees no theirs entries. The goal is a transport PATCH that performs the real 3-way merge against the fetched tip. The original routing bug (transport URI mis-routed to per-file PATCH) is fixed; the remaining bug is fetch-to-graf visibility. See [PATCH], [Keeper], [Graf].
+
+##  Issues
+After fetch, the new commit is in keeper's pack and the REFS row maps the URI to its sha, but `graf get` does not index it, so the merge loses theirs's files.
+
+ -  Repro `test/patch/20-divergent-merge` (WILL_FAIL): cur=B(parent A) touches `local.c`; origin master=C(parent A) touches `server.c`; disjoint → merge must be text-clean.
+ -  `be patch ssh://origin?master` prints `noop=2 take-theirs=0`; `server.c` is never written; `be log` shows only B and A — C absent from the DAG.
+ -  Suspected site: `graf_walk_from_tip` in `graf/INDEX.c`; the `KEEPGet` for C's commit body fails because the just-fetched pack's index is not visible to this keeper open, or the open is on the wrong shard.
+ -  Companion no-op case `test/patch/18-noop-already-absorbed` (theirs ⊆ cur) now passes natively after the routing fix.
+
+##  Blockers
+Likely a keeper shard/index-visibility interaction after fetch (related to the trunk-landing fix); confirm the index path before blaming the merge walk.
+
+##  Planned
+Find why the fetched commit is not indexed, then make the take-theirs case fire.
+
+ -  Trace whether C's commit body resolves via `KEEPGet` right after `BEActGrafGet`; check the shard the keeper open targets (sub-clone / remote-shard interaction).
+ -  Once C is indexed, confirm the merge walk has the right tree shas and `server.c` lands in the wt.
+ -  Flip `test/patch/20-divergent-merge` from WILL_FAIL to a passing assertion (server.c present after merge).
+
+##  Landed
+The routing half of the saga.
+
+ -  Gated `PATCHApplyFile` on `$empty(u->authority)` so transport URIs go to whole-tree `PATCHApply`, not per-file merge — `patch/18` passes, `patch/20` no longer GRAFFAILs (but still loses the added file).
+
+[PATCH]: ../wiki/PATCH.mkd "the patch verb"
+[Keeper]: ../wiki/Keeper.mkd "the object pool dog"
+[Graf]: ../wiki/Graf.mkd "history + merge dog"
+[Plan]: ../wiki/Plan.mkd "the master plan"

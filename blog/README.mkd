@@ -1,0 +1,13 @@
+#   LibRDX blog
+
+ -  [23Mar2025 Escher and computer science][e]
+ -  [2Jan2026 Arguments for a syncable data exchange format][a]
+ -  [19Feb2026 Beagle the revision control system][1] (part [I][1], [II][2], [III][3])
+ -  [24May2026 Three years with ABC (Abstractionless C)][c]
+
+[a]: ./args.mkd
+[e]: ./escher.mkd
+[c]: ./abc.mkd
+[1]: ./partI.mkd
+[2]: ./partII.mkd
+[3]: ./partIII.mkd

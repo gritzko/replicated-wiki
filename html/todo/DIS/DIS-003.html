@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIS-003: WEAVEMerge token identity is positional, not total</h1>
+<p>
+WEAVEMerge aligns weave streams by diff position rather than by real cross-weave token identity, so a small class of merges has a non-total, timestamp-dependent tie-break: a reconciled token can be emitted at the ours position when its true match is a later theirs token, and an insert can anchor on the wrong side of a blank line. The goal is a total, deterministic merge so content recovery holds for every history. The robust fix is a shared-sequence merge giving tokens stable identity, not diff-alignment plus positional reconciliation. See <a href="../wiki/Graf.html">Graf</a>.
+</p>
+<h2>Issues</h2>
+<p>
+Two faces of one root cause — positional alignment in <code>graf/WEAVE.c</code> <code>WEAVEMerge</code>.
+</p>
+<ul>
+<li>Cross-side reconciliation ordering: a byte-equal (a,b) pair reconciled at the ours position loses theirs-relative order when its real match is a later theirs token after a theirs-only token.</li>
+<li>Fuzz holdout (graf/fuzz/WEAVE2, crash-d924…, in <code>$HOME/Corpus/WEAVE2</code>): 927/928 of the corpus recovers correctly; the lone holdout recovers <code>abac</code> instead of <code>aabc</code>.</li>
+<li>Insert-vs-blank flake (<code>be-patch-15-ancestor-skip</code> step 2, ~1/2): a re-stamped spine blank collides on (bytes,in) with theirs's code-line EOL, so the LCS anchors the insert on the wrong side of the blank.</li>
+<li>The flake is two-layered: a non-deterministic ours-closure topo-sort (<code>graf/DAG.c</code>, SHA-keyed) yields either a clean or a duplicate-carrying weave, then <code>WEAVEMerge</code>'s full-stream diff mis-ties.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+A clean fix is constrained.
+</p>
+<ul>
+<li>Confined diff-key tweaks (drop-<code>in</code>-for-ws, line-context, blank/EOL bit, alive/dead bit) and an EDL insert-slider stay flaky or regress <code>MERGE3B01 rm_reconciliation_in_disjoint_tail</code>.</li>
+<li>A total/deterministic closure topo-sort fix lives in <code>graf/DAG.c</code>, which was outside the prior task's edit scope.</li>
+</ul>
+<h2>Planned</h2>
+<p>
+Replace positional reconciliation with real token identity.
+</p>
+<ul>
+<li>Rework <code>WEAVEMerge</code> to align on alive-only streams while threading dead tokens to the disjoint-tail rescue separately.</li>
+<li>Or make the ours-closure topo-sort total/deterministic in <code>graf/DAG.c</code> so equal-timestamp commits sort stably.</li>
+<li>Keep <code>graf/test/WEAVE2.c</code> content-recovery and <code>MERGE3B01</code> green; fold the minimized holdout into the property test.</li>
+</ul>
+<h2>Landed</h2>
+<p>
+One sub-bug already fixed.
+</p>
+<ul>
+<li>WEAVEMerge in=0 mis-stamp: dedup now keeps BOTH tokens ordered by stamp (earlier marked removed by the later) so every ancestor recovers its own content; pinned by <code>graf/test/WEAVE2.c</code> <code>dedup_merge_post_fork</code>.</li>
+</ul>
+</body>
+</html>

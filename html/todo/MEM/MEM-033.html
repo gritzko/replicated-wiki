@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-033</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-033: JABCReport casts exception OBJECT to JSStringRef (js/main.cpp)</h1>
+<p>
+<code>JABCReport</code> reports a thrown JS exception. In the message branch (<code>JSValueIsObject</code> &amp;&amp; has message), it fetches <code>ref=message</code> (a real JSStringRef) into <code>page</code>, overwrites the NUL with newline, then calls <code>JSStringGetUTF8CString((JSStringRef)exception, page+len, PAGESIZE-len)</code> — but <code>exception</code> is a JS OBJECT, not a string. Casting an object to <code>JSStringRef</code> makes JSC reinterpret the object's heap layout as a <code>StringImpl</code>, reading a bogus length and char pointer: type confusion / OOB-garbage read into a stack buffer, reachable from any uncaught <code>Error</code> with a message. The sibling Stack branch correctly uses <code>(JSStringRef)ref</code>, confirming a copy-paste defect. The goal is to use <code>ref</code>, bound by remaining <code>page</code>, and re-terminate.
+</p>
+<h2>Issues</h2>
+<p>
+Object reinterpreted as a string; weak bounds/termination around it.
+</p>
+<ul>
+<li><code>js/main.cpp:140-141</code> <code>JSStringGetUTF8CString((JSStringRef)exception,…)</code> casts a <code>JSObjectRef</code> to <code>JSStringRef</code> → JSC type confusion / OOB read.</li>
+<li><code>js/main.cpp:139</code> <code>page[len-1]='\n'</code> relies on <code>len&gt;=1</code> and leaves <code>page</code> unterminated for <code>fprintf</code>.</li>
+<li><code>js/main.cpp:140</code> <code>page+len</code> with <code>len==PAGESIZE</code> is one-past-end; only JSC's size-0 short-circuit avoids an OOB write.</li>
+<li><code>js/main.cpp:163</code> <code>JABCExecute</code> forwards any uncaught exception, so the branch is script-reachable via <code>throw new Error('x')</code>.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Use the message ref; bound and terminate.
+</p>
+<ul>
+<li>Repro FIRST: eval <code>throw new Error('x')</code>, run <code>JABCReport</code> under ASan; assert no type-confusion read/OOB.</li>
+<li>Replace <code>(JSStringRef)exception</code> at :140 with the already-fetched <code>ref</code> (the message JSStringRef).</li>
+<li>Bound the second write by remaining <code>page</code> space and re-append a NUL before <code>fprintf</code>/<code>printf</code>.</li>
+</ul>
+</body>
+</html>

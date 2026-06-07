@@ -4,19 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Store</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>Store: one flat object pool per project, branches as refs</h1>
 <p>
-A store is a directory (<code>.be/</code>) holding one or more project shards; each shard is one flat object pool for all of a project's branches, tags, and remotes. The goal is a repo almost impossible to break — your own little GitHub in <code>~/.be</code> — with cheap parallel worktrees and submodules. The method: multi-project shards, branches and tags as pure ref rows (no per-branch object dirs), nested branch dirs for pack locality, and ff-only branch trees that keep trunk linear while mess sinks into leaves.
+A store is a directory (<code>.be/</code>) holding one or more project shards; each shard is one flat object pool for all of a project's branches, tags, and remotes. The goal is a repo almost impossible to break — your own little GitHub in <code>~/.be</code> — with cheap parallel worktrees and submodules. The method: multi-project shards, one flat object pool per project, branches and tags as pure ref rows (no per-branch object dirs), and ff-only branch trees that keep trunk linear while mess sinks into leaves.
 </p>
 <h2>Why multi-project, repo-per-store</h2>
 <p>
@@ -32,20 +25,30 @@ A store hosts many projects, so the idiomatic setup is one <code>~/.be</code> Gi
 Branches form a tree (<code>feature/fix1</code>) of ff-only tips, so churn lives deep in the tree while trunk and its neighbors stay clean; staging and stash become short dirty branchlets.
 </p>
 <ul>
-<li>Tree-structured: every project has a trunk plus arbitrarily nested branch dirs and tags on particular branches.</li>
+<li>Tree-structured: every project has a trunk plus arbitrarily nested branch names and tags pinned on particular branches.</li>
 <li>ff-only steering: <a href="POST.html">POST</a> fast-forwards, so trunk stays linear; messy work sinks into leaves and rebases up as one stack.</li>
 <li>No stash needed: a short-lived dirty branchlet replaces git stash and the staging area (see <a href="Verbs.html">Verbs</a>).</li>
 </ul>
 <h2>Repo dir layout</h2>
 <p>
-Each project is one flat shard dir holding objects for all its branches; branch dirs nest freely and carry their own packs, indexes, and <code>refs</code>, so a leaf branch drops as a whole-dir delete.
+Each project is one flat object pool: a single shard dir holds the packs, indexes, and <code>refs</code> for ALL its branches, tags, and remotes, so object retrieval consults exactly one dir with no trunk→leaf fan-out.
 </p>
 <ul>
-<li><code>.be/&lt;project&gt;/</code> is the shard (== its trunk); <code>NNNNN.keeper</code> packs, <code>NNNNN.*.idx</code> index runs, and a <code>refs</code> ULOG live in it.</li>
-<li>Branch dirs mirror <code>?refname</code> path-for-path: <code>feature/fix1/</code> is a sub-branch of <code>feature/</code>, with its own <code>refs</code> + packs.</li>
-<li>A branch's <code>refs</code> is authoritative for its own tips — resolution does NOT walk up; drop-survivors live in <code>&lt;project&gt;/refs</code>.</li>
-<li>Branches and tags are ref rows, not dirs: creating writes a row (no mkdir), dropping a tombstone (no object deletion).</li>
-<li>Remotes fold in: fetched objects land in the project's packs, remote-tracking refs (<code>//host?heads/…</code>) ride the same <code>refs</code>.</li>
+<li><code>.be/&lt;project&gt;/</code> is the shard (== trunk): <code>NNNNN.keeper</code> packs, <code>NNNNN.*.idx</code> index runs, a <code>refs</code> ULOG — one object pool.</li>
+<li>The shard dir is named by the project <a href="Title.html">Title</a> — a deterministic key from the public URL basename, recorded as <code>refs</code> line 1.</li>
+<li>Branches and tags are ref rows in <code>&lt;project&gt;/refs</code>, not object dirs: creating writes one row (no mkdir), dropping a tombstone.</li>
+<li>A leaf dir (<code>feature/fix1/</code>) is materialized lazily — only for a checkout's rw <code>.lock</code> and peer-form <code>refs</code> rows, never objects.</li>
+<li>Resolution reads <code>&lt;project&gt;/refs</code>, then the branch's leaf <code>refs</code> (where <code>keeper get //h?br</code> peer rows land); it never walks up.</li>
+<li>Remotes fold in: objects join the project's packs, remote-tracking refs ride the same <code>refs</code> — no <code>remotes/&lt;host&gt;/</code> dir.</li>
+</ul>
+<h2>Remote resolution by reverse reflog grep</h2>
+<p>
+A short <code>//host</code> ref resolves with no ALIAS file and no registration step: every remote <a href="URI.html">URI</a> touched is logged to the project reflog on first contact, and a later short form reverse-greps that log newest-first for the most recent matching row.
+</p>
+<ul>
+<li><code>//host</code> matches the newest reflog row with that authority; <code>//host?branch</code> also matches the branch, <code>//host/path</code> the path.</li>
+<li>The matched row supplies the full transport URL (<code>ssh:</code>/<code>be:</code>) for a follow-up wire call; bare <code>//host</code> reads cache only.</li>
+<li>No registration: first contact with <code>ssh://origin?feat</code> appends the URL as a normal reflog row, so a later <code>//origin</code> finds it.</li>
 </ul>
 <h2>Worktrees and the anchor</h2>
 <p>

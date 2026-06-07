@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Submodules</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>Submodules: nested projects mounted as secondary worktrees</h1>
@@ -28,6 +21,7 @@ A submodule is a secondary worktree of a separate project: the parent tree's git
 <li>Recursion is <code>BERecurseInto</code>: fork + chdir(<code>&lt;wt&gt;/&lt;sub&gt;</code>) + execvp self, so each child runs against its own HOME.</li>
 <li>Pre-order verbs (<a href="GET.html">GET</a>, <a href="HEAD.html">HEAD</a>) hit the parent then descend; post-order <a href="POST.html">POST</a> commits subs first, then bumps the gitlink.</li>
 <li>The child reaches the parent's keeper through the row-0 <code>repo</code> anchor, so a sub needs no separate object pool of its own.</li>
+<li>Recursion keys on <a href="Title.html">Title</a>: clone reads it from <code>.gitmodules</code>; later verbs read it from the mount's <code>.be</code>/wtlog or shard <code>refs</code>.</li>
 </ul>
 <h2>CLI</h2>
 <p>
@@ -66,11 +60,11 @@ Beagle reads and writes submodules exactly as git does — <code>160000</code> g
 A submodule is just another project shard in the parent's store, mounted as a secondary worktree that points back; there is no separate submodule store class.
 </p>
 <ul>
-<li>The sub's objects sit in <code>&lt;parent_root&gt;/.be/&lt;basename&gt;/</code>, a shard beside the parent's, sharing its keeper (see <a href="Store.html">Store</a>).</li>
-<li>The basename comes from the clone URL: last path segment, <code>.git</code> and trailing <code>/</code> stripped (<code>…/libabc.git</code> → <code>libabc</code>).</li>
+<li>The sub's objects sit in <code>&lt;parent_root&gt;/.be/&lt;title&gt;/</code>, a shard beside the parent's, sharing its keeper (see <a href="Store.html">Store</a>).</li>
+<li>The shard's <a href="Title.html">Title</a> comes from the <code>.gitmodules</code> URL basename, <code>.git</code> and trailing <code>/</code> stripped (<code>…/libabc.git</code> → <code>libabc</code>).</li>
 <li>The mount <code>&lt;wt&gt;/&lt;path&gt;/.be</code> is a file holding one row <code>&lt;ts&gt;\trepo\tfile://&lt;parent_root&gt;/.be/</code> — the secondary-wt anchor.</li>
 <li>Nesting composes: a sub-of-a-sub is another shard, so <code>&lt;parent&gt;/.be/&lt;sub&gt;/.be/&lt;subsub&gt;/</code> and deeper share one pool.</li>
-<li>For beagle-sourced parents the sub fetches from the same source — url-basename, then path-basename, then the declared URL.</li>
+<li>For beagle-sourced parents the sub is fetched by <a href="Title.html">Title</a> from that same remote; the declared <code>.gitmodules</code> URL is the fallback.</li>
 </ul>
 <h2>TLV report aggregation (landed)</h2>
 <p>
@@ -84,6 +78,19 @@ The parent captures each sub's TLV hunk report and relays every hunk into its se
 <li>A clean sub returns <code>*NONE</code>; recursion passes <code>-q</code> and treats it as a no-op, so it never fails a bare <code>be put</code>/<code>delete</code>.</li>
 <li>Patch recursion is gitlink-diff driven (reuses GET): a sub whose applied pin differs from base is re-got and relayed.</li>
 <li>put/delete recurse only the bare stage-all / delete-all form into mounted subs; path-scoped and remote forms don't recurse.</li>
+</ul>
+<h2>Committing detached subs (synthetic branch)</h2>
+<p>
+A mounted sub sits detached at the gitlink pin; a parent <a href="POST.html">POST</a> commits it onto a synthetic branch so the new commit is a real ref tip, never a GC-orphan.
+</p>
+<ul>
+<li>Target branch is <code>?/&lt;subproj&gt;/.&lt;parentproj&gt;[/&lt;parentbranch&gt;]</code> — the parent's coordinate, dot-marked, as the sub's branch.</li>
+<li>Recursive prepend: each level prepends its parent, so a 3-deep leaf reads <code>?/leaf/.sub/.proj/br</code>; trunk → <code>?/sub/.proj</code>.</li>
+<li>Why a branch: the commit is a REFS tip, GC-reachable in the sub's shard (see <a href="Store.html">Store</a>); a ref-less commit dies at recompaction.</li>
+<li>The <code>160000</code> gitlink still pins the raw commit sha; the synthetic branch is just the keep-alive anchor in the sub's shard.</li>
+<li><code>be post</code> on a detached sub auto-creates that branch at the pin and attaches the wt; later posts fast-forward it.</li>
+<li>Remote <code>be post //host?/proj/br</code> recurses the push, pushing each sub's <code>?/subproj/.proj/br</code>; the parent records the sha.</li>
+<li>A standalone <code>be post</code> in a detached sub (no parent driving it) still refuses — no coordinate to derive the branch from.</li>
 </ul>
 </body>
 </html>

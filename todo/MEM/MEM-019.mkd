@@ -1,0 +1,22 @@
+#   MEM-019: graf call() early-return skips mmap/handle cleanup (graf/MERGE.c, MAP.c, LOG.c, REBASE.c)
+
+Several graf entry points acquire resources mid-function then reach a `call()`/bare-`return __` that short-circuits past their own cleanup label, leaking already-mapped files, fds, weave mmaps, or an owned graf-open on the error path — violating the acquire-at-top / release-by-owner discipline (CLAUDE.md §5). The goal is to route every failure through the single cleanup path.
+
+##  Issues
+Cleanup label bypassed by early returns.
+
+ -  `graf/MERGE.c:33-64` `GRAFMerge` — base maps, then ours/theirs `call(graf_merge_read,…)` fails → returns before the `FILEUnMap` cleanup; mapped file(s)+fds leak.
+ -  `graf/REBASE.c:1008-1025` `GRAFRebaseBlobMerge` — `call(WEAVEInit,&w1/&nu)` failure returns before `WEAVEFree(&w0/&w1)`; already-mapped weave tlv leaks.
+ -  `graf/MAP.c:244-252` `GRAFMap` — mid-function `wh128bAcquire` `NOROOM` → `return __` skips `if (own_graf) GRAFClose()` (:428).
+ -  `graf/LOG.c:966-1006` `graf_head_ahead_behind` — non-NOPATH `GRAFSwitchBranch` failure returns, skipping `if (own_open) GRAFClose()` (:1083).
+
+##  Blockers
+None. Reached on missing inputs / mmap / BASS pressure.
+
+##  Planned
+Single cleanup path per function.
+
+ -  Repro first: `graf merge` with a missing `ours`/`theirs`; fault-inject `WEAVEInit`/`wh128bAcquire`/branch-switch failures; assert no map/fd/handle leak.
+ -  Replace `call()`/bare returns with `try()` + `goto cleanup` (NULL-init the map/own_graf vars), so `FILEUnMap`/`WEAVEFree`/`GRAFClose` always run.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

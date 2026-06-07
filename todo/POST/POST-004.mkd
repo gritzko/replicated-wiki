@@ -1,0 +1,24 @@
+#   POST-004: `be patch` refuses on a detached submodule
+
+A parent that merges branches into its subs (`be patch` recursion) hits the wall POST had: a mounted sub is detached at its pin, and `sniff patch` refuses ("re-attach to a branch first"). POST now routes a detached sub onto a synthetic branch (see [Submodules]); PATCH needs the mirror so absorb-into-sub works during recursion. The goal is parity. See [Submodules], [PATCH], [POST]. Repro: `post/17-sub-msg-resolution-per-level` (deterministic; fails at the `be patch` step).
+
+##  Issues
+PATCH's detached gate has no recursion-aware escape hatch.
+
+ -  `sniff/PATCH.c` `is_detached_wt` refuses on any `?<sha>` cur-tip, even when a parent recursion supplies a coordinate.
+ -  POST's fix (relax the gate given a target + auto-create at the pin) lives in `sniff/POST.c`; PATCH lacks it.
+ -  Any workflow that merges into subs dead-ends on the first detached sub.
+
+##  Blockers
+Decide PATCH-detached semantics: PATCH writes the wt and records absorbed parents for the next POST — attach to the synthetic branch up front, or stay detached and let the following POST create it?
+
+##  Planned
+Give PATCH the same recursion-aware detached handling as POST.
+
+ -  Relax the `is_detached_wt` refusal when the synthetic coordinate is passed; reuse the POST attach-at-pin path.
+ -  Thread the coordinate into PATCH recursion the way `bepost_synth_child_uri` does (`beagle/BE.cli.c`).
+ -  Keep `post/17` as the regression; add a focused detached-patch case.
+
+[Submodules]: ../wiki/Submodules.mkd "submodules"
+[PATCH]: ../wiki/PATCH.mkd "PATCH verb"
+[POST]: ../wiki/POST.mkd "POST verb"

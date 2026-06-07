@@ -1,0 +1,23 @@
+#   MEM-025: first_name slice dangles into compacted advert buffer (keeper/WIRECLI.c)
+
+`wcli_match_advert` captures `first_name` as a pointer-pair slice into the advert `buf`, then holds it across the rest of the drain loop; `wcli_read_pkt` compacts the same buffer when IDLE runs out (`u8bUsed`+`u8bShift` memmove of surviving DATA to `buf[0]`, then `FILEDrain` overwrites), so `first_name`'s bytes are relocated/clobbered. The legacy first-ref fallback then does `a_dup(u8c, fn, first_name)` (a pointer copy, not a byte copy) and records the stale/overwritten region as a corrupt ref name. The slice stays within the BASS-carved `buf`, so this is a stale-memory read (corrupt name), not OOB. The goal is to snapshot the first ref name into stable storage at capture time.
+
+##  Issues
+A captured slice aliases a buffer that later compacts under it.
+
+ -  Capture: `keeper/WIRECLI.c:446` `u8csMv(first_name, name)` copies pointers aliasing advert `buf` DATA; never re-derived, only used at :498.
+ -  Compaction: `keeper/WIRECLI.c:61-69` `wcli_read_pkt` `u8bUsed`+`u8bShift(buf,0)` memmoves surviving DATA to `buf[0]`; `FILEDrain` (:72) overwrites → `first_name` bytes relocated/clobbered.
+ -  Trigger reachable: `WCLI_BUF=64KiB` (:46) but vanilla git advertises ~100KiB, so compaction fires mid-drain.
+ -  Stale read: fallback `keeper/WIRECLI.c:498` `a_dup(u8c,fn,first_name)` is a pointer-pair copy; the corrupt bytes feed `wcli_wire_to_be` when `want_branch` empty + no HEAD match + no surviving `refs/heads/main`.
+
+##  Blockers
+None.
+
+##  Planned
+Snapshot the name at first sight.
+
+ -  Repro first: feed an advert > `WCLI_BUF` (forcing compaction) with empty `want_branch` and no `refs/heads/main`; assert the recorded first-ref name matches the real first ref, not garbage.
+ -  Snapshot the first ref name into a stable buffer (small `a_pad`/`u8bFeed` copy, like `WCLI_RECORD_NAME`→name_out) when first seen; use that copy in the fallback.
+ -  Or fold the legacy first-ref pick into the `WCLI_RECORD_NAME` path during the main loop so no buffer-pointing slice is held across compacting reads.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

@@ -1,0 +1,24 @@
+#   SUBS-015: `blob:<path>` without `?ref` returns KEEPNONE in the parent
+
+**LOW (found mid-fix in [SUBS-011]/[SUBS-012]).**  `be blob:<path>` with **no**
+`?ref` slot returns `KEEPNONE` even on a plain parent file (not submodule-
+related).  Per VERBS.md §"Open edges", `blob:file.c` (no ref) is defined as the
+git-hash-object bytes of the wt's on-disk file, and `blob:file.c?` (empty ref)
+as the tracked-blob via sniff's index — but the no-ref form resolves to nothing.
+
+##  Repro
+ -  `be blob:main.c?master` → bytes (works).
+ -  `be blob:main.c` (no `?ref`) → KEEPNONE.
+
+##  Expected
+`blob:<path>` (no ref) yields the wt on-disk bytes (git-hash-object semantics);
+`blob:<path>?` (empty ref) yields the tracked-blob bytes.
+
+##  Notes
+Surfaced while building projector sub-recursion (SUBS-011/012); the sub-shard
+routing is unaffected — this is a pre-existing parent-side gap in `blob:`
+ref-resolution.  Filed so it is not lost.
+
+[SUBS-011]: SUBS-011.mkd
+[SUBS-012]: SUBS-012.mkd
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

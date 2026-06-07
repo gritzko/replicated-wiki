@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-026</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-026: bare call() leaks owned buffers/ULOG on error paths (sniff)</h1>
+<p>
+Three sniff functions acquire owned OS resources (256MB mmaps, heap buffers, an open ULOG mmap) then hit a bare <code>call()</code> whose return-on-error bypasses the function's own cleanup. <code>GET.c:1414 HOMEBranchDir</code> leaks 4×256MB mmaps + the subs heap buffer past <code>GET_BUFS_FREE()</code>. <code>SNIFF.c:219 PATHu8bFeed</code> leaks the just-opened wtlog mmap and leaves the singleton half-initialized (no <code>ULOGClose</code>/<code>zerop</code>), unlike every sibling arm; RW opens also skip <code>FILETrimBook</code>, leaving on-disk pad bytes. <code>LS.c:271-272</code> leak the <code>c.text</code> mmap (and <code>c.toks</code>) when a later allocation fails. The goal is to route every error path through existing cleanup.
+</p>
+<h2>Issues</h2>
+<p>
+Bare <code>call()</code> early-returns skip the function's own resource cleanup.
+</p>
+<ul>
+<li><code>sniff/GET.c:1414</code> bare <code>call(HOMEBranchDir,…)</code> returns past <code>GET_BUFS_FREE()</code>, leaking 4×256MB mmaps (noop/unlinks/merges/blob) + subs heap.</li>
+<li><code>sniff/SNIFF.c:219</code> bare <code>call(PATHu8bFeed, h-&gt;root, sb)</code> returns with no <code>ULOGClose</code>/<code>zerop</code>; leaks open wtlog mmap, leaves SNIFF singleton half-open.</li>
+<li><code>sniff/SNIFF.c:219</code> RW opens skip <code>FILETrimBook</code> on this exit, leaving trailing page-pad bytes on disk for the next reader.</li>
+<li><code>sniff/LS.c:271</code> <code>call(u32bAllocate c.toks)</code> failing after <code>u8bMap c.text</code> leaks the 4MB <code>c.text</code> mmap (cleanup at :310-312 unreached).</li>
+<li><code>sniff/LS.c:272</code> <code>call(u8bAllocate c.dir_seen)</code> failing leaks both <code>c.text</code> mmap and <code>c.toks</code> heap in non-recurse mode.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Single cleanup path per function.
+</p>
+<ul>
+<li>Repro tests FIRST (CLAUDE.md §17): inject HOMEBranchDir/PATHu8bFeed/alloc failure on each path; assert no mmap/heap/ULOG leak under ASan.</li>
+<li><code>sniff/GET.c:1414</code>: capture the result and <code>GET_BUFS_FREE()</code>+return on non-OK, or make it non-fatal via <code>try()</code>+<code>__=OK</code> like the adjacent <code>REFSAppendVerb</code>.</li>
+<li><code>sniff/SNIFF.c:219</code>: route failure through <code>ULOGClose(s-&gt;log_data,&amp;s-&gt;log_idx,s-&gt;log_rw); zerop(s); return</code>, mirroring the other early-return arms.</li>
+<li><code>sniff/LS.c:270-272</code>: acquire all three buffers then unwind already-acquired ones on first failure, or carve via BASS <code>a_carve</code> so scratch auto-releases.</li>
+</ul>
+</body>
+</html>

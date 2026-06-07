@@ -1,0 +1,43 @@
+#   Title: a project's public name, the key that names its shard
+
+A title is a project's public name — the one in its GitHub URL and package managers (beagle, libabc, git). The goal is a deterministic, human-meaningful key for referencing projects, naming store shards, naming submodules etdc. The method: derive the title from the public URL basename (`libabc.git`→`libabc`), let an explicit value override it, persist it as reflog/wtlog line 1, use.
+
+##  Title is the project segment
+The `?/<project>/…` URI segment and the shard dir `~/.be/<title>/` are both the title; it is a deterministic public name, not an opaque label (see [Store]).
+
+ -  `be get ?/beagle/submods` names project `beagle`; its shard is `~/.be/beagle/` and its trunk is `?/beagle`.
+ -  Beagle's own title is `beagle`; the vendored `abc/` submodule is titled `libabc`, not its on-disk path `abc`.
+ -  Cross-clone mirrors converge: two clones of `…/libabc.git` share one `libabc` shard, so [Submodules] mount once.
+
+##  Derived from the URL, override wins
+Title resolves in three steps off the clone URL: a `?/<title>` query segment wins; else a `/.be/<seg>/` anchor names it; else the URL path basename (`.git` and trailing `/` stripped).
+
+ -  `ssh://git@github.com/gritzko/libabc.git` → `libabc`; `https://host/beagle.git/` → `beagle` (the default basename rule).
+ -  Override with the `?/<title>` slot: `be get ssh://host/path/dogs.git?/beagle` clones `dogs.git` but titles it `beagle`.
+ -  Git can't be asked its title, so an override is the manual fix when basename ≠ intended title (git sees only the branch).
+ -  The `.gitmodules` URL is almost certainly the titular one, so a submodule's title is its basename (see [Submodules]).
+ -  A project with no upstream URL is titled explicitly at init; the URL rule only auto-fills the title on clone.
+
+##  Persisted in reflog line 1 and the wtlog
+The title is carried by the existing line-1 `get` row of both `<project>/refs` and the wtlog — its URI's `?/<title>` (or basename) is the title; no separate title row exists.
+
+ -  Line 1 is a `get` row in both logs (not a distinct `repo`/`title` verb); its URI records the source and the `?/<title>`.
+ -  The wtlog carries the title as well, so a secondary worktree knows its project without scanning [Store] refs.
+
+##  Same title, different history is an error
+Titles identify projects, so a shared title means a shared project; a clash between unrelated histories is refused, never merged.
+
+ -  Same title + common history = the same project: one shard, mirrors-with-different-labels converge naturally.
+ -  Same title + no common ancestor = a hard error; the user overrides one title to give it a distinct shard.
+
+##  Submodule retrieval prefers the remote over the titular URL
+A submodule's title comes from its `.gitmodules` URL, but a parent cloned from a beagle remote fetches the sub from that same remote by title — the titular URL is only the fallback (see [Submodules]).
+
+ -  The declared `.gitmodules` URL is the public, titular one; its basename is the submodule's title.
+ -  Cloning off a beagle remote, request the sub by title from that remote, not from the titular public URL.
+ -  Fall back to the declared URL only when that remote has no project under the title.
+
+[Store]: Store.mkd "the store and shards"
+[Submodules]: Submodules.mkd "nested projects"
+[URI]: URI.mkd "URI structure"
+[Home]: Home.mkd "wiki entry page"

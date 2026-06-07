@@ -1,0 +1,24 @@
+#   MEM-032: JABCu8bImport builder overflow + JSC refcount leaks (js/convert.cpp)
+
+The `JABCu8bImport` family imports JS values into an RDX builder with two memory defects. `JABCu8bImportString` sizes the `JSStringGetUTF8CString` write by the string's worst-case UTF-8 length (`maxSize`) instead of the builder's idle room, so a large string overflows `u8bIdle` (the `u8bReserve` call is commented out as a todo) and `*idle` is hand-advanced instead of `u8bFed`. The same paths leak owned JSC refs: `JSValueToStringCopy` is never `JSStringRelease`'d and `JSObjectCopyPropertyNames` is never `JSPropertyNameArrayRelease`'d (incl. call-macro error early-returns). The code is compiled WIP with no in-tree callers yet, so the overflow is latent. The goal is to bound the write to idle room and release every owned ref.
+
+##  Issues
+Unbounded external write into the builder; two JSC refs leaked.
+
+ -  `js/convert.cpp:21-24` `maxSize=JSStringGetMaximumUTF8CStringSize` then `JSStringGetUTF8CString` into `u8bIdle` with no room check → heap overflow.
+ -  `js/convert.cpp:22` `u8bReserve` commented out; no `min(maxSize,u8bIdleLen)` guard before the external JSC write.
+ -  `js/convert.cpp:25` `*idle += factlen-1` hand-advances the idle head instead of `u8bFed(builder, factlen-1)`.
+ -  `js/convert.cpp:77-78` `JSValueToStringCopy str` returned to `JABCu8bImportString`, never `JSStringRelease`'d → ref leak per call.
+ -  `js/convert.cpp:35` `JSObjectCopyPropertyNames keys` never `JSPropertyNameArrayRelease`'d; in-loop `call()` early-returns leak it too.
+
+##  Blockers
+None. WIP code, no in-tree callers yet (latent).
+
+##  Planned
+Reserve room; release refs on every exit.
+
+ -  Repro FIRST: import a JS string larger than the builder idle room; assert no overflow (ASan) and BNOROOM-style propagation.
+ -  Reserve via `call(u8bReserve/u8bGrow, builder, maxSize)` and check, OR cap the JSC write to `u8bIdleLen(builder)`; then `u8bFed(builder, factlen-1)`.
+ -  `JSStringRelease(str)` in the `kJSTypeString` case after import; `JSPropertyNameArrayRelease(keys)` on every `JABCu8bImportObject` exit incl. error paths (single epilogue).
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLAME-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>BLAME-004: blame of a large / long-history file returns BNOROOM</h1>
+<p>
+<code>graf blame:keeper/KEEP.c</code> (a 2973-line file) fails with <code>BNOROOM</code> instead of producing output — surfaced while profiling <a href="../todo/BLAME-001.html">BLAME-001</a>. A fixed scratch cap overflows: candidates are <code>GRAF_FW_BLOB_MAX</code> (16 MB per blob, graf/BLAME.c:245), the keeper inflate buffers (keeper/KEEP.h:167), or the 16 MB blame <code>outbuf</code>/weave accumulation (graf/BLAME.c) once the all-ancestors walk folds a large file across long history. It is a correctness bug (a real file is un-blameable), distinct from the performance gap, though the all-ancestors walk amplifies it. See <a href="../wiki/Plan.html">Plan</a>.
+</p>
+<h2>Issues</h2>
+<p>
+A large, long-lived file cannot be blamed at all — a fixed buffer fills before the weave/output completes.
+</p>
+<ul>
+<li><code>blame:keeper/KEEP.c</code> returns <code>BNOROOM</code> (observed in release; the trivial schemes and small files succeed).</li>
+<li>Suspect caps: <code>GRAF_FW_BLOB_MAX</code> 16 MB (graf/BLAME.c:245), keeper <code>buf1..4</code> (keeper/KEEP.h:167), the 16 MB <code>a_carve</code> outbuf in <code>GRAFBlame</code>.</li>
+<li>The all-ancestors walk (<a href="../todo/BLAME-001.html">BLAME-001</a>) inflates/accumulates far more than necessary, hastening the overflow.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Needs a repro-first failing test (CLAUDE.md §17) pinning the exact buffer before resizing or switching to a growable/BASS-carved sink.
+</p>
+<h2>Planned</h2>
+<p>
+Repro, identify the overflowing buffer, then make it grow (or stream) rather than cap.
+</p>
+<ul>
+<li>Step 0: failing test — <code>graf blame:keeper/KEEP.c</code> (or a synthetic large/long-history fixture) must finish OK, not <code>BNOROOM</code>.</li>
+<li>Step 1: instrument which <code>*bAcquire</code>/<code>a_carve</code>/keeper buffer returns <code>BNOROOM</code>; confirm the trigger (blob size vs accumulated output vs weave).</li>
+<li>Step 2: replace the offending fixed cap with a growable buffer (BASS carve / <code>u8bAllocate</code> sized to need), or stream the render instead of one 16 MB <code>outbuf</code>.</li>
+<li>Likely shrinks naturally once <a href="../todo/BLAME-001.html">BLAME-001</a> stops folding unchanged versions, but the cap must be removed regardless.</li>
+</ul>
+<h2>Landed</h2>
+<p>
+None yet.
+</p>
+</body>
+</html>

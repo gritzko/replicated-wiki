@@ -1,0 +1,25 @@
+#   MEM-022: KEEPGetPacked resolves delta offsets without re-bounding (keeper/KEEP.c)
+
+`KEEPGetPacked` chases the pack delta chain re-deriving `cur` each iteration but never re-checks `cur < packlen` at the loop top (the entry bound runs once), and the OFS_DELTA arm does `cur = cur - obj.ofs_delta` with no `ofs_delta <= cur` guard, so a corrupt index/pack underflows `cur` to a wild base pointer (UB; `sane()` is compiled out in Release). Separately the cross-file REF_DELTA arm recurses via `KEEPGet`→`KEEPGetPacked` with only a per-call local `depth`, so a deep cross-file chain stacks N frames → stack-overflow DoS. UNPK ingest guards block the remote underflow/cycle cases, leaving these as latent fragility plus a real deep-chain DoS. The goal is to bound and re-validate the resolver.
+
+##  Issues
+Under-validated offset arithmetic plus uncapped cross-file recursion.
+
+ -  OFS underflow: `keeper/KEEP.c:728` `cur = cur - obj.ofs_delta` lacks `ofs_delta != 0 && ofs_delta <= cur`; PACKDrainOfs caps only at `UINT64_MAX>>7`.
+ -  No per-iteration bound: `keeper/KEEP.c:708` rebuilds `from = {pack+cur, pack+packlen}` with no `cur < packlen` recheck; entry guard runs once.
+ -  `u8csOK` (`abc/Sx.h:608`) only checks `s[1]>=s[0]`; a wrapped `pack+cur` can pass, and `sane()` is a no-op under ABC_INSANE in Release.
+ -  Cross-file REF_DELTA recursion: `keeper/KEEP.c:751` `KEEPGet`→`KEEPGetPacked` with fresh `depth=0`; `depth>=256` (:724) bounds only the in-pack chain.
+ -  Deep cross-file REF_DELTA chain (ping-pong over 2 file_ids) → N frames → stack overflow; same-pair cycle blocked by `UNPK.c:517`.
+
+##  Blockers
+None.
+
+##  Planned
+Re-validate per iteration; cap recursion.
+
+ -  Repro first: build a store whose index points an OFS_DELTA entry at an offset with `ofs_delta > offset`; assert `KEEPGetPacked` returns KEEPFAIL, not UB.
+ -  Guard :728 (`if (ofs_delta==0 || ofs_delta>cur) fail KEEPFAIL`) and re-check `cur < packlen` at loop top before building `from`.
+ -  Repro: ingest a long cross-file REF_DELTA chain (alternating 2 file_ids); assert `KEEPGetExact` fails bounded, not via stack overflow.
+ -  Thread a recursion-depth cap through `KEEPGetPacked` (hidden depth param / k-field), fail when exceeded; or dedup revisited file_id/offset pairs.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

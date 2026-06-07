@@ -1,0 +1,20 @@
+#   MEM-016: ULOGOpen* leak the booked log map on scratch-alloc failure (dog/ULOG.c)
+
+`ULOGOpenBooked` and `ULOGOpenRO` first `FILEBook`/`FILEBookRO` the log into `*data` (mmap + fd held), then `call(ulog_idx_alloc_anon, &tmp, 1024)`; the `call()` macro returns immediately on failure *without* `FILEUnBook(*data)`, so when the 16 KB anon mmap (or 32-byte calloc) inside fails under memory pressure the booked map and its fd leak for the process lifetime. Every other error path in both functions unbooks `*data` — only the `call()` skips it. The goal is to unbook before returning on that path.
+
+##  Issues
+Single `call()` bypasses the function's own cleanup.
+
+ -  `dog/ULOG.c:447-456` `ULOGOpenBooked` — `call(ulog_idx_alloc_anon,…)` at :449 returns leaving `*data` booked; :452-455 and :460-463 all unbook.
+ -  `dog/ULOG.c:490-499` `ULOGOpenRO` — same: `call(...)` at :492 leaks the RO-booked map; :495-498/:503-506 unbook.
+
+##  Blockers
+None. Reachable on any RW/RO open under mmap/commit pressure.
+
+##  Planned
+Expand the `call()` into a checked allocate-then-unbook.
+
+ -  Repro first: fault-inject the anon mmap/calloc failure after a successful book; assert no map/fd leak under ASan.
+ -  `ok64 ao = ulog_idx_alloc_anon(&tmp,1024); if (ao!=OK) { if (*data && (*data)[0]) FILEUnBook(*data); return ao; }`, mirroring the surrounding cleanup, in both functions.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

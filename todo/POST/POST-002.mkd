@@ -1,0 +1,23 @@
+#   POST-002: `be post '#msg'` misparses a dotted multi-line message as a path
+
+`be post` should treat a `#fragment` argument as the commit message, never a path — but the path-form detector misclassifies the arg as a path-form URI when the message is BOTH multi-line AND contains a dot, so the commit is misrouted (or fails) and only the legacy `-m` flag works. The goal is for any `#`-fragment message to commit verbatim regardless of dots or newlines. See [POST], [URI].
+
+##  Issues
+The URILexer carves a spurious `path` slice out of a dotted multi-line fragment, which the path-form check then trusts.
+
+ -  Not a pre-parse heuristic: `be_post_is_path_form` (`BE.cli.c:1466`) returns YES on a non-empty `u->path` — a PARSE output (the raw-byte `.`/`/` scan only runs when path is empty). `BEActPathFormCheck`'s pure-fragment skip (`:1487`) is correct but never reached because the parse already wrote `path`.
+ -  Root cause is the grammar: `Fragment = ( pchar | "/" | "?" )*` (`abc/URI.c.rl`) EXCLUDES `\n` (not a `pchar`), so a multi-line message's fragment match STOPS at the first newline and the leftover line (which has a `.`) is parsed as a path → `u->path` non-empty. The message body is free-form and may hold newlines, so the fragment is too narrow — it does not "let `\n` through", it cuts the message at it.
+ -  Single-line dotted messages and dot-free multi-line messages parse correctly; the bug needs both a newline and a `.` in the body.
+ -  The standard `Co-Authored-By: <name> <a@b.c>` trailer (dots in the version and the email) triggers it on essentially every real commit — every post this session had to fall back to the legacy `-m <msg>` flag, which bypasses fragment URI-parsing.
+
+##  Blockers
+None.
+
+##  Planned
+Let the `#`-fragment (message) absorb newlines to end-of-input, so a multi-line message is wholly the fragment and never leaks into `path`.
+
+ -  Fix the URI lexer (`abc/URI.c.rl`, regenerate the ragel): a `#` fragment is opaque free-form to EOF — extend `Fragment` to accept `\n` (and the rest); OR route a `#`-led arg entirely to the fragment in `DOGNormalizeArg` without re-lexing the tail as a path. (Once `path` is empty for a `#msg`, `BEActPathFormCheck`'s :1487 skip handles it — keep that as belt-and-suspenders.)
+ -  Repro (rule 17): `be post` with a multi-line message containing a dot (e.g. the `Co-Authored-By: X <a@b.c>` trailer) commits the body verbatim, not misrouted to path-form; `-m` still works.
+
+[POST]: ../wiki/POST.mkd "POST verb"
+[URI]: ../wiki/URI.mkd "URI structure"

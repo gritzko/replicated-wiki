@@ -1,0 +1,32 @@
+#   BLAME-001: blame walks all ancestors, re-inflating unchanged blobs
+
+`graf blame:<path>` costs O(total history), not O(file history). `GRAFFileWeave` (graf/BLAME.c) topo-walks the tip's full ancestor closure (`nord`) and calls `GRAFBlobAtCommit` (graf/BLOB.c) for every commit — inflating the commit object, each path tree, and the (large) file blob from keeper — then byte-dedups AFTER the fetch. Measured (release): `blame:graf/GRAF.c` 0.34s (1.16s debug+ASAN), `nord`=1545 for EVERY file regardless of its 11–116-commit history, ~16 inflates/commit, only ~12% of fetches yield a fold. The fix is keeper-side, no index format change: compare object hashes top-down (each child OID is free in its parent tree), stop at the highest unchanged subtree, and inflate the blob + fold only when the leaf OID actually changed. The deeper index-side variant is [BLAME-002]; parallelism is [BLAME-003]. See [Plan].
+
+##  Issues
+Cost scales with total repo history, not the file's; the big blob is re-inflated at every ancestor, then discarded.
+
+ -  `nord`=1545 ancestors walked per file; blob fetches ≈ `nord`; only ~184/1544 (12%) become real folds (graf/BLAME.c:344).
+ -  Per commit ~16 keeper zlib inflates: 1 commit + D path-trees + 1 file blob (graf/BLOB.c `GRAFBlobAtCommit`/`GRAFTreeStep`).
+ -  Byte-dedup runs AFTER the blob is inflated (graf/BLAME.c:367); the root-tree skip (:359) almost never fires (root tree differs per commit).
+ -  Release profile: descent+inflate 51%, weave fold 48%, `blame_fetch_author` <0.4%, render <1% — CPU-bound in zlib + WEAVE, not I/O.
+
+##  Blockers
+None. Keeper-side only, no on-disk `.graf.idx` format change; each step lands green and ships independently.
+
+##  Planned
+Compare object hashes top-down, stop at the highest unchanged subtree, and inflate a blob only when its OID actually changed.
+
+ -  Step 0 (repro-first, CLAUDE.md §17): add a KEEP inflate-count test hook + `graf/test/BLAME01.c` asserting inflate count is O(changes), not O(`nord`).
+ -  Step 1: free root skip — `tree_hs[i]` (= `DAGCommitTree`, no inflate) equal to the prev folded root ⇒ nothing changed anywhere ⇒ skip (zero inflate); no commit inflate ever (use `tree_hs`, not the commit body).
+ -  Step 2 (core): when the root differs, descend the path comparing each segment's child OID — read free from the parent tree — to the prev folded version's, and STOP at the first matching level (file provably unchanged); inflate the blob + `WEAVEFromBlob` + fold ONLY when the leaf OID changed.
+ -  Step 3: content-addressed `(tree_sha,name)→child` step cache in the GRAF singleton (consulted by `GRAFTreeStep`) so the trees we do inflate aren't re-inflated across commits; also speeds GET.c replay.
+ -  Cost ladder per commit: root OID equal → 0 inflate; dir OID equal → 1 (root) inflate; blob OID equal → path-depth tree inflates; blob changed → + blob + fold.
+ -  Correctness: anchors (first/tail/fork/merge) always fold; OID-equality ≡ byte-equality (git OID == content); compare vs the prev FOLDED version, never a global set.
+ -  Residual floor: one small root-tree inflate per changed-tree commit — [BLAME-002]'s index `(tree,name)→child` records remove even that. Expected: ~1.16s → low tens of ms.
+
+##  Landed
+None yet.
+
+[BLAME-002]: ../todo/BLAME-002.mkd "index-side inflate-free path descent"
+[BLAME-003]: ../todo/BLAME-003.mkd "parallelize blame fetch"
+[Plan]: ../wiki/Plan.mkd "the master plan"

@@ -1,0 +1,31 @@
+#   DIS-006: be get file: from a legacy elided store crashes
+
+Some older stores use the legacy "elided" layout: the wtlog row-0 anchor has an empty project segment (`file:/…/.be/`) and `refs`/`wtlog` are regular files directly under `.be/` with no `<project>/` shard dir. `be get file:<legacy-store>` into an empty dir wires the cwd as a secondary worktree, then crashes because the secondary-wt path assumes the modern shard layout. The goal is either to migrate the elided layout or to materialize a modern shard on clone. Not hit in normal use today — `be get file:<gitrepo>` is the working path. See [Store], [Home], [Submodules].
+
+##  Issues
+The secondary-wt path does not handle empty-project stores.
+
+ -  FILEINVAL (open): the legacy wtlog is `mmap`'d `MAP_SHARED|MAP_FIXED` into a BASS arena slot → EINVAL, deep in the AT/ULOG wtlog-mmap machinery.
+ -  Canonical `~/.be` and `~/src/dogs/.be` are elided-layout (as of 2026-06-01), so they trip this only when shared deliberately via `file:`.
+ -  Normal `be get file:<path>` now routes by on-disk type — a git repo is git-cloned, a `.be/` store is wired as a sibling wt — so the crash is reached only for a pure legacy beagle store.
+
+##  Blockers
+None; needs a decision between migrating the elided layout in place or materializing a modern shard from it on clone.
+
+##  Planned
+Pick a path and pin a repro.
+
+ -  Either migrate the elided wtlog/refs to a `<project>/` shard on first contact, or add a clone path that builds a modern shard from the elided source.
+ -  Fix the `MAP_SHARED|MAP_FIXED` EINVAL in the AT/ULOG wtlog-mmap path for the secondary anchor.
+ -  Add a repro test sharing a pure legacy beagle store via `file:` and assert a clean checkout.
+
+##  Landed
+The fresh-init crash and the git-repo route.
+
+ -  FILENOTDIR fixed: `BEEnsureProjectRepo` skips shard init when `<cwd>/.be` is a regular file (secondary anchor).
+ -  `be get file:<gitrepo>` routes by on-disk type (git wins when both `.git` and `.be` exist), so the dogs checkout never touches the legacy `.be`; covered by `get/29` and `get/30`.
+
+[Store]: ../wiki/Store.mkd "the .be store layout"
+[Home]: ../wiki/Home.mkd "store/worktree resolution"
+[Submodules]: ../wiki/Submodules.mkd "submodule mounts"
+[Plan]: ../wiki/Plan.mkd "the master plan"

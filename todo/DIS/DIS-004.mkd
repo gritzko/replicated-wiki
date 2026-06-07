@@ -1,0 +1,26 @@
+#   DIS-004: delete dirty gate is mtime-only, no --force bypass
+
+`be delete <file>` should gate on mtime first, then a content-hash double-check when the mtime has drifted, and `be delete --force <file>` should delete a dirty file anyway. The impl is mtime-only with no hash fallback and no force bypass on the file/dir path, so a file with a drifted-but-identical mtime is wrongly refused and a deliberately dirty delete is impossible. The goal is to match the documented gate (see [DELETE]). User ruling 2026-05-31.
+
+##  Issues
+`sniff/DEL.c` implements only the mtime check; the hash double-check and the force bypass are missing code, not bugs in existing logic.
+
+ -  `!SNIFFAtKnown(mtime)` → DELDIRTY with no content fallback; the file's own comment flags the hash fallback as TODO pending a baseline-tree path→sha lookup.
+ -  `--force` / `-r` only drive the recursive branch drop in `DELBranch`; there is no force bypass on the file or dir delete path.
+ -  [DELETE] already documents the target three-step gate, so this is impl catching up to spec.
+
+##  Blockers
+None; needs a baseline-tree path→sha lookup exposed to `DEL.c` for the content double-check.
+
+##  Planned
+Add the hash double-check and thread a force flag.
+
+ -  DEL.c file + dir paths: on mtime ∉ stamp-set, hash the on-disk bytes and compare to the baseline blob sha — equal → proceed, drift → DELDIRTY.
+ -  Thread a `force` flag into `DELStage` / `del_dir` so `be delete --force <file>` skips the dirty gate.
+ -  Add table-driven cases: clean delete, mtime-drift-but-identical (proceed), genuine drift (refuse), `--force` over dirty (proceed).
+
+##  Landed
+Nothing yet.
+
+[DELETE]: ../wiki/DELETE.mkd "the delete verb"
+[Plan]: ../wiki/Plan.mkd "the master plan"

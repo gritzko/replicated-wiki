@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PATCH</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>PATCH: absorb another branch's work into the worktree</h1>
@@ -55,6 +48,15 @@ Squash and merge replay only the commits cur doesn't already have; rebase-one fi
 <li>Squash and merge replay only commits not already reachable from cur via parent ∪ foster.</li>
 <li><code>picked</code> trailers are dedup-only and do not participate in reachability.</li>
 <li>Rebase-one walks <code>?br</code>'s first-parent chain and stops at the first sha already reachable from cur.</li>
+</ul>
+<h2>Merge base: full stack vs single commit</h2>
+<p>
+The shapes split by merge base, which lets one verb be git's merge, rebase, and cherry-pick: squash and merge weave the full <code>fork..tip</code> stack against auto-LCA(cur, theirs), while cherry-pick and rebase-one weave one commit against its parent.
+</p>
+<ul>
+<li>Squash and merge use auto-LCA(cur, theirs) and replay the full not-yet-reachable stack — git's <code>merge</code> / <code>pull --squash</code>.</li>
+<li>Cherry-pick and rebase-one use the base parent(theirs), weaving that one commit's diff — git's <code>cherry-pick</code>/<code>rebase</code>.</li>
+<li>All four are merge-then-<a href="POST.html">POST</a>; only the base and the recorded provenance differ, so one verb covers four git commands.</li>
 </ul>
 <h2>Weave merge</h2>
 <p>

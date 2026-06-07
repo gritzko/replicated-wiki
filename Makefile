@@ -1,0 +1,71 @@
+#   replicated.wiki — build the StrictMark wiki to static HTML for GitHub Pages.
+#
+#   Every **/*.mkd source renders to html/**/*.html via `mark`, the Beagle wiki
+#   renderer (see wiki/Mark.mkd). `mark` rewrites inter-page .mkd links to .html,
+#   so the html/ tree is self-contained and serves as a plain static site — no
+#   Jekyll, no server-side build.
+#
+#   `mark` is NOT available on the GitHub Pages runners, so the committed html/
+#   tree IS the deployed site. Regenerate and commit it before pushing:
+#
+#       make && git add -A html && git commit
+#
+#   Targets:
+#       make            render everything into html/   (default)
+#       make strict     render with StrictMark budget linting (fails on a breach)
+#       make serve      preview the built site at http://localhost:8000
+#       make clean      remove html/
+
+# MARK: the StrictMark renderer (override with `make MARK=/path/to/mark`).
+# OUT:  output tree, served as the site root by GitHub Pages.
+# HEAD: HTML snippet inlined into every page's <head> (stylesheet, favicon...).
+# MARKFLAGS: `make strict` sets this to --strict.
+MARK ?= mark
+OUT ?= html
+HEAD ?= head.html
+MARKFLAGS ?=
+
+# Every StrictMark source, minus the output tree and git internals.
+SRC  := $(shell find . -name '*.mkd' -not -path './$(OUT)/*' -not -path './.git/*')
+HTML := $(patsubst ./%.mkd,$(OUT)/%.html,$(SRC))
+
+# Image directories are copied verbatim beside their pages.
+IMGDIRS := $(patsubst ./%,%,$(shell find . -type d -name img -not -path './$(OUT)/*' -not -path './.git/*'))
+
+.PHONY: all strict serve clean indexes assets
+all: $(HTML) indexes assets
+
+# One page. `mark` only ever writes a sibling .html, so stage the source inside
+# the output tree, render it in place, then drop the staged copy. --head inlines
+# the shared <head> snippet, so a head.html edit re-renders every page.
+$(OUT)/%.html: %.mkd $(HEAD)
+	@mkdir -p $(@D)
+	@cp $< $(@D)/
+	@$(MARK) $(MARKFLAGS) --head=$(HEAD) $(@D)/$(<F)
+	@rm -f $(@D)/$(<F)
+
+# Directory landing pages: Home (the wiki) and every README become index.html.
+indexes: $(HTML)
+	@[ -f $(OUT)/wiki/Home.html ] && cp $(OUT)/wiki/Home.html $(OUT)/wiki/index.html || true
+	@find $(OUT) -name README.html -exec sh -c 'cp "$$1" "$$(dirname "$$1")/index.html"' _ {} \;
+
+# Images, root-level dir symlinks (e.g. rule -> skill), the custom domain, and
+# .nojekyll (tells Pages to serve raw, not via Jekyll).
+assets: $(HTML)
+	@for d in $(IMGDIRS); do mkdir -p $(OUT)/$$d && cp -r $$d/. $(OUT)/$$d/; done
+	@mkdir -p $(OUT)/assets/css && cp assets/css/style.css $(OUT)/assets/css/
+	@for l in $$(find . -maxdepth 1 -type l); do t=$$(readlink $$l); n=$$(basename $$l); \
+		[ -d $(OUT)/$$t ] && rm -rf $(OUT)/$$n && cp -r $(OUT)/$$t $(OUT)/$$n || true; done
+	@[ -f CNAME ] && cp CNAME $(OUT)/ || true
+	@touch $(OUT)/.nojekyll
+
+# Lint every page against the StrictMark budgets; a full re-render so nothing is
+# skipped as up-to-date. Fails (non-zero) on the first breach — use this in CI.
+strict: clean
+	@$(MAKE) MARKFLAGS=--strict all
+
+serve: all
+	@python3 -m http.server -d $(OUT) 8000
+
+clean:
+	@rm -rf $(OUT)

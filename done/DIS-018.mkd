@@ -1,0 +1,23 @@
+#   DIS-018: PATCH modify/delete reports `kept` and exits 0
+
+[PATCH] enumerates exactly four report statuses (applied/merged/mod/conflict) and states conflicts are "loud … exits non-zero". A modify/delete divergence (theirs deletes a path ours modified, or vice versa) instead emits an undocumented `kept` status, keeps the file, and returns OK — a genuine conflict that silently drops one side's intent and exits 0. The goal is to treat modify/delete as a loud conflict (or document the status). See [PATCH].
+
+##  Issues
+The modify/delete arm short-circuits to a non-spec OK status.
+
+ -  `sniff/PATCH.c:724-746,748-776` emit `emit_status("kept", …)`, bump `mod_del_kept`, and return OK — `kept` is not one of the four documented statuses.
+ -  The exit code is set only on `merged_conflict`/`failed` (`PATCH.c:1653` → `PATCHCFLCT`); a modify/delete divergence exits 0, contradicting [PATCH] §"Conflicts are loud … exits non-zero".
+ -  Effect: an unattended `patch && post` records a commit that silently keeps a file the merge should have flagged as a delete/modify conflict.
+
+##  Blockers
+None; the code comment (`PATCH.c:716-723`) marks this as intentional, so a user ruling may prefer documenting `kept` over flipping it to a conflict.
+
+##  Ruling (maintainer, 2026-06-03)
+Relax the loud-exit contract — a hard non-zero PATCH exit breaks parent recursion when a submodule conflicts. PATCH reports conflicts in colour and returns OK; POST's conflict-marker scan (`POSTCFLCT`) is the patch→test→post safety net.
+
+ -  Genuine WEAVE conflict → `conf` status, bright red, exit OK; markers still written (POST refuses them via `POSTCFLCT`).
+ -  Modify/delete → a distinct `modl` status (replacing `kept`), bright red, exit OK.
+ -  Report vocabulary becomes applied/merged/mod/`conf`/`modl`; PATCH no longer exits non-zero for conflicts/modl (genuine errors like `PATCHDET` still fail).
+ -  Spec update: revise [PATCH] §"Reporting" and the "conflicts are loud … exits non-zero" line accordingly (wiki edit, separate).
+
+[PATCH]: ../wiki/PATCH.mkd "PATCH verb"

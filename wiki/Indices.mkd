@@ -24,23 +24,23 @@ A write sorts the batch and flushes one run; a read mmaps every run and binary-s
 
  -  Append-only like the log: a flush adds a run, never edits one; offsets into a run stay stable for live mmaps.
  -  Newest wins: runs scan oldest-first, so a later run's entry shadows an earlier one — the LSM update rule.
- -  Read path: range each run, take the first hit; on a miss keeper walks up the branch-dir chain to the [Store] root.
+ -  Read path: range every run in the single project pool, newest-wins; a miss is a true miss — there is no branch-dir walk-up.
 
 ##  Size-tiered compaction
 
-Runs accumulate until they break the 1/8 size-tiered invariant; compaction then merges the youngest violators into one run — the LSM analogue of drop-a-dir.
+Runs accumulate until they break the 1/8 size-tiered invariant; compaction then merges the youngest violators into one run — the LSM way to bound run count.
 
  -  The invariant: each younger run stays under 1/8 of its predecessor; `KEEPCompact` merges the youngest stack until it holds.
  -  Heap merge with dedup: a HIT min-heap of run iterators merge-sorts them, so identical rows across runs collapse to one.
  -  Atomic swap: write the merged `.idx`, unlink consumed sources, swap the shard's run mmaps — invoked from `KEEPClose`.
 
-##  Range queries and walk-up
+##  Range queries
 
-A lookup is a range query, not a point query, since keys pack a sub-field and callers hold a prefix; misses cascade up the branch-dir DAG.
+A lookup is a range query, not a point query, since keys pack a sub-field and callers hold a prefix; the whole project pool is one search space.
 
  -  Hashlet prefix: keeper zero-pads a hex prefix to 60 bits and ranges `[p<<4, p<<4|0xf]`, spanning all object types at once.
- -  Walk-up on miss: range each run in this dir, then retry the parent, up to the store root — mirroring REF_DELTA's dir rule.
- -  First match wins: the first `(dir, file_id, offset)` hit feeds the [PackLog] read, which chases the delta chain bottom-up.
+ -  One pool, no walk-up: range every run in the project shard, newest-wins; a miss is final — there is no parent-dir retry.
+ -  First match wins: the first `(file_id, offset)` hit feeds the [PackLog] read, which chases the delta chain bottom-up.
 
 [PackLog]: PackLog.mkd "the pack log format"
 [Keeper]: Keeper.mkd "the keeper dog"

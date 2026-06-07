@@ -1,0 +1,24 @@
+#   DIS-020: `POSTNONE` is overloaded; define `NOBRANCH`; `be` must abort on it
+
+`POSTNONE` is returned both for the benign "nothing to post / already in sync" case (which `be` treats as no-op-OK and continues past) AND for the hard error "target branch does not exist" (`sniff/POST.c:1763`, `?main does not exist`). Because `be` swallows `POSTNONE` as OK, `be post …?main` with no local `main` proceeds to a doomed wire push that dies later at `WIRECLNFF`. The goal: a distinct `NOBRANCH` code for "no such branch" that aborts before any push. See [POST], [Sniff].
+
+##  Issues
+One code carries two meanings; the hard case leaks past the abort point.
+
+ -  `sniff/POST.c:1746,1763` return `POSTNONE` for a missing parent/target branch — same code as "nothing to commit" (`:2554`).
+ -  `beagle/BE.cli.c:2014,2038` treat `POSTNONE` as no-op-OK, so the keeper push (`BEActKeeperPush`) still fires after a missing-branch local failure.
+ -  Repro: `be post //host?nonexistent` (or `?main` absent) → wire push attempted; must abort instead.
+
+##  Blockers
+None.
+
+##  Planned
+Split the meanings; gate `be` on the new hard code.
+
+ -  Define `ok64 NOBRANCH` ("no such branch", ron60 via `abc/ok64`, ≤10 chars) in `sniff/SNIFF.h` beside `POSTNONE`.
+ -  Return `NOBRANCH` from the missing-branch sites in `sniff/POST.c`; keep `POSTNONE` strictly = nothing to post.
+ -  In `beagle/BE.cli.c`, `NOBRANCH` is a hard error that aborts the POST plan (no `BEActKeeperPush`); `POSTNONE` stays no-op-OK.
+ -  Repro test: a post to a non-existent branch exits non-zero with `NOBRANCH` and performs no wire push.
+
+[POST]: ../wiki/POST.mkd "POST verb"
+[Sniff]: ../wiki/Sniff.mkd "the sniff dog"

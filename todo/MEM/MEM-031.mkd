@@ -1,0 +1,24 @@
+#   MEM-031: WOOFApiOpen leaks dogs/buffers on later open failure (woof/CONN.c)
+
+`WOOFApiOpen` acquires keeper/graf/spot/sniff and three cli buffers, then sets `woof_api_ready=YES` only at `:581`. If a later alloc (:565-567), `PATHu8bFeed`, or `memfd_create` (:578-579 `fail(WOOFFAIL)`) fails, it returns with `ready` still NO and no cleanup, since `call()`/`fail()` do bare returns with no finalizer. `WOOFApiClose` is gated on `woof_api_ready` (:586) so it early-returns, and `woof_serve` only flips `WOOF.api=NO`; the open keeper object-store mmap plus graf/spot/sniff singletons and cli buffers leak for the process lifetime. The goal is to release every partially-acquired resource on the error path.
+
+##  Issues
+Partial open survives because the close path is gated on the never-set ready flag.
+
+ -  `woof/CONN.c:565-567` alloc fail or `:578-579 memfd_create<0 fail(WOOFFAIL)` returns after keeper/graf/spot/sniff already opened (:549/557/561/563).
+ -  `abc/PRO.h:88,141` `call()`/`fail()` do bare return; `WOOFApiOpen` has no `done:`-label finalizer so partial state survives.
+ -  `woof/CONN.c:586` `WOOFApiClose` `if (!woof_api_ready) return;` short-circuits before its per-resource frees, but `ready` is still NO on a failed open.
+ -  `woof/WOOF.c` `woof_serve` sets `WOOF.api=NO` and keeps serving; `WOOFClose`→`WOOFApiClose` early-returns: leak persists for process lifetime.
+ -  Leaked: keeper object-store mmap, graf/spot/sniff singletons, `woof_api_cli.repo/flags/uris` buffers.
+
+##  Blockers
+None.
+
+##  Planned
+Make close work on a partial open.
+
+ -  Repro FIRST (§17): force a late open/alloc/memfd failure in `WOOFApiOpen`; assert keeper/graf/spot/sniff + cli buffers are released.
+ -  Drop the `woof_api_ready` gate in `WOOFApiClose` and rely on its existing `have_*`/`keep_owned`/`memfd>=0` checks; call it on the error path.
+ -  Or restructure `WOOFApiOpen` to acquire only past a single ready point, or add a `callsafe` cleanup arm per acquiring step; re-run `woof --api` tests.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

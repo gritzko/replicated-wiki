@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>Active ticket board</h1>
+<p>
+Index of Beagle's open work: one topic per dir, each holding numbered <a href="../wiki/Plan.html">Plan</a>-shaped tickets cleared by the parallel <a href="../rule/Issues.html">Issues</a> fix-and-land loop. Each line below names a topic and its live state; per-topic detail lives in <code>todo/&lt;TOPIC&gt;/README.mkd</code>. A fully-landed ticket drops from its topic page; a closed topic drops from here.
+</p>
+<h2>Active topics</h2>
+<ul>
+<li><a href="URI/README.html">URI</a> — one keeper rule for branch/commit naming; URI-001 St.1-3 landed (branch-first, length-agnostic, scope-only canonical), St.4-5 pending.</li>
+<li>DIS — cross-cutting spec/impl discrepancies; DIS-025/002 fixed, DIS-001/024 (store layout) + others open.</li>
+<li>MEM — memory-safety audit, 36 findings mostly planned; digest in <code>MEM/MEM.mkd</code>.</li>
+<li>SUBS — submodule recursion; SUBS-001..012 landed, SUBS-013/015 open; digest in <code>SUBS/SUBS.mkd</code>.</li>
+<li>POST — commit-path gaps; POST-002/003/004 planned.</li>
+<li>GET — checkout gaps; GET-001 done, GET-002 (detached secondary wt) planned.</li>
+<li>BLAME — blame perf on inflate-bound walks; BLAME-004 fixed, BLAME-001/002/003 planned.</li>
+</ul>
+</body>
+</html>

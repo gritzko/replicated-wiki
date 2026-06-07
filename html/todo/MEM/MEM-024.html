@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-024</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-024: push-side recursive walk holds 1MB mmap per frame (keeper/WIRECLI.c)</h1>
+<p>
+On the push path <code>wpush_walk_commit</code> and <code>wpush_walk_tree</code> mmap a 1MB buffer and recurse <strong>before</strong> unmapping, so a long linear commit chain or deep tree stacks one C frame plus one live mmap per level. The dedup count caps bound distinct objects, not single-chain depth: haveset-build callers pass <code>out==NULL</code> so no count cap applies at all, and pack mode's cap (65536) far exceeds the ~8MB C stack. A deep/force-pushed history → stack-overflow SIGSEGV; the discarded recursive return also drops errors. (Category is unbounded recursion — the NORESERVE mmap is reclaimed on unwind, not leaked.) The goal is to bound depth and stop holding the buffer across recursion.
+</p>
+<h2>Issues</h2>
+<p>
+Recursion per parent/subtree with a 1MB mmap live across the call; caps don't bound depth.
+</p>
+<ul>
+<li><code>keeper/WIRECLI.c:1182</code> <code>wpush_walk_commit</code> recurses on each parent with <code>cbuf</code> (mmap 1MB at :1144) still mapped until :1186; no depth guard → linear chain stacks N frames → stack overflow.</li>
+<li>Count cap <code>*n&gt;=cap</code> (cap=WPUSH_MAX_OBJS=65536, :1136) bounds only emitted shas; haveset callers (:1561,:1657) pass <code>out=NULL</code> so even that is skipped → depth = full chain length.</li>
+<li>Recursive return discarded at <code>keeper/WIRECLI.c:1182</code> (errors swallowed).</li>
+<li><code>keeper/WIRECLI.c:1102</code> <code>wpush_walk_tree</code> same pattern: <code>tbuf</code> mmap 1MB (:1077) held live across subtree recursion until :1113 (lower risk; trees usually shallow).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Bound depth, release before recursing, propagate errors.
+</p>
+<ul>
+<li>Repro first: build a long unshared linear commit chain (and a deep tree) and <code>WIREPush</code> it; assert bounded failure rather than SIGSEGV.</li>
+<li>Capture parent list + tree_sha by value and unmap <code>cbuf</code>/<code>tbuf</code> BEFORE recursing; or convert to an explicit bounded work-stack so only O(1) maps/frames are live.</li>
+<li>Check/propagate the recursive return at :1182; add a depth cap fired in both <code>out!=NULL</code> and <code>out==NULL</code> modes.</li>
+</ul>
+</body>
+</html>

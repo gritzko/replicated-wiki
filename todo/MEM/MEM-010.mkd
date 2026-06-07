@@ -1,0 +1,22 @@
+#   MEM-010: CURL unchecked alloc + handle/slist leaks (abc/CURL.c)
+
+`CURLGet`/`CURLPost` dereference `calloc()` and `curl_easy_init()` results without a NULL check (NULL write/deref under memory pressure or handle-init failure), the `curl_multi_add_handle` error path frees the request buffers but never `curl_easy_cleanup`s the easy handle, and every POST with a content type leaks its `curl_slist` headers (libcurl does not take ownership). The goal is to null-check the allocations and free the handle and slist on the right paths.
+
+##  Issues
+One null-deref plus two resource leaks in the request lifecycle.
+
+ -  `abc/CURL.c:190-196` — `req=calloc(...)` and `req->easy=curl_easy_init()` used unchecked; NULL → write/deref.
+ -  `abc/CURL.c:165-185` `CURLStart` — `curl_multi_add_handle != CURLM_OK` frees `req->url`/`req` but not `curl_easy_cleanup(req->easy)`.
+ -  `abc/CURL.c:216-223` `CURLPost` — `curl_slist` content-type headers handed to `CURLOPT_HTTPHEADER` and never `curl_slist_free_all`'d (leak per request; code even notes it).
+
+##  Blockers
+None.
+
+##  Planned
+Check allocations; release handle and slist exactly once at completion.
+
+ -  Repro first: fault-inject `calloc`/`curl_easy_init` NULL and a failing `multi_add_handle`; a POST-with-content-type leak check under ASan/valgrind.
+ -  `if (!req) return BALLOCFAIL;` and `if (!req->easy) { free(req->url); free(req); return CURLFAIL; }` before any setopt.
+ -  In the add-handle error branch `curl_easy_cleanup(req->easy)`; store the slist in `CURLreq` and `curl_slist_free_all` it in `CURLTick` at completion.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

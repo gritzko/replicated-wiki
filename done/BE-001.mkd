@@ -1,0 +1,24 @@
+#   BE-001: red leaks into non-conflict code render and ulog statuses
+
+Red is reserved for conflict statuses (the `conf` / `modl` PATCH reports, [DIS-018]). Some tokens in code-block render and some ulog status rows are coloured red when they are NOT conflicts — regular text in those cases must be the default/black, never red. The goal: red appears ONLY for genuine conflict statuses; everything else renders in the normal colour. See [Mark], [Sniff].
+
+##  Issues
+Two render sites over-apply the red palette entry.
+
+ -  Code render: some code tokens come out red (observed in `be` code-block output) though they are ordinary text, not conflicts.
+ -  Ulog statuses: some status rows render red though they are not `conf`/`modl` — regular `ok`/`mod`/etc. must be default-coloured.
+ -  The conflict-only red contract comes from [DIS-018] (PATCH `conf`/`modl` are bright red, exit OK); nothing else should reuse that colour.
+
+##  Blockers
+None.
+
+##  Planned
+Restrict red to conflict statuses; default the rest.
+
+ -  Locate the palette sites (the code-render colour map — `mark/` / `dog/tok` — and the sniff status row printer/palette).
+ -  Map only the conflict statuses (`conf`/`modl`) to red; route every other token/row to the normal/default colour.
+ -  Repro test: render a code block and a clean status; assert no red escape on non-conflict tokens/rows (and that `conf`/`modl` stay red).
+
+[Mark]: ../wiki/Mark.mkd "the mark dog"
+[Sniff]: ../wiki/Sniff.mkd "the sniff dog"
+[DIS-018]: ../done/DIS-018.mkd "PATCH conf/modl are red"

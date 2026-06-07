@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIS-002: be patch over a transport drops freshly-fetched commits</h1>
+<p>
+<code>be patch ssh://host?&lt;branch&gt;</code> fetches the remote branch but the merge never applies theirs's added files — the just-fetched commit is not indexed into graf's DAG, so the merge walk sees no theirs entries. The goal is a transport PATCH that performs the real 3-way merge against the fetched tip. The original routing bug (transport URI mis-routed to per-file PATCH) is fixed; the remaining bug is fetch-to-graf visibility. See <a href="../wiki/PATCH.html">PATCH</a>, <a href="../wiki/Keeper.html">Keeper</a>, <a href="../wiki/Graf.html">Graf</a>.
+</p>
+<h2>Issues</h2>
+<p>
+After fetch, the new commit is in keeper's pack and the REFS row maps the URI to its sha, but <code>graf get</code> does not index it, so the merge loses theirs's files.
+</p>
+<ul>
+<li>Repro <code>test/patch/20-divergent-merge</code> (WILL_FAIL): cur=B(parent A) touches <code>local.c</code>; origin master=C(parent A) touches <code>server.c</code>; disjoint → merge must be text-clean.</li>
+<li><code>be patch ssh://origin?master</code> prints <code>noop=2 take-theirs=0</code>; <code>server.c</code> is never written; <code>be log</code> shows only B and A — C absent from the DAG.</li>
+<li>Suspected site: <code>graf_walk_from_tip</code> in <code>graf/INDEX.c</code>; the <code>KEEPGet</code> for C's commit body fails because the just-fetched pack's index is not visible to this keeper open, or the open is on the wrong shard.</li>
+<li>Companion no-op case <code>test/patch/18-noop-already-absorbed</code> (theirs ⊆ cur) now passes natively after the routing fix.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+Likely a keeper shard/index-visibility interaction after fetch (related to the trunk-landing fix); confirm the index path before blaming the merge walk.
+</p>
+<h2>Planned</h2>
+<p>
+Find why the fetched commit is not indexed, then make the take-theirs case fire.
+</p>
+<ul>
+<li>Trace whether C's commit body resolves via <code>KEEPGet</code> right after <code>BEActGrafGet</code>; check the shard the keeper open targets (sub-clone / remote-shard interaction).</li>
+<li>Once C is indexed, confirm the merge walk has the right tree shas and <code>server.c</code> lands in the wt.</li>
+<li>Flip <code>test/patch/20-divergent-merge</code> from WILL_FAIL to a passing assertion (server.c present after merge).</li>
+</ul>
+<h2>Landed</h2>
+<p>
+The routing half of the saga.
+</p>
+<ul>
+<li>Gated <code>PATCHApplyFile</code> on <code>$empty(u-&gt;authority)</code> so transport URIs go to whole-tree <code>PATCHApply</code>, not per-file merge — <code>patch/18</code> passes, <code>patch/20</code> no longer GRAFFAILs (but still loses the added file).</li>
+</ul>
+</body>
+</html>

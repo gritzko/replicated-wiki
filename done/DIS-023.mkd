@@ -1,0 +1,23 @@
+#   DIS-023: `be` status is non-idempotent — a re-run hides real modifications
+
+Two consecutive `be` status runs with NO intervening edit or commit report different results: `?  1057 ok, 4 mod` then `?  1061 ok`. The dirty gate is mtime-only and re-stamps on read, so the first status records the current mtimes and the second sees them as matching → the 4 genuinely-modified tracked files are silently reported clean. The goal: status is idempotent and a modified file stays `mod` until it is actually committed; equality is confirmed by content hash, not just mtime. Shares its root with [DIS-004] (mtime-only gate, no hash double-check). See [Sniff].
+
+##  Issues
+The status/dirty check trusts mtime and rewrites the stamp during a read-only status.
+
+ -  `?  1057 ok, 4 mod` → `?  1061 ok` across two back-to-back `be` runs, no commit between — the 4 `mod` files flip to `ok`.
+ -  A read-only `status` must not mutate the stamp-set; today it does, so the second run loses the modification.
+ -  Same mtime-only gate as [DIS-004]: drift is resolved by re-stamping instead of a content-hash double-check.
+
+##  Blockers
+None; needs the baseline-tree path→sha lookup for the content double-check (the same one [DIS-004] needs).
+
+##  Planned
+Make status read-only and confirm modification by content hash, repro-first.
+
+ -  Repro (rule 17): modify a tracked file, run `be` (status) TWICE; the file must stay `mod` on both runs (no flip to `ok`), no commit.
+ -  Find the status dirty path (sniff status / `SNIFFAtKnown(mtime)` + stamp write); on mtime drift, hash the on-disk bytes vs the baseline blob sha — equal → clean, differ → `mod`; do NOT rewrite the stamp during a read-only status.
+ -  Reuse the [DIS-004] baseline-tree path→sha helper if present; otherwise factor it shared (CLAUDE.md §13).
+
+[Sniff]: ../wiki/Sniff.mkd "the sniff dog"
+[DIS-004]: ../todo/DIS-004.mkd "delete dirty gate is mtime-only"

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-008</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIS-008: GET <code>#~N</code> commit-ancestor rewind unimplemented</h1>
+<p>
+<a href="../wiki/GET.html">GET</a> documents <code>be get '#~1'</code> as &quot;rewinds cur's ref by one commit and resets the wt, staying attached to cur&quot;, but no <code>~N</code> ancestor operator exists in fragment handling — the <code>~1</code> is resolved as an ordinary ref/hex and fails. The goal is the documented relative-ancestor rewind. See <a href="../wiki/GET.html">GET</a>, <a href="../wiki/URI.html">URI</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The <code>~N</code> relative-ancestor fragment is never parsed.
+</p>
+<ul>
+<li><code>dog/DOG.c</code> <code>DOGCanonURI</code> (~<code>:327</code>) only strips a leading <code>?</code> from the fragment; it does not recognise <code>~N</code>.</li>
+<li><code>keeper/RESOLVE.c</code> resolves a fragment only as 40-hex / hashlet / ref, never as a relative walk back N first-parents.</li>
+<li><code>sniff/GET.c</code> has no tilde handling, so <code>be get '#~1'</code> attempts to resolve <code>~1</code> literally and refuses as a missing ref.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; needs a first-parent walk-back-N from cur's tip exposed where GET resolves the fragment.
+</p>
+<h2>Planned</h2>
+<p>
+Add the <code>~N</code> ancestor operator on the GET fragment path.
+</p>
+<ul>
+<li>Parse <code>#~N</code> (default N=1) in the GET fragment resolver; walk cur's first-parent chain back N commits to the target sha, then reset the wt and rewind cur's ref (staying attached).</li>
+<li>Add table cases: <code>#~1</code> after one commit lands on the parent; <code>#~N</code> past the root refuses cleanly.</li>
+</ul>
+</body>
+</html>

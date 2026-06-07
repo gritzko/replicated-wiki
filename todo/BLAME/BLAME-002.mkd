@@ -1,0 +1,29 @@
+#   BLAME-002: materialise tree entries in the DAG index for inflate-free descent
+
+blame's path descent must inflate keeper objects because the DAG index records only `(COMMIT,commit_h)→(TREE,tree_h)` root-tree edges and `(COMMIT,commit_h)→(COMMIT,parent_h)` parent edges (graf/DAG.c:847-863); the `DOG_OBJ_TREE`/`DOG_OBJ_BLOB` cases are explicit no-ops (graf/DAG.c:869-876, graf/INDEX.c:16-18). The graf/DAG.h header's "materialising every tree entry" claim is stale. Adding `(tree,name)→child` records lets graf descend a path via in-memory binary searches with zero keeper inflate, collapsing blame's descent to O(`nord`·depth) lookups + a blob fetch only on change. This is the structural complement to the keeper-side win in [BLAME-001]. See [Plan].
+
+##  Issues
+The index cannot descend a path; every blame commit re-inflates trees from keeper.
+
+ -  Only four edge kinds are emitted, all `(COMMIT,*)`-keyed (graf/DAG.c:847); no `(TREE,*)` key exists; tree/blob ingest is a no-op (:869).
+ -  graf/DAG.h header comment ("materialis[es] every tree entry") contradicts the code — fix the spec while adding the records.
+ -  Descent therefore hits keeper per segment (graf/BLOB.c `GRAFTreeStep`→`KEEPGetExact`), the cost [BLAME-001] measured.
+
+##  Blockers
+None hard. Reindex is required to populate the records; old stores stay correct (descent falls back to keeper on index miss).
+
+##  Planned
+Encode `(tree,name)→child` as ordinary wh128 records, emit them once per distinct tree at ingest, descend index-first with keeper fallback.
+
+ -  Encoding: key=`DAGPack(DAG_T_TREE, DOGChildPathHash(name, tree_h60))`, val=`(child_type, child_h60)`; `DOGChildPathHash` (dog/DOG.h, rapidhash seeded by parent) already exists.
+ -  Collisions (60-bit) are detected via the equal-key span (`DAGRange`) and survived by falling back to keeper for that one step — never silent.
+ -  Ingest (graf/DAG.c commit path): walk each tree with `GITu8sDrainTree`, emit child edges; dedup with a per-run seen-tree set on `dag_ingest` so each distinct tree is walked once.
+ -  Descent: `GRAFTreeStepIndexed`/`GRAFPathDescendIndexed` in graf/BLOB.c, threading hashlets; fall back to the existing keeper descent on any miss (legacy/un-indexed stores).
+ -  Format: no version bump — same 16-byte wh128, and readers already type-filter (`DAGAllCommits` graf/DAG.c:344 even skips "(TREE,*)" edges); `graf index` rebuild populates them.
+ -  Size grows by ≈ distinct tree-entries across history (E×16 B); the seen-tree dedup is load-bearing to avoid a C×E blowup — measure via `graf status` entry count.
+
+##  Landed
+None yet.
+
+[BLAME-001]: ../todo/BLAME-001.mkd "keeper-side lazy descent + sha-dedup"
+[Plan]: ../wiki/Plan.mkd "the master plan"

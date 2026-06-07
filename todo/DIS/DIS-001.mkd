@@ -1,0 +1,37 @@
+#   DIS-001: sha-bearing wtlog row-0 anchor
+
+The wtlog row-0 anchor should be ONE `get` row carrying title + branch + hash, mirroring the refs line-1 clone-source row, instead of encoding title/branch in the `.be/<proj>/<branch>/` path. The goal is a cleaner anchor that also fixes the keeper-leaf caveat (the fetched pack landing one level too deep). The canonical shape is `<ts> get file:<store>/.be/ ?/<title>/<branch> #<hash>`: the PATH locates the store root, the QUERY carries project+branch in the standard absolute ref grammar, the FRAGMENT is the checked-out tip (empty for a tip-less fresh init). See [Title], [Store], [Home].
+
+##  Issues
+Title + branch live in the anchor PATH today (`.be/<proj>/<branch>/`); moving them into the QUERY is cleaner and resolves the keeper-leaf caveat where a fetched pack lands one level too deep.
+
+ -  Path-encoded anchor forces project-aware branch stripping in [Home]'s `home_anchor_resolve`; the query form carries branch directly.
+ -  Keeper-leaf caveat: with branch mis-derived, keeper composes `<root>/.be/<proj>/<proj>/` and the fetched pack is invisible to sniff.
+ -  The new row 0 must round-trip through `SNIFFAtTailOf` → `--at` → keeper leaf, and legacy path-encoded stores must still open.
+
+##  Blockers
+None. Each step is land-and-stay-green; step 1 (the load-bearing compat change) is proven against existing path-encoded stores before any writer emits the new shape.
+
+##  Planned
+Remaining is the clone-path optimization only — an OPTIONAL cleanliness pass, not a correctness gap (the keeper-leaf caveat was the secondary/sub-clone branch mis-derivation, already fixed by steps 1/3/4).
+
+ -  Step 5 — Clone: bootstrap dir+empty wtlog only (no bare anchor); after keeper get resolves the tip, write the combined row 0; `SNIFFOpen` skips its bootstrap for the get flow.
+ -  Step 6 — Suppress sniff GET's establishing append (`GET.c` ~1353) when row 0 already encodes (branch, hash).
+ -  Risk note: steps 5–6 reorder the hot clone/checkout dispatch (BE_PLAN_GET) and that GET append records the tip on EVERY checkout, not just row 0 — do it as a focused pass with full clone/get coverage, not bundled.
+ -  Optional: [Title] persistence section could cross-link the sha-bearing wtlog row 0.
+
+##  Landed
+Steps 1–4, all 213 green and behavior-preserving today; smoke-verified a secondary wt's `.be` now reads `get file:<store>/.be/?/<title>#<sha>`.
+
+ -  Step 1 — `home_anchor_resolve` ([Home], `dog/HOME.c`): reads title+branch from the row-0 QUERY via the new `home_anchor_proj_branch` helper; legacy path-after-`.be` fallback. `home_peek_repo_uri` gained an optional `query_out`.
+ -  Step 2 — `SNIFFAtAnchorRef` (`sniff/AT.c`/`AT.h`) builds the `?/<title>/<branch>#<hash>` query+fragment; `SNIFFWtRepoAnchor` extended to (title, branch, hash); tip-less callers pass empty.
+ -  Step 3 — `BEGetWorktree` (`beagle/BE.cli.c`): resolves the primary tip up front (SNIFFAtTailOf), writes a store-root anchor with title/branch in the query and the tip in the fragment.
+ -  Step 4 — `SNIFFSubMount`/`subs_write_anchor` (`sniff/SUBS.c`): sub anchor is store-root path + `?/<basename>` + the gitlink pin in the fragment.
+ -  Step 7 — pinned the new shape: `test/get/29-file-worktree` and `beagle/test/roundtrip.sh` (WITH_SSH `BEroundtrip`) assert row 0 matches `file:…/.be/?/<title>/<branch>#<40-hex>`; roundtrip's stale legacy-`repo` grep was corrected to `get`. Full WITH_SSH suite 268/268.
+ -  Step 8 — docs: `sniff/AT.md` row-vocabulary + row-0 section document the bare vs sha-bearing shapes and tip-presence exclusion.
+ -  Scanner foundation: `SNIFFAtBaseline`/`SNIFFAtCurTip` exclude a row by tip-presence (query AND fragment both empty), not by position; positional `i==0` anchor guards removed from both `SNIFFAtTailOf` walks. Readers accept `get` OR legacy `repo`.
+
+[Title]: ../wiki/Title.mkd "project title persistence"
+[Store]: ../wiki/Store.mkd "the .be store layout"
+[Home]: ../wiki/Home.mkd "store/worktree resolution"
+[Plan]: ../wiki/Plan.mkd "the master plan"

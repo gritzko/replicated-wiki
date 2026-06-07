@@ -1,0 +1,30 @@
+#   BLAME-003: parallelize blame's inflate-bound fetch across cores
+
+blame's fetch/descent is inflate-bound and embarrassingly parallel (independent per commit), while the weave fold is small and sequential. After the per-commit work is minimized ([BLAME-001]/[BLAME-002]), the residual descent+inflate can be sharded across the 16 cores: a parallel pass resolves each commit's leaf blob sha, a parallel pass inflates the distinct changed blobs, then a serial pass folds them in topo order. The blocker is that the keeper/graf read path uses shared singleton scratch buffers; those must become per-thread (or caller-owned) first. This layers on top of — and is gated by — the single-thread wins. See [Plan].
+
+##  Issues
+The per-commit loop (graf/BLAME.c:344) is serial though its dominant cost (inflate) is independent across commits.
+
+ -  Fetch/inflate dominates and parallelizes; the fold (`WEAVEApply`/`WEAVEDiff`) is sequential but only runs for the few changed commits.
+ -  Shared scratch blocks concurrency: `GRAF.obj_buf`/`tree_buf` (graf/GRAF.h:42) and keeper `buf1..buf4` (keeper/KEEP.h:167, written by `KEEPGetPacked`).
+ -  No threading exists anywhere in the tree (no pthread/threads/omp, no `find_package(Threads)`) — adding it is a new dependency decision.
+
+##  Blockers
+Ordering dependency: land [BLAME-001] first and re-measure — sha-dedup alone may evaporate enough that parallelism's ROI drops. Threads are new to the codebase (build/ASAN/fuzz matrix + a TSan build).
+
+##  Planned
+Phase the work, make the read path reentrant by passing scratch as parameters (CLAUDE.md §5), then shard.
+
+ -  Phase 1 (parallel): per commit, descend to the file's leaf blob sha (no leaf inflate); shard `[0,nord)` over workers.
+ -  Phase 2 (parallel): dedup to distinct changed blob shas; inflate those once each into a sha→bytes map.
+ -  Phase 3 (serial): fold changed versions in topo order via the existing closure `WEAVEApply` path.
+ -  Reentrancy: give `GRAFBlobAtCommit`/`GRAFTreeStep` a scratch-context arg and add a `KEEPGetPacked` variant taking caller-owned `buf1..4`; each worker `u8bMap`s its own `ABC_BASS` (already `_Thread_local`).
+ -  Safe shared-read (no change): pack mmaps + `packs`/`puppies` registries, and the pure DAG readers (`DAGLookup`/`DAGCommitTree`/`DAGParents`).
+ -  Mechanism: C11 `<threads.h>` + `Threads::Threads` on graflib, atomic work-counter; add a `graf/bench/` blame benchmark; Amdahl est. ~6–9× (≈1.16s → 0.15–0.25s), memory-bandwidth capped.
+
+##  Landed
+None yet.
+
+[BLAME-001]: ../todo/BLAME-001.mkd "keeper-side lazy descent + sha-dedup"
+[BLAME-002]: ../todo/BLAME-002.mkd "index-side inflate-free path descent"
+[Plan]: ../wiki/Plan.mkd "the master plan"

@@ -1,0 +1,21 @@
+#   MEM-002: i64decdrain reads x uninitialized on parse failure (abc/INT.c)
+
+`i64decdrain` declares `u64 x;` uninitialized, fills it via `call(u64decdrain, &x, dec)` but never checks the return code; when `u64decdrain` rejects the input (empty / non-digit after a sign) it returns `SBADARG` *without writing `x`*, so the function then computes the out-parameter `*i` from garbage stack memory and applies a stale-value `INTBAD` test. The goal is to propagate the parse error and stop reading uninitialized memory.
+
+##  Issues
+Unchecked error return leaves an out-parameter set from uninitialized stack.
+
+ -  `abc/INT.c:5-22` — `o = u64decdrain(&x, dec)` (line 10) is captured but never checked; on early `SBADARG` (`abc/01.h:394-405`) `x` is never written.
+ -  Lines 12-20 then read `x` to set `*i = -x` / `*i = x` and run `test(x<=lim, INTBAD)` on the garbage value.
+ -  Trigger: `i64decdrain` on a lone sign or sign+non-digit (`"-"`, `"+a"`); `sane()` only enforces `!$empty(tok)`, so after the sign skip `dec` is empty/non-numeric.
+
+##  Blockers
+None.
+
+##  Planned
+Check the decode result before using the value.
+
+ -  Repro first: add `"-"`, `"+"`, `"+a"`, `"-z"` rows to the `INT` decode table test; confirm garbage/UB under ASan/MSan-style scrutiny.
+ -  Replace the bare capture with `try`/`call` propagation: `ok64 o = u64decdrain(&x, dec); if (o!=OK) return o;` (and defensively `u64 x = 0;`).
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

@@ -1,0 +1,48 @@
+#   Invariants: the load-bearing rules every verb upholds
+
+The design invariants are the load-bearing rules every [Verbs] and dog upholds — the small set of guarantees that keep the command language unambiguous and the store safe. The goal is to state them in one place so a change that would break one is easy to spot. The method: a handful of write-path, branching, and resolution invariants, plus the open edges still being settled; the per-verb pages and [Store] carry the detail, this page carries the contract.
+
+##  Write-path invariants
+
+The write path has exactly one commit-maker and one ref-writer, a linear first-parent spine, and a strict fast-forward rule, so history stays simple and safe.
+
+ -  POST is the only commit-maker, PUT the only ref-writer: [POST] advances cur; [PUT] writes a `refs` row but never a commit.
+ -  First-parent linear, multi-parent at POST: first parent is cur's prior tip; `parent`/`foster`/`picked` come from patch rows.
+ -  POST is fast-forward only, PUT unconstrained: POST refuses non-FF advance or push; PUT force-writes any ref on either side.
+
+##  Branch and worktree invariants
+
+Branches are cheap one-row entries, speculative work forks preventively, and one store backs many worktrees, with detach the one explicit escape hatch.
+
+ -  Cheap branches, mkdir/cd split: a branch is a one-row reflog entry; `be put ?./A` creates it, `be get ?./A` enters it.
+ -  Eager branching replaces stash: speculative work happens on a preventively-forked sub-branch, never on cur (see [Worktree]).
+ -  One store, many worktrees: per-wt state lives in the wtlog; secondaries point `.be` at the primary (see [Worktree]).
+ -  Detached mode is explicit: a `?<sha>` checkout with no branch detaches, and POST and [PATCH] refuse on a detached wt.
+
+##  Resolution and interop invariants
+
+URI shape alone fixes the resource, remotes are cached unless a transport scheme is named, projectors never mutate, and git peers see a flat byte-faithful namespace.
+
+ -  Verb × URI shape is unambiguous: a ref-only URI targets the branch, a path+ref URI a file, a projector only reshapes output.
+ -  Cached vs transport: a bare `//host` reads cached refs only; `scheme://host` opens the wire (the cache refresh, see [Store]).
+ -  Projector schemes are read-only: they never mutate, so they compose safely with any verb (see [Projector]).
+ -  Git-peer interop is byte-faithful, topology-flat: branch paths roundtrip as slashy refs, tree flattens, trunk maps to `main`.
+
+##  Open edges
+
+A few cross-cutting contracts are still unsettled; the per-verb pages carry their own TBDs, this section the architectural ones.
+
+ -  Conflict-marker wire format: PATCH's token-level 4-char delimiters need a stable format for [Bro] and a `git mergetool` adapter.
+ -  Provenance trailers: the `picked:` cherry-pick key and a possible path-scoped `<sha>:<path>` trailer are both still TBD.
+ -  Real squash and repack: today GC is "drop a branch"; consolidating a branch's `refs` into one commit is still TODO.
+ -  Bulk fetch `?*` orders parents-before-children over the delta DAG; the bare `be head` summary output format is still TBD.
+
+[Verbs]: Verbs.mkd "the verbs hub"
+[Store]: Store.mkd "the store and shards"
+[Worktree]: Worktree.mkd "worktree state"
+[Projector]: Projector.mkd "read-only views"
+[POST]: POST.mkd "POST verb"
+[PATCH]: PATCH.mkd "PATCH verb"
+[PUT]: PUT.mkd "PUT verb"
+[Bro]: Bro.mkd "the bro dog"
+[Home]: Home.mkd "wiki entry page"

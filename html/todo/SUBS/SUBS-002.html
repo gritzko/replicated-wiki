@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>SUBS-002: PATCH is unusable on any submodule (gitlink-bearing) parent (LANDED)</h1>
+<p>
+*<strong>HIGH — LANDED <code>a31bdfcf</code> (2026-06-06).</strong>*  The sniff gitlink-skip was already
+in place; the live bug was that <code>BE_PLAN_PATCH</code> registered <code>BEActSubsPatch</code> with
+<code>exclude_mask = URI_AUTHORITY</code>, and <code>BEExecute</code> computes the slot mask <strong>before</strong>
+<code>BEActResolveRemote</code> rewrites a transport URI to a local <code>?&lt;sha&gt;</code> — so the
+<code>be patch ssh://host?adv</code> form (a gitlink bump) never recursed into the sub.
+Fix <code>beagle/DISPATCH.c</code> (mask→0; the action's own guards gate it) plus
+suppressing the spurious <code>bad ref ''</code> print on the empty parent-probe query in
+<code>sniff/PATCH.c</code>.  Added <code>test/patch/28</code> (repro) + <code>test/patch/29</code> (control).
+(Committed with <code>--force</code>: <code>sniff/PATCH.c</code> POSTCFLCT false-positive — the marker
+strings are in comments documenting the conflict-marker grammar, no real conflict.)
+</p>
+<p>
+*<strong>HIGH — verb effectively dead for submodule users.</strong>*  <code>be patch ?&lt;branch&gt;</code>
+aborts with <code>PATCHCFLCT</code> (exit 157) on ANY parent whose tree contains a
+<code>160000</code> gitlink, *<strong>even when the gitlink is unchanged by the patch</strong>*.  sniff
+PATCH chokes on the gitlink entry (<code>sniff: patch: bad ref ''</code>,
+<code>patch\tfailed\tvendor/sub</code>).  Because <code>BE_PLAN_PATCH</code> runs <code>BEActSniffPatch</code>
+<strong>before</strong> <code>BEActSubsPatch</code>, and <code>BEExecute</code> returns on the first non-NONE error,
+<code>BEActSubsPatch</code> never executes — the gitlink-diff sub re-get recursion
+(<code>beagle/BE.cli.c:1005-1071</code>) is structurally unreachable.  No <code>BE.dbg</code>/
+<code>SUBS.dbg</code> recursion line ever appears; the sub never advances to the new pin.
+</p>
+<h2>Repro</h2>
+<p>
+ 1. <code>be get &lt;parent&gt;?master</code> (gitlink <code>vendor/sub</code> pinned at SUB_C2).
+ 2. Create a parent branch <code>adv</code> whose tree bumps the gitlink to SUB_C3.
+ 3. On master: <code>be patch ?adv</code>.
+ 4. Observe exit 157 / PATCHCFLCT; <code>vendor/sub/core.c</code> stays at the C2 bytes.
+</p>
+<p>
+Scope nuance (verified by <code>test/patch/28</code> vs <code>29</code>): the failure reproduces
+when the absorbed tree *<strong>carries the gitlink as a diff entry</strong>*.  A patch that
+<strong>bumps</strong> the gitlink (patch/28) reliably aborts.  A regular-file-only patch from
+a *<strong>be-internal child branch</strong>* that shares the gitlink (patch/29) succeeds —
+the minimal squash never feeds the gitlink to sniff.  The audit's original
+&quot;even an unchanged gitlink fails&quot; observation used a <strong>fetched</strong> branch whose
+full tree (gitlink included) was re-applied; that construction still trips.
+The core breakage is the gitlink-changed case, which is exactly what submodule
+patch exists to propagate.
+</p>
+<h2>Expected</h2>
+<p>
+Per spec (Submodules.mkd §&quot;TLV report aggregation&quot;): &quot;Patch recursion is
+gitlink-diff driven (reuses GET): a sub whose applied pin differs from base is
+re-got and relayed.&quot;  An unchanged gitlink must be a no-op; a changed gitlink
+must trigger a sub re-get to the new pin; exit 0 when clean.
+</p>
+<h2>Actual</h2>
+<p>
+sniff PATCH treats the <code>160000</code> entry as a ref to resolve and fails
+<code>bad ref ''</code>, turning every submodule-parent patch into a hard PATCHCFLCT.
+<code>--nosub</code> changes nothing (it only guards the already-unreached
+<code>BEActSubsPatch</code>).  Path-scoped patch (<code>be patch vendor/sub/core.c?adv</code>) is the
+one shape that works (exit 0) because no gitlink is fed to the resolver.
+</p>
+<h2>Root cause / fix sketch</h2>
+<p>
+Two coupled defects: (1) sniff PATCH must SKIP <code>160000</code> gitlink entries instead
+of resolving them as refs (the gitlink delta is the sub's concern, handled by
+<code>BEActSubsPatch</code>'s gitlink-diff re-get, not by the parent's WEAVE merge).
+(2) Ordering/aggregation: <code>BEActSubsPatch</code> should run for the gitlink even when
+the parent's regular-file absorb reports a per-file failure — or sniff should
+emit a benign gitlink status so <code>BEExecute</code> does not abort.  Fix (1) first; it
+likely also un-blocks (2).  See <code>beagle/DISPATCH.c</code> <code>BE_PLAN_PATCH</code> /
+<code>BEExecute</code> loop and <code>sniff</code> PATCH entry handling.
+</p>
+<h2>Tests</h2>
+<p>
+<code>test/patch/28-sub-gitlink-bump-reget</code> — changed pin must re-get the sub;
+<code>WILL_FAIL</code> until fixed.  <code>test/patch/29-sub-unchanged-gitlink-ok</code> is a
+*<strong>passing</strong>* positive control (be-internal regular-file patch over a shared
+gitlink works).  Also blocks <code>test/all/01-subs-all-verbs</code>.
+</p>
+</body>
+</html>

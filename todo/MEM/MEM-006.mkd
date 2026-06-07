@@ -1,0 +1,20 @@
+#   MEM-006: BROSearchNext uses packed offset as byte index → OOB read (bro/BRO.c)
+
+`BROSearchNext` reads `range32.hi` raw as a byte offset, but for non-title rows `hi` is `bro_line_make(off,pass) = (pass<<24)|(off&0xFFFFFF)`; every other reader decodes it via `bro_line_off()`. When a normal-pass row is adjacent (same `lo`) to an RM/IN-pass row in a diff hunk, the packed `nhi` (~`0x1000000+small`) passes the `nhi>off` test and indexes `hk->text[0][nhi-1]` ~16 MB past a few-KB hunk text. The goal is to decode offsets consistently and gate on render pass.
+
+##  Issues
+Packed offset/pass field used as a raw index.
+
+ -  `bro/BRO.c:1924-1940` — `off = ln->hi` (:1924) and `nhi = bro_lines(st)[i+1].hi` (:1930) skip `bro_line_off()`; `hk->text[0][nhi-1]` (:1934) over-reads when `nhi` carries pass bit 24/25.
+ -  Trigger: `be diff:`/`log:`/blame view producing IN/RM-pass rows, set a search (`/`), press `n`/`N` so a normal-pass row precedes an in/rm-pass row of the same hunk.
+
+##  Blockers
+None.
+
+##  Planned
+Decode like the rest of the file; require matching pass.
+
+ -  Repro first: open a diff view with adjacent normal+in/rm rows, run a search step; confirm OOB read under ASan.
+ -  Use `u32 off = bro_line_off(ln);` (:1924) and `u32 nhi = bro_line_off(&bro_lines(st)[i+1]);` (:1930); only treat `nhi` as a continuation when `bro_line_pass` matches.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

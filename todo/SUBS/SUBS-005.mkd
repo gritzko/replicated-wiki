@@ -1,0 +1,44 @@
+#   SUBS-005: path-scoped DELETE of a submodule (or sub-interior file) false-positives DELDIRTY
+
+**MEDIUM.**  There is no working way to remove a submodule, or a file inside
+one, via `be delete <path>`.  Both `be delete vendor/sub` (the gitlink dir) and
+`be delete vendor/sub/core.c` (a file inside the mount) abort with `DELDIRTY`
+(exit 157), leaving the path on disk and nothing staged.
+
+##  Repro
+ -  `be get <parent>?master`; `be delete vendor/sub/core.c`
+    → `delete: vendor/sub/core.c has unstamped changes` / DELDIRTY / 157.
+ -  `be delete vendor/sub`
+    → `delete: vendor/sub has unstamped changes` / DELDIRTY / 157.
+
+##  Root cause
+DELETE's dirty check refuses when a path's mtime is out of the parent
+stamp-set AND its content differs from the parent baseline sha.  For a
+sub-interior file the parent tree has no baseline entry (it holds only
+`160000 commit <sha> sub`), and for the gitlink dir the on-disk form (a
+directory with a `.be` mount) does not hash to the `160000` pin — so the dirty
+predicate false-positives in both cases.
+
+##  Expected
+Path-scoped delete is documented as non-recursing, but it must still have a
+defined, working behavior for the gitlink case:
+ -  `be delete vendor/sub` should remove the submodule — unmount the `.be`
+    anchor, remove the worktree files, and stage the gitlink + `.gitmodules`
+    removal (git `git rm` of a submodule parity) — or refuse with a clear,
+    sub-aware message, not a spurious DELDIRTY.
+ -  `be delete vendor/sub/core.c` should either recurse into the sub to delete
+    that file, or skip cleanly with a sub-aware message — never DELDIRTY on a
+    byte-clean sub file.
+
+##  Fix sketch
+Teach DELETE's dirty check to recognise gitlink paths: a `160000` tree entry's
+on-disk mount is not "dirty parent content".  For the whole-sub case, route to
+a submodule-removal path (unmount + stage gitlink/`.gitmodules` delete).
+Relates to SUBS-008 (unmount leaves orphaned files).
+
+##  Tests
+`test/delete/08-sub-path-scoped-deldirty` (`WILL_FAIL` until fixed);
+`test/delete/07-sub-delete-all-missing` (passing control — bare delete-all
+recurses correctly).
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

@@ -1,0 +1,52 @@
+#   Issues: the parallel agent fix-and-land loop
+
+Issues are cleared by a fleet of background agents — one per ticket, each in its own isolated clone. The loop is: agree the fix, fork an agent, it repros-first and implements, then STOPS for a human to gate the commit; on approval it updates, re-tests, and fast-forward-posts. The method keeps many fixes in flight at once while every landed commit stays reviewed, tested, and ff-only.
+
+##  One ticket per issue
+Every discrepancy is a numbered ticket e.g. `todo/TOPIC/TOPIC-001.mkd`, and the fix approach is agreed before any agent is forked.
+
+ -  Tickets are [Plan]-shaped pages (Issues, Blockers, Planned, Landed); `DIS-NNN` for gaps, `GET-`/`POST-NNN` for verb-specific.
+ -  Decide the fix first (the Planned section, or a design pass for open-ended ones), then fork — never on a vague idea.
+ -  A discrepancy found mid-fix becomes its OWN ticket, never a silent patch (this session spawned POST-001/002, GET-002).
+
+##  One agent per ticket, in an isolated clone
+Each agent clones the source into its own scratch tree WITH BEAGLE, builds a debug tree there, and never touches another agent's files.
+
+ -  `mkdir $HOME/todo/<TICKET>`, `be get --nosub ssh://<src>`, debug build per `CLAUDE.md`, work only in that clone.
+ -  Drive `be` with the known-good binary on `PATH`, not the clone's freshly-built one, for the clone/commit/post steps.
+ -  Independent tickets run as concurrent background agents; disjoint files mean no collision while implementing.
+
+##  Implement, stop, report — the human gates the commit
+An agent repros the bug, fixes it, gets the suite green, then STOPS without committing and reports for a decision.
+
+ -  Repro-first (`CLAUDE.md` §17): write a failing test, confirm it fails, then fix; the repro and full `ctest` must end green.
+ -  The agent pauses at the commit boundary and reports root cause, fix (file:line), and test result; it does not post on its own.
+ -  The human says "commit" (land it) or "iterate" (another pass); a real design fork makes the agent stop and ask, never guess.
+
+##  Commit and ff-post, serialized
+On approval the agent updates onto current trunk, re-tests, commits, and fast-forward-posts — one post at a time.
+
+ -  `be get --nosub` to update first, re-run the suite, then `be post`; the push is ff-only and NEVER forced.
+ -  Post one ticket at a time: two concurrent posts race the same base and the loser is non-FF — re-land it, don't force.
+ -  Git-scheme (`ssh:`) remotes pass `--nosub` (submodules are manual there); messages may be multi-line once the parser allows.
+
+##  Reconcile against landed work
+Because tickets land while others are in flight, each post rebases onto the current tip and merges any file two tickets both touched.
+
+ -  The update is usually a clean fast-forward; an overlapping file gets a 3-way merge keeping every landed change plus the new one.
+ -  The green suite on the merged tree is the gate; a red result or an ambiguous merge stops the agent to report, never force.
+ -  Keep each changeset minimal and file-disjoint where possible so reconciles stay clean.
+
+##  Keep the board current
+`todo/README.mkd` lists all the active topics and what's going on there; `todo/TOPIC/README.mkd` lists active tickets (all bulletpoint 2 lines per entry). A fully-landed ticket gets removed from README.mkd, a closed topic from `todo/README.mkd`.
+
+##  Hazards seen this session
+A handful of traps recurred; each cost a stop-and-report, and each has a standing workaround.
+
+ -  Clone shape varies — a plain git checkout has no beagle baseline to `be post` from; land such work onto a fresh beagle clone.
+ -  A stray `/tmp/.be` poisons store discovery; tests use the shared hermetic repo-setup lib, never a bare `.be`.
+ -  `POSTCFLCT` false-fires on a `//` comment quoting a marker string; verify no real markers, then `--force` that one scan only.
+ -  Never bypass the URI parser with hand-rolled string handling — fix the grammar; manual parsing is forbidden (`CLAUDE.md`).
+
+[Plan]: ../wiki/Plan.mkd "the live planning page"
+[WikiWeb]: ../wiki/WikiWeb.mkd "one concept per page"

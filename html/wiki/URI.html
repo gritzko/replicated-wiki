@@ -4,30 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>URI</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>URI: scheme://authority/path?ref#fragment</h1>
 <p>
-Every <code>be</code> argument is one URI — <code>[scheme:][//authority][path][?ref][#fragment]</code> — and each component reflects one aspect of the command. The verb picks the direction; the URI picks the resource. Changing the URI's shape changes the command's semantics: the same <a href="PATCH.html">PATCH</a> becomes a merge, a rebase, or a cherry-pick depending on which slots are filled.
+Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the revision controlled resources (surprise!). URIs address any repos, files, branches, revisions, blobs and any views/projections the system can produce. URI format is <code>[scheme:][//authority][path][?ref][#fragment]</code> and each component reflects one orthogonal aspect:
 </p>
 <ul>
-<li><code>scheme:</code> is the transport (<code>ssh:</code>/<code>https:</code>/<code>file:</code>) or a read-only projector (<code>sha1:</code>/<code>diff:</code>/…); none acts locally.</li>
-<li><code>//authority</code> is a remote label; bare <code>//host</code> reads the cache (no wire, reflog grep), a transport scheme opens the wire.</li>
-<li><code>path</code> is a file or dir in the branch's tree; with <code>file:</code> it is a filesystem path to another store/wt on this host.</li>
-<li><code>?ref</code> is a branch, tag, sha, or commit-message search; the ref shape alone decides which (see Refs).</li>
-<li><code>#fragment</code> is free-form payload: a commit-message body, an object hash, a line jump, or an extension filter (<code>#.c.h</code>).</li>
+<li><code>scheme:</code> is the transport (<code>ssh:</code>/<code>https:</code>/<code>file:</code>) or a <a href="Projector.html">Projector</a> view (<code>sha1:</code>/<code>diff:</code>/…);</li>
+<li><code>//authority</code> is a host, implies a remote repo, e.g. https://github.com;</li>
+<li><code>/path</code> is the file path (normally: within a project, legacy: repo path on a host); </li>
+<li><code>?ref</code> is a revision specifier: project, branch, tag, or a detached commit sha hash;</li>
+<li><code>#fragment</code> is free-form verb payload: a commit message, a line jump, an extension filter, etc.</li>
 </ul>
 <h2>Shape changes semantics</h2>
 <p>
-Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation — most visibly for <a href="PATCH.html">PATCH</a>, where the <code>?</code>/<code>#</code> shape alone selects the merge mode.
+Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for <a href="PATCH.html">PATCH</a> where the <code>?</code>/<code>#</code> shape alone selects the merge mode.
 </p>
 <ul>
 <li><code>be patch ?feat</code> squashes, <code>?feat#msg</code> merges, <code>?feat#</code> rebases one, <code>#sha</code> cherry-picks — one <a href="PATCH.html">PATCH</a> verb, varied shape.</li>
@@ -35,7 +28,39 @@ Each populated URI slot adds its effect orthogonally, and the slot combination d
 <li><code>diff:</code> vs <code>diff:?br</code> vs <code>diff:?a#b</code> change the diff from/to sides — projector slots compose like verb slots.</li>
 <li>An empty <code>?</code> slot in a URI means the project trunk; no <code>?</code> slot at all means cur (see Refs rule 0).</li>
 </ul>
-<h2>Argument classification</h2>
+<h2>Relative URIs</h2>
+<p>
+URIs as typed by the user can be context-dependent — relative or implied paths, tags, branches. For internal use and storage fully-resolved URIs are safer, so URIs get <strong>resolved</strong> at the entry point, to prevent any later ambiguity.
+</p>
+<h3>Path shapes: legacy, repo-relative, recursive, cwd-relative</h3>
+<p>
+URI paths specify paths in the tree objects that lead to the tree/blob/submodule of interest. In some cases (legacy/ssh:/file:), a path may also specify the file system path <strong>to</strong> the repo. (Beagle per se prefers one repo per host.) So, the cases are:
+</p>
+<ul>
+<li>legacy paths, e.g. <code>ssh://git@github.com:gritzko/beagle.git</code></li>
+<li>repo relative paths, e.g. <code>dog/DOG.h</code></li>
+<li>recursive paths that cross into submodules, e.g. <code>abc/ZINT.h</code></li>
+<li>relative paths, e.g. <code>../README.md</code></li>
+</ul>
+<h3>Ref shapes: resolved, absolute, project- &amp; branch-relative</h3>
+<p>
+Beagle branches are tree-structured, the trunk is named as the project e.g. <code>?/beagle/submods</code>. Cases are:
+</p>
+<ul>
+<li><code>?</code> project-relative (the trunk),</li>
+<li><code>?/project</code> absolute, some project's trunk,</li>
+<li><code>?branch</code> project-relative, a top level branch (not the trunk),</li>
+<li><code>?/project/branch/</code> absolute, a top level branch,</li>
+<li><code>?..</code> branch-relative, the parent branch,</li>
+<li><code>?./fix</code> branch-relative, a tag or a child branch,</li>
+<li><code>?/project/branch/fix</code> absolute,</li>
+<li><code>?7d37f90f</code> project-relative, detached commit hashlet,</li>
+<li><code>?7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> project-relative, detached, commit hash,</li>
+<li><code>?/project/7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> absolute, detached, commit hash.</li>
+<li><code>?/project#7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> absolute, project trunk, pinned hash.</li>
+<li><code>?/project/branch#7d37f90f85dfd6ec218c7cf635c9bf5fd744b8ee</code> absolute, branch, pinned.</li>
+</ul>
+<h2><code>be</code> CLI argument classification</h2>
 <p>
 Every non-flag argv token becomes one URI via <code>DOGNormalizeArg</code>; the token's markers decide the slot, so the common case needs no punctuation.
 </p>

@@ -1,0 +1,20 @@
+#   MEM-020: BROExec leaks mmap'd file (and keeper) on arena overflow (bro/BRO.exe.c)
+
+In `BROExec`'s per-URI loop a file is `FILEMapRO`'d but only registered for cleanup (`BRODefer` → `b->maps`) several lines later; between the two, `call(u8bHost, b->arena, …)` can return `BNOROOM` when the 128MB arena fills, and the `call` returns from `BROExec` before the mapping is recorded — so `BROClose` (which iterates only `b->maps`) never unmaps it, and any open keeper teardown after the loop is skipped too. In an in-process `be` host this accumulates. The goal is to register the mapping before any returning call.
+
+##  Issues
+Mapping unregistered across a fallible `call()`.
+
+ -  `bro/BRO.exe.c:171-189` — `FILEMapRO` at :172, `BRODefer(mapped)` at :188; `call(u8bHost,…)` at :182 can return between them, leaking the mmap (and skipping `KEEPClose()`/`BROArenaCleanup()` at :192-193).
+ -  Note: even when `BRODefer` is reached it silently drops the mapping if `b->maps` is full (`BRO.c:130`) while a live hunk still aliases it — also a leak.
+
+##  Blockers
+None. Reached when the 128MB arena fills before all URIs are staged.
+
+##  Planned
+Acquire-then-register; teardown on every exit.
+
+ -  Repro first: stage enough/large files to exhaust `b->arena` at the URI copy; assert the mapped file is unmapped (fd/map count stable).
+ -  Move `BRODefer(mapped)` to immediately after `FILEMapRO`, or make :182 a non-returning `try`/checked form that `FILEUnMap(mapped); continue;` on `BNOROOM`; run keeper teardown in a single exit block.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

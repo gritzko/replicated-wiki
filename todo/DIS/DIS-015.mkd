@@ -1,0 +1,23 @@
+#   DIS-015: Keeper/PackLog/Indices specs describe an abandoned branch-dir DAG
+
+[Keeper], [PackLog], and [Indices] still describe the per-branch-dir delta-dependency DAG model (REF_DELTA walks up the dir chain, "drop-a-dir replaces GC", per-dir refs/packs, walk-up-on-miss), but the code migrated to a single flat object pool per project — [Store] and `STORE.md` already say so. The three audited specs are now authoritatively wrong on their most prominent structural claims. Separately, one PackLog invariant ("a pack's first object is a commit") is documented but not enforced. The goal is reconciling the three specs to the flat-store reality and pinning the order invariant. See [Store], [Keeper], [PackLog], [Indices].
+
+##  Issues
+Stale architecture in three specs plus one unenforced invariant.
+
+ -  Flat store, no dir walk-up: `keeper/KEEP.c:309` ("Flat store … the old trunk→leaf branch-dir walk … removed"), `KEEPLookup` (`KEEP.c:649-667`) scans all runs in one pool with no parent-dir retry; `KEEPBranchDrop` (`KEEP.c:601-613`) is a REFS tombstone, not a dir delete; `KEEPMoveCommits` (`KEEP.c:619`) is a no-op. Contradicts [Keeper]:3,8,50-54, [PackLog]:29-51, [Indices]:9,27,42.
+ -  "First object MUST be a commit" not enforced: `KEEP.c:1444` checks only non-decreasing type with `last_type` zero-init (`KEEP.c:1342`), so a pack may legally start with a tree/blob/tag — any prefix-scan consumer assuming offset-0 is a commit ([PackLog]:26) can misread.
+
+##  Blockers
+None. The spec reconciliation is a doc pass (gradual, per the StrictMark wiki reorg); the order-invariant fix is a small code change.
+
+##  Planned
+Reconcile the three specs to flat-store, then pin the order invariant.
+
+ -  Rewrite the branch-dir DAG / drop-a-dir / walk-up sections of [Keeper], [PackLog], [Indices] to the flat single-pool model already in [Store] and `STORE.md` (keep the kv64/bookmark/strict-order/compaction details, which are accurate).
+ -  Enforce first-object-is-commit in `KEEPPackFeed` strict-order (or downgrade the [PackLog]:26 claim to "non-decreasing type"), with a test.
+
+[Store]: ../wiki/Store.mkd "the store layout"
+[Keeper]: ../wiki/Keeper.mkd "the keeper dog"
+[PackLog]: ../wiki/PackLog.mkd "the pack log format"
+[Indices]: ../wiki/Indices.mkd "the sorted-run indexes"

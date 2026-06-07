@@ -1,0 +1,22 @@
+#   DIS-008: GET `#~N` commit-ancestor rewind unimplemented
+
+[GET] documents `be get '#~1'` as "rewinds cur's ref by one commit and resets the wt, staying attached to cur", but no `~N` ancestor operator exists in fragment handling — the `~1` is resolved as an ordinary ref/hex and fails. The goal is the documented relative-ancestor rewind. See [GET], [URI].
+
+##  Issues
+The `~N` relative-ancestor fragment is never parsed.
+
+ -  `dog/DOG.c` `DOGCanonURI` (~`:327`) only strips a leading `?` from the fragment; it does not recognise `~N`.
+ -  `keeper/RESOLVE.c` resolves a fragment only as 40-hex / hashlet / ref, never as a relative walk back N first-parents.
+ -  `sniff/GET.c` has no tilde handling, so `be get '#~1'` attempts to resolve `~1` literally and refuses as a missing ref.
+
+##  Blockers
+None; needs a first-parent walk-back-N from cur's tip exposed where GET resolves the fragment.
+
+##  Planned
+Add the `~N` ancestor operator on the GET fragment path.
+
+ -  Parse `#~N` (default N=1) in the GET fragment resolver; walk cur's first-parent chain back N commits to the target sha, then reset the wt and rewind cur's ref (staying attached).
+ -  Add table cases: `#~1` after one commit lands on the parent; `#~N` past the root refuses cleanly.
+
+[GET]: ../wiki/GET.mkd "GET verb"
+[URI]: ../wiki/URI.mkd "URI structure"

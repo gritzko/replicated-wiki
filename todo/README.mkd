@@ -1,0 +1,17 @@
+#   Active ticket board
+
+Index of Beagle's open work: one topic per dir, each holding numbered [Plan]-shaped tickets cleared by the parallel [Issues] fix-and-land loop. Each line below names a topic and its live state; per-topic detail lives in `todo/<TOPIC>/README.mkd`. A fully-landed ticket drops from its topic page; a closed topic drops from here.
+
+##  Active topics
+
+ -  [URI] — one keeper rule for branch/commit naming; URI-001 St.1-3 landed (branch-first, length-agnostic, scope-only canonical), St.4-5 pending.
+ -  DIS — cross-cutting spec/impl discrepancies; DIS-025/002 fixed, DIS-001/024 (store layout) + others open.
+ -  MEM — memory-safety audit, 36 findings mostly planned; digest in `MEM/MEM.mkd`.
+ -  SUBS — submodule recursion; SUBS-001..012 landed, SUBS-013/015 open; digest in `SUBS/SUBS.mkd`.
+ -  POST — commit-path gaps; POST-002/003/004 planned.
+ -  GET — checkout gaps; GET-001 done, GET-002 (detached secondary wt) planned.
+ -  BLAME — blame perf on inflate-bound walks; BLAME-004 fixed, BLAME-001/002/003 planned.
+
+[Plan]: ../wiki/Plan.mkd "the live planning page"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"
+[URI]: URI/README.mkd "branch/commit naming tickets"

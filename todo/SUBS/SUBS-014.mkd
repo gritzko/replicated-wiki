@@ -1,0 +1,29 @@
+#   SUBS-014: misleading "does not exist — skipped" for a plain untracked dir
+
+**LOW (UX — found mid-fix in [SUBS-009]).**  `be put <dir>` where `<dir>` is a
+plain on-disk **untracked directory** named *without* a trailing slash returns
+`put: <dir> does not exist — skipped` / PUTNONE — misleading, because the dir is
+right there.  The cause is the same `SNIFFClassify` file-iteration gap SUBS-009
+fixed for the sub-add case: a bare dir arg is never matched (only `<dir>/`
+dir-form is).  This is **not** sub-specific — it fires for any ordinary
+untracked dir.
+
+##  Repro
+ 1. `mkdir newdir && touch newdir/a.c` (untracked).
+ 2. `be put newdir` → `does not exist — skipped` / PUTNONE.
+ 3. `be put newdir/` (trailing slash) → stages the subtree correctly.
+
+##  Expected
+Either stage the dir (treat a bare untracked dir like `<dir>/`), or refuse with
+a "did you mean `newdir/`?" hint — never the false "does not exist".
+
+##  Fix sketch
+In `sniff/PUT.c` `PUTStage`, where SUBS-009 added the sub-add candidate branch,
+add a sibling branch for a plain untracked dir that emits the
+trailing-slash hint instead of the generic skip.  Decide stage-vs-hint.
+
+##  Tests
+A `test/put` case once the behavior (auto-stage vs hint) is decided.
+
+[SUBS-009]: SUBS-009.mkd
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

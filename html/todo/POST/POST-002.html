@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>POST-002: <code>be post '#msg'</code> misparses a dotted multi-line message as a path</h1>
+<p>
+<code>be post</code> should treat a <code>#fragment</code> argument as the commit message, never a path — but the path-form detector misclassifies the arg as a path-form URI when the message is BOTH multi-line AND contains a dot, so the commit is misrouted (or fails) and only the legacy <code>-m</code> flag works. The goal is for any <code>#</code>-fragment message to commit verbatim regardless of dots or newlines. See <a href="../wiki/POST.html">POST</a>, <a href="../wiki/URI.html">URI</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The URILexer carves a spurious <code>path</code> slice out of a dotted multi-line fragment, which the path-form check then trusts.
+</p>
+<ul>
+<li>Not a pre-parse heuristic: <code>be_post_is_path_form</code> (<code>BE.cli.c:1466</code>) returns YES on a non-empty <code>u-&gt;path</code> — a PARSE output (the raw-byte <code>.</code>/<code>/</code> scan only runs when path is empty). <code>BEActPathFormCheck</code>'s pure-fragment skip (<code>:1487</code>) is correct but never reached because the parse already wrote <code>path</code>.</li>
+<li>Root cause is the grammar: <code>Fragment = ( pchar | &quot;/&quot; | &quot;?&quot; )*</code> (<code>abc/URI.c.rl</code>) EXCLUDES <code>\n</code> (not a <code>pchar</code>), so a multi-line message's fragment match STOPS at the first newline and the leftover line (which has a <code>.</code>) is parsed as a path → <code>u-&gt;path</code> non-empty. The message body is free-form and may hold newlines, so the fragment is too narrow — it does not &quot;let <code>\n</code> through&quot;, it cuts the message at it.</li>
+<li>Single-line dotted messages and dot-free multi-line messages parse correctly; the bug needs both a newline and a <code>.</code> in the body.</li>
+<li>The standard <code>Co-Authored-By: &lt;name&gt; &lt;a@b.c&gt;</code> trailer (dots in the version and the email) triggers it on essentially every real commit — every post this session had to fall back to the legacy <code>-m &lt;msg&gt;</code> flag, which bypasses fragment URI-parsing.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Let the <code>#</code>-fragment (message) absorb newlines to end-of-input, so a multi-line message is wholly the fragment and never leaks into <code>path</code>.
+</p>
+<ul>
+<li>Fix the URI lexer (<code>abc/URI.c.rl</code>, regenerate the ragel): a <code>#</code> fragment is opaque free-form to EOF — extend <code>Fragment</code> to accept <code>\n</code> (and the rest); OR route a <code>#</code>-led arg entirely to the fragment in <code>DOGNormalizeArg</code> without re-lexing the tail as a path. (Once <code>path</code> is empty for a <code>#msg</code>, <code>BEActPathFormCheck</code>'s :1487 skip handles it — keep that as belt-and-suspenders.)</li>
+<li>Repro (rule 17): <code>be post</code> with a multi-line message containing a dot (e.g. the <code>Co-Authored-By: X &lt;a@b.c&gt;</code> trailer) commits the body verbatim, not misrouted to path-form; <code>-m</code> still works.</li>
+</ul>
+</body>
+</html>

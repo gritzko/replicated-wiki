@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-027</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-027: patch_walk unbounded BASS carving exhausts the arena (sniff/PATCH.c)</h1>
+<p>
+Recursive <code>patch_walk</code> <code>a_carve</code>s ~29MB per directory level (3×4MB trees + 16MB blob + entry arrays) and recurses into every subdir with no depth bound; the plain recursive call keeps each parent's carve live for the whole subtree, so a tree ~34 levels deep overflows the 1GB ABC_BASS. The leaf loop also issues <code>(void)fetch_blob</code> / <code>(void)GRAFMerge3Bytes</code> / <code>(void)GRAFMergeWtFileTunable</code> as plain calls, so any callee BASS scratch is never rewound per iteration and accumulates with file count. <code>a_carve</code> returns BNOROOM (graceful, no OOB), so this is resource exhaustion that fails deep/large trees unpredictably. The goal is to bound depth and reclaim per-leaf scratch.
+</p>
+<h2>Issues</h2>
+<p>
+Per-level carve held across recursion; per-leaf scratch never rewound.
+</p>
+<ul>
+<li><code>sniff/PATCH.c:507</code> <code>patch_walk_inner</code> recurses into <code>patch_walk</code> via a plain call with no depth guard; ~29MB/level stays live for the whole subtree.</li>
+<li><code>sniff/PATCH.c:798-814</code> each frame <code>a_carve</code>s 3×4MB trees + 16MB blob + 3× entry arrays; ~34 nested levels overflow 1GB ABC_BASS (BNOROOM).</li>
+<li><code>sniff/PATCH.c:553,629,636,670,695,765</code> leaf <code>(void)fetch_blob</code>/<code>GRAFMerge*</code> are plain calls; callee scratch not rewound per iteration, scales with file count.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Bound depth; rewind per leaf.
+</p>
+<ul>
+<li>Repro FIRST (CLAUDE.md §17): drive <code>PATCHApply</code> against a deeply nested tree (and a wide many-file tree); assert no BNOROOM at sane depth.</li>
+<li>Add an explicit recursion-depth bound to <code>patch_walk</code> and surface a clear error past it.</li>
+<li>Wrap the per-leaf <code>fetch_blob</code>/<code>GRAFMerge*</code> in <code>call()</code>/<code>try()</code> or bracket the leaf-loop body with a BASS mark/rewind so each iteration's scratch is reclaimed.</li>
+</ul>
+</body>
+</html>

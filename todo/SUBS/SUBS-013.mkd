@@ -1,0 +1,41 @@
+#   SUBS-013: full `git submodule add` parity from `be put`
+
+**LOW (feature gap — design needed).**  Escalated from [SUBS-009].  There is no
+single-command flow that introduces a brand-new submodule the way
+`git submodule add <url> <path>` does: stage a new `160000` gitlink for the
+mounted sub **and** synthesize the `.gitmodules` section, so a subsequent POST
+records the new sub.  SUBS-009 landed only the actionable refusal; the add
+itself is blocked on two design decisions.
+
+##  Open decisions (must be agreed before forking)
+ -  **URL source for `.gitmodules` `url =`.**  A mounted-but-untracked sub's
+    row-0 `.be` anchor is `file:/…/.be//?/<title>#<sha>` — a *local shard
+    pointer*, not a portable upstream.  Candidates:
+      1. require the user to have written the `.gitmodules` `url =` first (the
+         current working flow; `be put` only stages the gitlink);
+      2. recover the upstream from the sub-shard's reflog (the URL it was
+         fetched from), falling back to the declared `.gitmodules`;
+      3. a new explicit arg carrying the URL.
+ -  **Pin source / grammar.**  `be put <subpath>` has no pin slot, and
+    `be put <subpath>#<sha>` is already the move-form (`PUTDSTBAD`).  Either a
+    new grammar (e.g. a dedicated sub-add verb-shape) or "pin = the sub-wt's
+    current tip read from its `.be` anchor" (parity with the existing
+    gitlink-bump path).
+
+##  Existing partial flow (works today)
+User writes the `.gitmodules` section, runs `sniff sub-mount ./<sub>#<pin>`,
+then `be put <sub>` stages the gitlink; POST records gitlink + `.gitmodules`
+(covered by `test/post/15-sub-add-then-post`).  SUBS-013 is about collapsing
+that into a single `git submodule add`-style command.
+
+##  Fix sketch
+Once URL + pin sources are chosen: detect a mounted-but-untracked sub dir under
+an explicit `be put <path>`, read the pin, synth the `.gitmodules` section via
+`SUBSu8bSynth`, and stage both the `160000` gitlink and the `.gitmodules` blob.
+
+##  Tests
+`test/put/11-sub-add-refusal` (landed with SUBS-009) pins the current refusal;
+the auto-add case follows once the grammar is decided.
+
+[SUBS-009]: SUBS-009.mkd
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

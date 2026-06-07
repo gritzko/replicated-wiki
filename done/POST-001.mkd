@@ -1,0 +1,32 @@
+#   POST-001: get/post recurse into submodules even on git (ssh:) remotes
+
+Submodule recursion (GET descending into mounts, POST committing subs bottom-up) should be the DEFAULT only for **beagle remotes** (`be:` scheme), where a sub is fetched by [Title] from that same remote (see [Submodules], [Title] §"Submodule retrieval"). For **git remotes** (`ssh:`/`https:`) beagle has no title machinery on the far side, so submodules are handled manually — recursion should be OFF by default there (i.e. `--nosub` is the implicit default). The current binary recurses regardless of scheme, so `be get ssh://host/repo` reaches for the declared `.gitmodules` URL and fails when it is unreachable. The goal is scheme-driven recursion defaults. See [GET], [POST], [Submodules], [Title].
+
+##  Issues
+Two layers: a concrete blocking bug (`--nosub` ignored by POST), and the broader scheme-gated default.
+
+ -  **BLOCKER — `be post --nosub` does not honor `--nosub`.** `BEActSubsPost` (`beagle/BE.cli.c:1970`) has NO `--nosub` guard, unlike `BEActSubsGet` (`:782`), `BEActSubsPatch` (`:913`), and `BEActSubsRelay` for put/delete (`:2224`), which all early-`done` on `CLIHas(c,"--nosub")`. So every `be post` recurses into mounts regardless of the flag. Offline (git-scheme parent) the abc child reaches the dead `.gitmodules` URL; with a multi-line commit message the child misparses it as a path-form URI → `BEDOGEXIT` → "aborting parent commit"; it also leaves a stray `put <sub>` gitlink-bump row staged in the parent. This blocks posting EVERY ticket through the commit path (GET-001 hit it; DIS-009 only slipped through on a clean-abc no-op).
+
+Recursion default is also unconditional, not scheme-gated.
+
+ -  `be get ssh://localhost/src/dogs` (git scheme) tries to mount the `abc` sub via the declared `.gitmodules` URL `https://github.com/gritzko/libabc.git` → `ssh github.com` → offline `WIRECLFL`/`BEDOGEXIT`, even though the sibling `libabc` exists at the pinned commit under the parent source (`ssh://localhost/src/libabc`).
+ -  Per [Title], a *beagle*-sourced parent fetches the sub by title from that same remote (declared URL is only the fallback); a *git* (`ssh:`) parent has no such remote-side title resolution, so its subs are a manual step.
+ -  `--nosub` already suppresses recursion for one invocation and is the correct manual workaround today — but the SCHEME should pick the default: a `be:` parent recurses ALL submodule-descending verbs (get, head, post, patch, and bare put/delete); a git (`ssh:`/`https:`) parent recurses none of them.
+ -  This contradicts [Submodules] as written: §CLI ("Recursion is the default — every verb descends into mounted subs") and the opener ("descend into subs by default") state recursion unconditionally; §"Store layout" only covers the beagle-sourced fetch-by-title (declared URL as fallback). The doc must gain the scheme distinction: recurse by default only for `be:` parents; git (`ssh:`/`https:`) parents do not recurse (manual subs), so they never reach the declared-URL fallback offline.
+
+##  Blockers
+None; needs the recursion dispatch to branch on the parent source's scheme.
+
+##  Planned
+First fix the `--nosub` blocker, then the scheme-gated default.
+
+ -  IMMEDIATE (unblocker): add `if (CLIHas(c, "--nosub")) done;` to the top of `BEActSubsPost` (`beagle/BE.cli.c:1971`, after `sane(c)`), mirroring the other three recursion sites. One line; lets every `be post --nosub` skip sub recursion.
+
+ -  In the recursion dispatch shared by all submodule-descending verbs (get, head, post, patch, bare put/delete), recurse by default only when the parent source is a `be:` (beagle) remote; for `ssh:`/`https:` (git) default to no-recurse (manual subs) across every one of those verbs.
+ -  Keep `--nosub` as the explicit opt-out; add an explicit opt-in (`--sub`?) if a user wants to drive sub recursion against a git remote.
+ -  Add table cases: `be get ssh://…/parent` with a sub does NOT attempt the sub fetch (no offline failure); `be get be://…/parent` DOES recurse and resolves the sub by title.
+
+[GET]: ../wiki/GET.mkd "GET verb"
+[POST]: ../wiki/POST.mkd "POST verb"
+[Submodules]: ../wiki/Submodules.mkd "nested projects"
+[Title]: ../wiki/Title.mkd "project title"

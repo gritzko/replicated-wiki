@@ -1,0 +1,24 @@
+#   MEM-029: LESSDefer leaks mmap+tokens when map table full (spot/LESS.c)
+
+`LESSDefer` is documented to take single-owner ownership of the per-file mmap (`mapped`) and token buffer (`toks`) so `LESSArenaCleanup` can unmap them. When `less_nmaps >= LESS_MAX_MAPS` (1024) it returns early WITHOUT storing the descriptors and WITHOUT unmapping them; the dropped pointers are never recorded in `less_maps[]`/`less_toks[]`, so cleanup cannot reclaim them either. All three callers invoke the void-returning `LESSDefer` in their `mapped != NULL` branch and do nothing else, assuming transfer. `less_nmaps` grows monotonically within a scan. The goal is to unmap on the full path so a scan matching >1024 files stops leaking one whole-file mmap plus a ~4×filesize token buffer per file.
+
+##  Issues
+Ownership "transfer" silently drops resources once the table is full.
+
+ -  `spot/LESS.c:46-51` `LESSDefer` returns early on `less_nmaps>=LESS_MAX_MAPS` without unmapping `mapped`/`toks`.
+ -  `spot/LESS.c:34-41` `LESSArenaCleanup` iterates only `[0,less_nmaps)`; dropped descriptors are never stored so cleanup cannot reclaim them.
+ -  `spot/GREP.c:147-148` `capo_grep_file_cb` calls `LESSDefer` in the `mapped!=NULL` branch and nothing else, assuming transfer.
+ -  `spot/GREP.c:391-392` `capo_pcre_file_cb` and `spot/CAPO.c:849-850` `capo_spot_file_cb` — same drop on the full path.
+ -  `less_nmaps` reset only at `LESSArenaInit`/`LESSArenaCleanup`; no mid-scan drain, so it grows to the 1024 cap.
+
+##  Blockers
+None.
+
+##  Planned
+Never silently drop owned resources.
+
+ -  Repro FIRST: drive a scan matching >`LESS_MAX_MAPS` files (or lower the cap); assert no mmap/token leak past file 1025.
+ -  Fix `LESS.c:47`: on the full path `FILEUnMap(mapped); if (toks[0]) u32bUnMap(toks);` then return.
+ -  Verify under a leak build; consider raising `LESS_MAX_MAPS` or returning a status so callers can free if mid-scan accumulation past 1024 is expected.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

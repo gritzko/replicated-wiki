@@ -1,5 +1,0 @@
-source "https://rubygems.org"
-
-gem "jekyll", "~> 4.3"
-gem "jekyll-readme-index"
-gem "jekyll-theme-primer"

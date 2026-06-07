@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-015</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-015: PACKCreate/PACKOpen leak PAGE + index mmap on open failure (abc/PACK.c)</h1>
+<p>
+<code>PACKCreate</code> acquires resources mid-function — <code>PAGECreate</code> maps a PAGE, then <code>mmap</code> maps the index, then <code>open</code> opens the file; if <code>open</code> fails, <code>test(p-&gt;fd&gt;=0, PACKFAIL)</code> returns immediately (PRO.h <code>test</code>/<code>fail</code> do no cleanup) with <code>p-&gt;writing</code> still 0, leaving the PAGE and the <code>idxsize</code> index mapping allocated. A caller that treats a failed Create as &quot;nothing to clean up&quot; leaks both. <code>PACKOpen</code> has the same shape (fd + idx mmap). The goal is to release on the failure path or contract callers to <code>PACKClose</code> a failed handle.
+</p>
+<h2>Issues</h2>
+<p>
+Resources taken below the failing check are never released.
+</p>
+<ul>
+<li><code>abc/PACK.c:9-42</code> <code>PACKCreate</code> — <code>open</code> fail at :34 returns with PAGE (<code>:21</code>) and index mmap (<code>:25</code>) leaked; <code>p-&gt;writing</code> set only at :39.</li>
+<li>Same range — <code>PACKOpen</code> leaves fd + idx mmap open when a later <code>test</code> fails.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Currently only safe if callers always <code>PACKClose</code> a failed handle (undocumented).
+</p>
+<h2>Planned</h2>
+<p>
+Cleanup on failure, mirrored in both entry points.
+</p>
+<ul>
+<li>Repro first: <code>PACKCreate</code> with an unwritable path after PAGE+idx map succeed; assert no mmap/PAGE leak under ASan, without a caller <code>PACKClose</code>.</li>
+<li>Use explicit cleanup (<code>PAGEClose(p-&gt;pg)</code> + <code>munmap(idx)</code>) on the <code>open</code>-failure path, or document+guarantee callers must <code>PACKClose</code>; apply the same to <code>PACKOpen</code>.</li>
+</ul>
+</body>
+</html>

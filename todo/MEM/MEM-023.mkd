@@ -1,0 +1,22 @@
+#   MEM-023: tree-walk recursion holds a 1MB buffer per level (keeper/KEEP.c, keeper/WALK.c)
+
+Two tree walkers recurse per nesting level while each frame holds a live ~1MB buffer with no depth cap: `keep_walk_tree` maps `u8bMap(tbuf, 1<<20)` per level and recurses before unmapping; `walk_tree_dive` carves `a_carve(u8, tbuf, 1<<20)` and recurses bare so each BASS carve survives across the child fetch. A pathologically deep directory chain (a legal git tree shape) drives recursion to the SHA cap (~65536) for `keep_walk_tree` → C-stack overflow, or exhausts the per-thread BASS arena for `walk_tree_dive` (graceful WALKNOROOM). The goal is to bound depth and stop stacking one big buffer per level.
+
+##  Issues
+Per-level recursion with a 1MB buffer live across the recursive call; no depth cap.
+
+ -  `keeper/KEEP.c:2632` `keep_walk_tree` recurses with `tbuf` (1MB, mapped :2606) still mapped until :2638; only `*n>=cap` (cap=65536) bounds SHAs, not depth → ~65536 frames → stack overflow.
+ -  `keeper/WALK.c:96` `walk_tree_dive` bare recursive call (deliberately not in `call()`), so each `a_carve(u8,tbuf,1<<20)` (:45) stacks on BASS with no rewind; deep tree → arena exhaustion (WALKNOROOM).
+ -  No recursion-depth cap or visited-SHA set in either walker (unlike `UNPK_MAX_CHAIN`); content-addressing precludes true cycles but deep nesting is constructible.
+
+##  Blockers
+None.
+
+##  Planned
+Cap depth; keep only O(1) buffers live.
+
+ -  Repro first: construct a deeply nested single-entry tree chain and walk it via `KEEPPush`/`keep_walk_commit` and `WALKTree`; assert a bounded failure, not SIGSEGV/exhaustion.
+ -  Add an explicit max-depth parameter (mirroring `UNPK_MAX_CHAIN`) to both walkers, returning KEEPFAIL/WALKBADFMT when exceeded.
+ -  Convert to an iterative work-stack (reuse the `out` array as the queue) or pass one shared buffer down and unmap/rewind before recursing.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

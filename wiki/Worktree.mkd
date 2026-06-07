@@ -1,0 +1,47 @@
+#   Worktree: a checked-out tree with its state in one wtlog
+
+A worktree is a checked-out tree on disk, with its per-call state in one append-only `<wt>/.be/wtlog`. The goal is cheap, disposable worktrees over one hard-to-break [Store] — a machine needs only one store per upstream repo, and every extra worktree is just a dir pointing back. The method: row 0 anchors the store, later `get`/`post` rows track the branch and tip, [Sniff] stamps each file it touches with the row's timestamp, and [POST] reads those stamps back to classify files at commit time.
+
+##  The wtlog and the anchor
+
+Per-wt state — base branch, base tip, and pending [PATCH] parents — lives in `<wt>/.be/wtlog`; the current branch is the latest `get`/`post` row's `?branch`, never a fixed field, so switching just appends a row.
+
+ -  Colocated: `<wt>/.be/` is the store dir itself, beside the wt files; wtlog row 0's `repo` is `file:<wt>/.be/<project>`.
+ -  Secondary: `<wt>/.be` is a FILE whose first row `repo`-points at the primary store; [Sniff] follows it and shares the pool.
+ -  One branch has at most one active worktree, tracked in the branch reflog; extra worktrees are dirs whose wtlog points back.
+
+##  The --at coordinate
+
+Every `be` invocation relays exactly one coordinate to each sub-dog on argv — `--at <branch-uri>#<sha>` — and the worker derives everything else itself, so the dogs share no out-of-band state.
+
+ -  `<branch-uri>` is cur's branch [URI] (the intent); `<sha>` is cur's tip at resolve time, pinned against a concurrent post.
+ -  The format is `<root>?/<project>/<branch>#<sha>`; the resolved tip lives only here and in `refs`, never in an argv query.
+ -  Everything else the worker derives: it walks cwd up to the nearest `.be/` and reads wtlog row 0 for the base branch.
+
+##  File classification by stamps
+
+Every sniff row stamps each file it touched with the row's `ts` via `utimensat`; at commit time [POST] reads each file's mtime, finds the owning row, and decides KEEP vs REWRITE in selective or implicit (commit-all) mode.
+
+ -  KEEP (baseline): mtime older than the last `get`, or owned by a `get`/`post` row — baseline content, in both modes.
+ -  REWRITE: owned by a `patch` row (merged bytes) or a `put` row (current bytes) — new content, in both modes.
+ -  Off the stamp-set, tracked: ignored in selective mode unless an explicit `put` named it; REWRITE in implicit (git `commit -a`).
+ -  Off the stamp-set, untracked: always ignored — a new file never commits without an explicit `be put <path>` first.
+ -  Selective vs implicit: selective = at least one explicit [PUT]/[DELETE] since the last post; implicit (commit-all) = none.
+
+##  Eager branching replaces stash
+
+Branches are mkdir-cheap, so the idiom is to fork preventively: mint a sub-branch before anything speculative, experiment freely, then bring the result home as one squash — there is never a reason to stash.
+
+ -  Fork first: `be put ?./feat/exp && be get ?./feat/exp` before risky work; a dead end drops with `be delete -r ?./feat/exp`.
+ -  Stash is a code smell: speculative work belongs on a sub-branch, so staging and `git stash` are both unnecessary (see [Store]).
+ -  Bring it home: `be patch ?./feat/exp` weaves the whole chain into the parent's wt, then `be post '#feat'` makes one commit.
+
+[Store]: Store.mkd "the store and shards"
+[Sniff]: Sniff.mkd "the sniff dog"
+[POST]: POST.mkd "POST verb"
+[PATCH]: PATCH.mkd "PATCH verb"
+[PUT]: PUT.mkd "PUT verb"
+[DELETE]: DELETE.mkd "DELETE verb"
+[GET]: GET.mkd "GET verb"
+[URI]: URI.mkd "URI structure"
+[Home]: Home.mkd "wiki entry page"

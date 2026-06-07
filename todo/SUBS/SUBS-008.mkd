@@ -1,0 +1,45 @@
+#   SUBS-008: GET unmount of a removed sub orphans the sub's worktree files (LANDED)
+
+**LOW — LANDED `50722656` (2026-06-06).**  `BEGetSubUnmount` (`beagle/SUBS.c`)
+only unlinked `<wt>/<subpath>/.be` (the logical unmount), leaving the sub's
+checked-out files (`core.c`, `helper.c`, `..be.idx`) orphaned under the parent
+wt.  Fix: after unlinking the anchor, best-effort `FILErmrf` the whole mount dir
+— the sub's objects live in the parent's store shard, so the on-disk checkout is
+pure clutter once the gitlink is gone (git `submodule deinit` + tree-switch
+parity).  This is the shared GET/PATCH unmount path, so both verbs get the
+cleanup.  Added `be-get-sub-unmount-clean` repro.
+
+**LOW.**  When `be get ?<branch>` switches to a target tree where a gitlink has
+been removed (the sub and its `.gitmodules` entry are gone), GET correctly
+unmounts the sub — removes `vendor/sub/.be` and prunes — but leaves the sub's
+worktree files (`core.c`, `helper.c`) and internal metadata (`..be.idx`)
+orphaned on disk.
+
+##  Repro
+ 1. `be get <parent>?master` (mounts `vendor/sub`).
+ 2. Switch to a branch `norm` whose tree drops the `vendor/sub` gitlink and the
+    `.gitmodules` entry: `be get ?norm`.
+ 3. stderr: `be: get vendor/sub: unmounted` + `sniff: pruned 1 file(s)`, exit 0.
+ 4. But `vendor/sub/` still lists `core.c`, `helper.c`, `..be.idx`.
+
+##  Expected
+Removing a gitlink in the target tree should fully clean up the mount —
+unmount the anchor AND remove the now-untracked sub worktree files (the sub's
+objects belong to the sub shard, but the checked-out files under the parent wt
+should go), mirroring `git submodule deinit` + tree-switch cleanup.
+
+##  Actual
+Logical unmount only; the sub's checked-out files and `..be.idx` are left
+behind as untracked clutter under the parent wt.
+
+##  Fix sketch
+After unlinking `<sub>/.be`, remove the sub's checked-out worktree files for
+the removed gitlink (respecting `--prune`/`--force` semantics already applied
+to the rest of the tree).  Relates to SUBS-005 (the delete path needs the same
+sub-aware cleanup).
+
+##  Tests
+A `test/get` case can pin this once the cleanup behavior is decided; for now it
+is documented here and observed in the audit's GET tree-reset probes.
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

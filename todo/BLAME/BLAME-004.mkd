@@ -1,0 +1,27 @@
+#   BLAME-004: blame of a large / long-history file returns BNOROOM
+
+`graf blame:keeper/KEEP.c` (a 2973-line file) fails with `BNOROOM` instead of producing output — surfaced while profiling [BLAME-001]. A fixed scratch cap overflows: candidates are `GRAF_FW_BLOB_MAX` (16 MB per blob, graf/BLAME.c:245), the keeper inflate buffers (keeper/KEEP.h:167), or the 16 MB blame `outbuf`/weave accumulation (graf/BLAME.c) once the all-ancestors walk folds a large file across long history. It is a correctness bug (a real file is un-blameable), distinct from the performance gap, though the all-ancestors walk amplifies it. See [Plan].
+
+##  Issues
+A large, long-lived file cannot be blamed at all — a fixed buffer fills before the weave/output completes.
+
+ -  `blame:keeper/KEEP.c` returns `BNOROOM` (observed in release; the trivial schemes and small files succeed).
+ -  Suspect caps: `GRAF_FW_BLOB_MAX` 16 MB (graf/BLAME.c:245), keeper `buf1..4` (keeper/KEEP.h:167), the 16 MB `a_carve` outbuf in `GRAFBlame`.
+ -  The all-ancestors walk ([BLAME-001]) inflates/accumulates far more than necessary, hastening the overflow.
+
+##  Blockers
+None. Needs a repro-first failing test (CLAUDE.md §17) pinning the exact buffer before resizing or switching to a growable/BASS-carved sink.
+
+##  Planned
+Repro, identify the overflowing buffer, then make it grow (or stream) rather than cap.
+
+ -  Step 0: failing test — `graf blame:keeper/KEEP.c` (or a synthetic large/long-history fixture) must finish OK, not `BNOROOM`.
+ -  Step 1: instrument which `*bAcquire`/`a_carve`/keeper buffer returns `BNOROOM`; confirm the trigger (blob size vs accumulated output vs weave).
+ -  Step 2: replace the offending fixed cap with a growable buffer (BASS carve / `u8bAllocate` sized to need), or stream the render instead of one 16 MB `outbuf`.
+ -  Likely shrinks naturally once [BLAME-001] stops folding unchanged versions, but the cap must be removed regardless.
+
+##  Landed
+None yet.
+
+[BLAME-001]: ../todo/BLAME-001.mkd "keeper-side lazy descent + sha-dedup"
+[Plan]: ../wiki/Plan.mkd "the master plan"

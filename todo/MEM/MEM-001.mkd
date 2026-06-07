@@ -1,0 +1,24 @@
+#   MEM-001: BSDPatch untrusted-patch integer overflows (abc/BSD.c)
+
+`BSDPatch` decodes lengths and counts straight from an untrusted BSDIFF01 patch and checks them with additive comparisons that wrap, so a crafted patch defeats every bounds guard and drives an unbounded attacker-controlled `memcpy` into the caller's `neu` buffer (ASan-reproduced) plus wild-pointer OOB reads. The goal is to bound every patch-derived field with subtraction (no wrap) and re-validate source pointers against the patch end before each copy.
+
+##  Issues
+Three signed-overflow holes in one function, all reachable from a single malformed patch.
+
+ -  `abc/BSD.c:446-468` — `newpos + diff_len <= neusize` / `newpos + extra_len <= neusize` wrap negative for `diff_len≈INT64_MAX`; the following `memcpy(nb+newpos, dp, diff_len)` overflows `neu` (ASan abort at :456).
+ -  `abc/BSD.c:407-421` — `ctrl_bytes = ctrl_count*24` overflows i64; `patchlen >= 24+ctrl_bytes` passes, then `cp+ctrl_bytes` and the `ci<ctrl_count` loop read far past `patch[1]`.
+ -  `abc/BSD.c:424-442` — pre-scan `total_diff/total_extra` accumulation overflows, so `patchlen >= 24+ctrl_bytes+total_diff+total_extra` passes and `ep = dp+total_diff` becomes a wild source pointer.
+ -  Pre-scan only checks each field `>=0`; the same wrapping accumulator gives no independent protection.
+
+##  Blockers
+None. `BSDPatch` is exported in `abc/BSD.h`; only in-tree caller today is `abc/test/BSD.c:37`, but the API's whole contract is consuming serialized (untrusted) bytes.
+
+##  Planned
+Make all patch-field arithmetic overflow-safe and add a crafted-patch repro.
+
+ -  Repro first (CLAUDE.md §17): add a 2-triple BSDIFF01 patch (small `diff_len`, then `diff_len≈INT64_MAX`) to the table-driven `abc/test/BSD.c`; confirm ASan abort.
+ -  Bound with subtraction: `test(diff_len>=0 && diff_len<=neusize-newpos, BSDCORRUPT)` (same for `extra_len`), keeping `neusize-newpos` non-negative.
+ -  Reject `ctrl_count > (patchlen-24)/24` before multiplying; accumulate totals in a ceilinged/checked form bounded by `patchlen-24-ctrl_bytes`.
+ -  Re-validate `dp`/`ep` have the bytes remaining before `patch[1]` ahead of every `memcpy`.
+
+[Issues]: ../rule/Issues.mkd "the parallel agent fix-and-land loop"

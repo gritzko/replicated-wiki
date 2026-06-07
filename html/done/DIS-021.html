@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-021</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIS-021: wpush debug spew on by default; pack built on error; have-set unused</h1>
+<p>
+The wire-push path ships loud debug and wastes work. Every <code>wpush:</code> / <code>wpush_dump:</code> line is an unconditional <code>fprintf(stderr,…)</code> (<code>keeper/WIRECLI.c:1072,1108,1139,1597,1650,1699…</code>) — leftover instrumentation that prints all 265 objects on every push. The full pack is built BEFORE the refname/negotiation is validated, so a rejected push still pays the pack cost. <code>have_peer=0</code> is printed while <code>peer_tips=4</code> (a mislabel), and the have-set (&quot;has 2349 objects&quot;) does not prune the commit walk — the full 265-object pack is sent even when the peer already has most of it. Goals: silent by default, no pack on error, incremental packs. See <a href="../wiki/PackLog.html">PackLog</a>, <a href="../wiki/Keeper.html">Keeper</a>.
+</p>
+<h2>Issues</h2>
+<p>
+Three independent defects in <code>keeper/WIRECLI.c</code>, all in the push path.
+</p>
+<ul>
+<li>Debug spew: <code>wpush:</code>/<code>wpush_dump:</code> fprintf unconditional — must be <code>ABC_TRACE</code>-gated.</li>
+<li>Pack-before-validate: <code>wire_push_inner</code> builds the pack, then <code>send_update</code>; a funny-ref/non-FF reject wastes the whole build.</li>
+<li><code>have_peer=0</code> with <code>peer_tips=4</code> (<code>:1597</code>) is self-contradictory; the have-set is built (<code>:1650</code>) but the walk is not pruned by it.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Gate the noise, reorder validation before the pack, and use the have-set.
+</p>
+<ul>
+<li>Wrap every <code>wpush:</code>/<code>wpush_dump:</code> fprintf in <code>ABC_TRACE</code> (or a trace helper) so a normal push is silent.</li>
+<li>Validate the refname + run the FF/peer check up front; build/send the pack ONLY when the update will be accepted (no pack on error).</li>
+<li>Prune the object walk by the have-set so an incremental push sends only objects the peer lacks; fix the <code>have_peer</code>/<code>peer_tips</code> flag.</li>
+<li>Tests: a rejected push builds no pack; an up-to-date incremental push sends a near-empty pack; no <code>wpush</code> output without <code>ABC_TRACE</code>.</li>
+</ul>
+</body>
+</html>

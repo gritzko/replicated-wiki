@@ -1,0 +1,24 @@
+#   DIS-021: wpush debug spew on by default; pack built on error; have-set unused
+
+The wire-push path ships loud debug and wastes work. Every `wpush:` / `wpush_dump:` line is an unconditional `fprintf(stderr,…)` (`keeper/WIRECLI.c:1072,1108,1139,1597,1650,1699…`) — leftover instrumentation that prints all 265 objects on every push. The full pack is built BEFORE the refname/negotiation is validated, so a rejected push still pays the pack cost. `have_peer=0` is printed while `peer_tips=4` (a mislabel), and the have-set ("has 2349 objects") does not prune the commit walk — the full 265-object pack is sent even when the peer already has most of it. Goals: silent by default, no pack on error, incremental packs. See [PackLog], [Keeper].
+
+##  Issues
+Three independent defects in `keeper/WIRECLI.c`, all in the push path.
+
+ -  Debug spew: `wpush:`/`wpush_dump:` fprintf unconditional — must be `ABC_TRACE`-gated.
+ -  Pack-before-validate: `wire_push_inner` builds the pack, then `send_update`; a funny-ref/non-FF reject wastes the whole build.
+ -  `have_peer=0` with `peer_tips=4` (`:1597`) is self-contradictory; the have-set is built (`:1650`) but the walk is not pruned by it.
+
+##  Blockers
+None.
+
+##  Planned
+Gate the noise, reorder validation before the pack, and use the have-set.
+
+ -  Wrap every `wpush:`/`wpush_dump:` fprintf in `ABC_TRACE` (or a trace helper) so a normal push is silent.
+ -  Validate the refname + run the FF/peer check up front; build/send the pack ONLY when the update will be accepted (no pack on error).
+ -  Prune the object walk by the have-set so an incremental push sends only objects the peer lacks; fix the `have_peer`/`peer_tips` flag.
+ -  Tests: a rejected push builds no pack; an up-to-date incremental push sends a near-empty pack; no `wpush` output without `ABC_TRACE`.
+
+[PackLog]: ../wiki/PackLog.mkd "the pack log format"
+[Keeper]: ../wiki/Keeper.mkd "the keeper dog"

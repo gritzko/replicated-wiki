@@ -1,0 +1,18 @@
+#   replicated.wiki
+
+A blog on replicated data, version control, and the [RDX][r] data format.
+The reference pages live in the [wiki][w]; the posts are below.
+
+ -  [23Mar2025 Escher and computer science][e]
+ -  [2Jan2026 Arguments for a syncable data exchange format][a]
+ -  [19Feb2026 Beagle the revision control system][1] (part [I][1], [II][2], [III][3])
+ -  [24May2026 Three years with ABC (Abstractionless C)][c]
+
+[r]: https://github.com/gritzko/c-rdx "RDX data format"
+[w]: wiki/Home.mkd "Beagle wiki"
+[e]: blog/escher.mkd
+[a]: blog/args.mkd
+[1]: blog/partI.mkd
+[2]: blog/partII.mkd
+[3]: blog/partIII.mkd
+[c]: blog/abc.mkd

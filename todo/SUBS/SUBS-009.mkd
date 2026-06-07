@@ -1,0 +1,58 @@
+#   SUBS-009: no `be put` path to add a brand-new submodule gitlink (PARTLY LANDED)
+
+**LOW — PARTLY LANDED `50724d9a` (2026-06-06).**  A design pass found two
+unresolved forks blocking true `git submodule add` parity, so the ticket's
+sanctioned fallback shipped and the full add escalated to [SUBS-013]:
+ -  **URL source unrecoverable** — a mounted-but-untracked sub's row-0 `.be`
+    anchor is `file:/…/.be//?/<title>#<sha>` (a *local shard pointer*, not the
+    portable upstream `.gitmodules` needs); auto-writing it would break a fresh
+    clone elsewhere.
+ -  **Pin grammar taken** — `be put <sub>#<sha>` is the move-form, so a pin slot
+    is a CLI fork.
+
+**Landed:** `sniff/PUT.c` `PUTStage` now detects a sub-add candidate (a dir that
+is not a mount and is either declared in `.gitmodules` via `SNIFFSubsParseFind`
+or holds a child `.be`) and **refuses with an actionable message** naming the
+`sniff sub-mount ./<sub>#<pin>` step, instead of the misleading
+"does not exist — skipped" / PUTNONE.  A trailing-slash arg still falls through
+to dir-form; a plain untracked dir still gets the original message (see
+[SUBS-014]).  Repro `test/put/11-sub-add-refusal` added.  The existing
+declare-`.gitmodules` + `sniff sub-mount` + `be put`-gitlink flow already records
+both the `160000` gitlink and the `.gitmodules` section end-to-end (post/15).
+
+**Remaining (→ [SUBS-013]):** the full auto-add — choose a URL source and a pin
+grammar, then stage gitlink + synth `.gitmodules` from a single `be put`.
+
+**LOW (feature gap).**  A freshly-mounted submodule that is not yet a `160000`
+gitlink in the parent baseline cannot be added through `be put`.  `be put
+vendor/sub2` on such a path returns `put: vendor/sub2 does not exist —
+skipped` / `no eligible paths` (PUTNONE/206); the parent sees the dir as
+unknown and skips it.  There is no `git submodule add` parity.
+
+##  Repro
+ 1. `be get <parent>?master`.
+ 2. Mount a fresh sub at `vendor/sub2` (no `.gitmodules` entry, no `160000`
+    entry in the parent tree).
+ 3. `be put vendor/sub2` → PUTNONE; nothing staged.
+
+##  Expected
+A defined flow to introduce a new submodule: stage a new `160000` gitlink for
+the added sub plus the `.gitmodules` section (git `submodule add` parity), so a
+subsequent POST records the new sub.  Or an explicit, documented refusal naming
+the missing piece — not a bare PUTNONE.
+
+##  Actual
+No way to add a new submodule via PUT; the path is silently skipped as an
+unknown dir.
+
+##  Fix sketch
+Detect a mounted-but-untracked sub dir (a child `.be` anchor with no parent
+gitlink) under an explicit `be put <path>` and stage a new gitlink + a
+`.gitmodules` section (synth via `SUBSu8bSynth`).  Decide the URL source
+(the sub's row-0 anchor / its remote) for the `.gitmodules` `url =`.
+
+##  Tests
+`test/put/10-sub-gitlink-bump` covers the *existing*-gitlink bump (passing);
+sub-add stays a documented gap until the flow is designed.
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

@@ -1,0 +1,69 @@
+#   SUBS-002: PATCH is unusable on any submodule (gitlink-bearing) parent (LANDED)
+
+**HIGH — LANDED `a31bdfcf` (2026-06-06).**  The sniff gitlink-skip was already
+in place; the live bug was that `BE_PLAN_PATCH` registered `BEActSubsPatch` with
+`exclude_mask = URI_AUTHORITY`, and `BEExecute` computes the slot mask *before*
+`BEActResolveRemote` rewrites a transport URI to a local `?<sha>` — so the
+`be patch ssh://host?adv` form (a gitlink bump) never recursed into the sub.
+Fix `beagle/DISPATCH.c` (mask→0; the action's own guards gate it) plus
+suppressing the spurious `bad ref ''` print on the empty parent-probe query in
+`sniff/PATCH.c`.  Added `test/patch/28` (repro) + `test/patch/29` (control).
+(Committed with `--force`: `sniff/PATCH.c` POSTCFLCT false-positive — the marker
+strings are in comments documenting the conflict-marker grammar, no real conflict.)
+
+**HIGH — verb effectively dead for submodule users.**  `be patch ?<branch>`
+aborts with `PATCHCFLCT` (exit 157) on ANY parent whose tree contains a
+`160000` gitlink, **even when the gitlink is unchanged by the patch**.  sniff
+PATCH chokes on the gitlink entry (`sniff: patch: bad ref ''`,
+`patch\tfailed\tvendor/sub`).  Because `BE_PLAN_PATCH` runs `BEActSniffPatch`
+*before* `BEActSubsPatch`, and `BEExecute` returns on the first non-NONE error,
+`BEActSubsPatch` never executes — the gitlink-diff sub re-get recursion
+(`beagle/BE.cli.c:1005-1071`) is structurally unreachable.  No `BE.dbg`/
+`SUBS.dbg` recursion line ever appears; the sub never advances to the new pin.
+
+##  Repro
+ 1. `be get <parent>?master` (gitlink `vendor/sub` pinned at SUB_C2).
+ 2. Create a parent branch `adv` whose tree bumps the gitlink to SUB_C3.
+ 3. On master: `be patch ?adv`.
+ 4. Observe exit 157 / PATCHCFLCT; `vendor/sub/core.c` stays at the C2 bytes.
+
+Scope nuance (verified by `test/patch/28` vs `29`): the failure reproduces
+when the absorbed tree **carries the gitlink as a diff entry**.  A patch that
+*bumps* the gitlink (patch/28) reliably aborts.  A regular-file-only patch from
+a **be-internal child branch** that shares the gitlink (patch/29) succeeds —
+the minimal squash never feeds the gitlink to sniff.  The audit's original
+"even an unchanged gitlink fails" observation used a *fetched* branch whose
+full tree (gitlink included) was re-applied; that construction still trips.
+The core breakage is the gitlink-changed case, which is exactly what submodule
+patch exists to propagate.
+
+##  Expected
+Per spec (Submodules.mkd §"TLV report aggregation"): "Patch recursion is
+gitlink-diff driven (reuses GET): a sub whose applied pin differs from base is
+re-got and relayed."  An unchanged gitlink must be a no-op; a changed gitlink
+must trigger a sub re-get to the new pin; exit 0 when clean.
+
+##  Actual
+sniff PATCH treats the `160000` entry as a ref to resolve and fails
+`bad ref ''`, turning every submodule-parent patch into a hard PATCHCFLCT.
+`--nosub` changes nothing (it only guards the already-unreached
+`BEActSubsPatch`).  Path-scoped patch (`be patch vendor/sub/core.c?adv`) is the
+one shape that works (exit 0) because no gitlink is fed to the resolver.
+
+##  Root cause / fix sketch
+Two coupled defects: (1) sniff PATCH must SKIP `160000` gitlink entries instead
+of resolving them as refs (the gitlink delta is the sub's concern, handled by
+`BEActSubsPatch`'s gitlink-diff re-get, not by the parent's WEAVE merge).
+(2) Ordering/aggregation: `BEActSubsPatch` should run for the gitlink even when
+the parent's regular-file absorb reports a per-file failure — or sniff should
+emit a benign gitlink status so `BEExecute` does not abort.  Fix (1) first; it
+likely also un-blocks (2).  See `beagle/DISPATCH.c` `BE_PLAN_PATCH` /
+`BEExecute` loop and `sniff` PATCH entry handling.
+
+##  Tests
+`test/patch/28-sub-gitlink-bump-reget` — changed pin must re-get the sub;
+`WILL_FAIL` until fixed.  `test/patch/29-sub-unchanged-gitlink-ok` is a
+**passing** positive control (be-internal regular-file patch over a shared
+gitlink works).  Also blocks `test/all/01-subs-all-verbs`.
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"

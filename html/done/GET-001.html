@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>GET-001: weave merge of long-history files exhausts BASS (BNOROOM)</h1>
+<p>
+<a href="../wiki/GET.html">GET</a>'s checkout weave-merges every wt-dirty file the incoming commit also touched; on a large file with long history the merge aborts with BNOROOM, so GET prints <code>merge failed … (graf err)</code> and leaves that file unmerged. The cause is in <a href="../wiki/Graf.html">Graf</a>: the per-file history-replay loop calls <code>WEAVEFromBlob</code> / <code>WEAVEDiff</code> directly with no per-version <a href="../wiki/BASS.html">BASS</a> rewind, so the per-call <code>WEAVE_DECODE</code> scratch — sized off the weave's TLV, which grows each version — accumulates across all versions until the 1 GB arena overflows. The goal is to reclaim that scratch per version. See <a href="../wiki/GET.html">GET</a>, <a href="../wiki/Graf.html">Graf</a>, <a href="../wiki/BASS.html">BASS</a>.
+</p>
+<h2>Issues</h2>
+<p>
+A direct (un-<code>call</code>ed) replay loop accumulates BASS scratch quadratically.
+</p>
+<ul>
+<li><code>sniff/GET.c:687</code> calls <code>GRAFMergeWtFile</code>; on its error (<code>:690</code>) it prints <code>merge failed … (graf err)</code> and keeps the wt file — the user-visible symptom, with the actual code (BNOROOM) swallowed.</li>
+<li><code>graf/GET.c:546-571</code> (<code>build_tip_weave_tunable</code>) replays every version of the path; <code>:560</code> <code>WEAVEFromBlob</code> and <code>:562</code> <code>WEAVEDiff</code> are invoked directly — no <code>call()</code>/<code>try()</code> boundary, so <a href="../wiki/BASS.html">BASS</a> is never rewound between iterations.</li>
+<li><code>graf/WEAVE.c:278-294</code> (<code>WEAVE_DECODE</code>) <code>BACQ</code>-acquires 7 BASS buffers sized off <code>_tl</code>, the weave's TLV byte length; <code>WEAVEDiff</code> (<code>:563</code>) decodes both src and nu, and <code>_tl</code> grows each version as history piles into the accumulator weave.</li>
+<li>Total BASS use ≈ Σ over versions of O(TLV) ≈ O(versions² × tokens); the 1 GB arena (<code>abc/PRO.h:37</code>) overflows and the next <code>a_carve</code> returns BNOROOM — at <code>build_tip_weave_tunable:488</code> or <code>:520</code>, whichever carve tips it over.</li>
+</ul>
+<h2>Repro</h2>
+<p>
+Confirmed against the live store (base <code>10e0bebd</code>, tgt <code>c54a8c72</code>) via a harness calling <code>GRAFMergeWtFile</code> directly.
+</p>
+<ul>
+<li><code>beagle/BE.cli.c</code> (81 KB, 93 versions) and <code>sniff/test/SNIFF.c</code> (35 KB, 45 versions) both fail with BNOROOM; small or short-history files merge fine.</li>
+<li>The existing <code>graf/test/MERGEWT01.c</code> cases use tiny 2-3 line files and pass — the bug needs scale (large file × long history), so current tests miss it.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; the fix is local to <code>build_tip_weave_tunable</code> in <code>graf/GET.c</code>.
+</p>
+<h2>Planned</h2>
+<p>
+Give each replay step a <code>call()</code> boundary so its scratch is reclaimed per version; verified to turn both files' merges from BNOROOM into OK.
+</p>
+<ul>
+<li>Move the <code>WEAVEFromBlob</code> + <code>WEAVEDiff</code> pair into a helper invoked via <code>call()</code>/<code>try()</code>, so <a href="../wiki/BASS.html">BASS</a> rewinds each version — <code>wsrc</code>/<code>wdst</code>/<code>wnu</code> keep their state in their own mmaps and are unaffected.</li>
+<li>Add a MERGEWT01 case with a many-version large file that overflows the unfixed loop, to lock the regression.</li>
+</ul>
+</body>
+</html>

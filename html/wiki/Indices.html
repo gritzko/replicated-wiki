@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Indices</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>Indices: sorted integer LSM runs</h1>
@@ -43,25 +36,25 @@ A write sorts the batch and flushes one run; a read mmaps every run and binary-s
 <ul>
 <li>Append-only like the log: a flush adds a run, never edits one; offsets into a run stay stable for live mmaps.</li>
 <li>Newest wins: runs scan oldest-first, so a later run's entry shadows an earlier one — the LSM update rule.</li>
-<li>Read path: range each run, take the first hit; on a miss keeper walks up the branch-dir chain to the <a href="Store.html">Store</a> root.</li>
+<li>Read path: range every run in the single project pool, newest-wins; a miss is a true miss — there is no branch-dir walk-up.</li>
 </ul>
 <h2>Size-tiered compaction</h2>
 <p>
-Runs accumulate until they break the 1/8 size-tiered invariant; compaction then merges the youngest violators into one run — the LSM analogue of drop-a-dir.
+Runs accumulate until they break the 1/8 size-tiered invariant; compaction then merges the youngest violators into one run — the LSM way to bound run count.
 </p>
 <ul>
 <li>The invariant: each younger run stays under 1/8 of its predecessor; <code>KEEPCompact</code> merges the youngest stack until it holds.</li>
 <li>Heap merge with dedup: a HIT min-heap of run iterators merge-sorts them, so identical rows across runs collapse to one.</li>
 <li>Atomic swap: write the merged <code>.idx</code>, unlink consumed sources, swap the shard's run mmaps — invoked from <code>KEEPClose</code>.</li>
 </ul>
-<h2>Range queries and walk-up</h2>
+<h2>Range queries</h2>
 <p>
-A lookup is a range query, not a point query, since keys pack a sub-field and callers hold a prefix; misses cascade up the branch-dir DAG.
+A lookup is a range query, not a point query, since keys pack a sub-field and callers hold a prefix; the whole project pool is one search space.
 </p>
 <ul>
 <li>Hashlet prefix: keeper zero-pads a hex prefix to 60 bits and ranges <code>[p&lt;&lt;4, p&lt;&lt;4|0xf]</code>, spanning all object types at once.</li>
-<li>Walk-up on miss: range each run in this dir, then retry the parent, up to the store root — mirroring REF_DELTA's dir rule.</li>
-<li>First match wins: the first <code>(dir, file_id, offset)</code> hit feeds the <a href="PackLog.html">PackLog</a> read, which chases the delta chain bottom-up.</li>
+<li>One pool, no walk-up: range every run in the project shard, newest-wins; a miss is final — there is no parent-dir retry.</li>
+<li>First match wins: the first <code>(file_id, offset)</code> hit feeds the <a href="PackLog.html">PackLog</a> read, which chases the delta chain bottom-up.</li>
 </ul>
 </body>
 </html>

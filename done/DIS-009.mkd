@@ -1,0 +1,23 @@
+#   DIS-009: detached checkout does not make POST/PATCH refuse
+
+[GET] promises `be get ?abc1234` is a detached checkout where "[POST] and [PATCH] refuse until you re-attach to a branch", but the detached-wt detector matches the opposite row shape from the one GET actually writes, so neither verb refuses — a user can silently graft commits onto trunk/empty branch from a detached checkout. The goal is to enforce the documented no-commit-while-detached safety invariant. See [GET], [PATCH], [POST].
+
+##  Issues
+GET writes one row shape; the guard checks another; POST has no guard at all.
+
+ -  `sniff/GET.c:1356-1366` — for `be get ?<40hex>` the `$len(source) != 41` guard is false, so the query is dropped and the row is written as `get #<sha>` (empty query, fragment = sha).
+ -  `sniff/PATCH.c:1301-1316` — `is_detached_wt` returns NO when the fragment is non-empty, and only fires for query = 40-hex + empty fragment (`?<sha>`) — the inverse shape. The code comment even (wrongly) asserts "GET only emits the attached form".
+ -  Result: after `be get ?abc1234…`, `is_detached_wt` returns NO, so the `PATCHDET` guards (`PATCH.c:1320`, `:1664`) never fire; `sniff/POST.c` has no detached gate at all — `post_collect_parents` just takes the `#fragment` sha as parent and commits against an empty/trunk branch, silently re-attaching.
+
+##  Blockers
+None; the canonical detached row shape needs to be pinned (`get #<sha>` vs `get ?<sha>`) and the detector aligned to it.
+
+##  Planned
+Make repro first (CLAUDE.md rule 17), then align detector to GET's emitted shape and add a POST gate.
+
+ -  Repro: `be get ?<sha>` then `be post '#x'` and `be patch ?other` — both must refuse, currently both proceed.
+ -  Fix `is_detached_wt` to match the `get #<sha>` (empty-query) shape GET emits; add the same gate to POST's entry.
+
+[GET]: ../wiki/GET.mkd "GET verb"
+[PATCH]: ../wiki/PATCH.mkd "PATCH verb"
+[POST]: ../wiki/POST.mkd "POST verb"
