@@ -1,0 +1,26 @@
+#   DIS-027: a failed git push swallows the peer's error text (opaque WIRECLFL)
+
+When `be post`/`be put` pushes to a git remote and the peer's `git-receive-pack` refuses (dirty `updateInstead` checkout, `denyCurrentBranch`, a pre-receive hook, a funny ref), the human-readable reason lives in the peer's report-status `ng <ref> <reason>` line and/or its side-band-2 / receive-pack stderr — and be drops all of it, surfacing only `fatal: the remote end hung up unexpectedly` + `Error: WIRECLFL` + `BEDOGEXIT`. The cause of a push failure is therefore unknowable from be's output, which turned a one-line "checkout is dirty" into a multi-step trace. The FETCH path already does this right: it negotiates `side-band-64k` and forwards band-2 to stderr live (`keeper/WIRECLI.c:618-624`); the PUSH path does not. The goal: a refused push prints the peer's own reason before it fails. See [POST], [[DIS-026]].
+
+##  Issues
+The push wire reads a status reply but never relays the peer's diagnostics.
+
+ -  The push request advertises only `report-status` (`keeper/WIRECLI.c:1388`), not `side-band-64k`, so receive-pack's `remote: …` text is never multiplexed back.
+ -  The report-status reader (`~1415-1433`, `rfd_live`/"peer closed report side") consumes `unpack`/`ng <ref> <reason>` but does not PRINT the `ng` reason; on an early hangup it just yields `WIRECLFL`.
+ -  Observed: `be post ssh://localhost/src/dogs/abc?main` and `be head …?main` against a non-bare `updateInstead` peer with a dirty worktree → `the remote end hung up unexpectedly` / `WIRECLFL`, with NO indication the receiving checkout was dirty (the actual cause, see [[DIS-026]]).
+ -  Contrast the fetch path (`:618-624`): `side-band-64k` + band-2 → stderr already works; the push path should mirror it.
+
+##  Blockers
+None. Independent of [[DIS-026]] (capability) — this is diagnosability — but both touch the push wire (`keeper/WIRECLI.c`); keep each change minimal and land serialized to ease the reconcile.
+
+##  Planned
+Surface the peer's push diagnostics: relay band-2 and print the report-status `ng` reason before raising `WIRECLFL`.
+
+ -  Repro first ([CLAUDE] §17): a hermetic git peer that REFUSES a push deterministically — a `pre-receive` hook printing a known marker to stderr and exiting 1 (or a non-bare `updateInstead` peer left dirty) — and assert be's output CONTAINS the peer's marker/reason, not just `WIRECLFL`.
+ -  Add `side-band-64k` to the push capability advert (`keeper/WIRECLI.c:1388`) and forward band-2 to stderr on the push path, reusing the fetch path's mechanism (`:618-624`, `KEEPIngestStream`'s band-2→stderr forwarder).
+ -  Parse and print each report-status `ng <ref> <reason>` (and an `unpack <err>`) line to stderr before returning `WIRECLFL`; keep the exit code non-zero.
+ -  On an early peer hangup, still emit whatever bytes arrived on band-2 / the report side so the user sees the partial reason.
+ -  Regression test under `test/` (the same `push/` fixture as [[DIS-026]] if it lands first): refused push → output contains the peer's reason; successful push → unchanged.
+
+[POST]: ../wiki/POST.mkd "POST verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

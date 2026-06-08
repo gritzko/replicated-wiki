@@ -5,12 +5,12 @@ Index of Beagle's open work: one topic per dir, each holding numbered [Plan]-sha
 ##  Active topics
 
  -  [URI] — one keeper rule for branch/commit naming; URI-001 St.1-3 landed (branch-first, length-agnostic, scope-only canonical), St.4-5 pending.
- -  DIS — cross-cutting spec/impl discrepancies; DIS-025/002 fixed, DIS-001/024 (store layout) + others open.
+ -  DIS — cross-cutting spec/impl discrepancies; DIS-025/002 fixed, DIS-001/024 (store layout) open; DIS-026/027/028 landed (`fbfea176`/`262d8922`/`465703db`: push cur→git-remote branch, relay peer push errors, `?main` resolves peer's refs/heads/main).
  -  MEM — memory-safety audit, 36 findings; 12 landed 2026-06-07 (suite green), js 007/032/033 blocked on JSC, mediums/lows pending; digest in `MEM/MEM.mkd`.
  -  SUBS — submodule recursion; SUBS-001..012 landed, SUBS-013/015 open; digest in `SUBS/SUBS.mkd`.
  -  POST — commit-path gaps; POST-002/003/004 planned. POST-005 (selective-recursion BEDOGEXIT) resolved-by-SUBS-001/006; guard test/post/30 pending land.
  -  GET — checkout gaps; GET-001 done, GET-002 (detached secondary wt) planned.
- -  [HEAD] — dry-run preview gaps; HEAD-001 done, HEAD-002 (parent head GRAFNONE on stale .refs.idx, swallowed error) open.
+ -  [HEAD] — dry-run preview gaps; HEAD-001 done, HEAD-002 landed (`90f4a362`: self-hosted trunk resolves via local `?` tip + coherent GRAFNONE error, test head/23).
  -  BLAME — blame perf on inflate-bound walks; BLAME-004 fixed, BLAME-001/002/003 planned.
 
 [Plan]: ../wiki/Plan.mkd "the live planning page"

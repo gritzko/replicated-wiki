@@ -35,7 +35,7 @@ The everyday git commands map onto verb + URI combinations, no extra flags.
  -  `git clone URL` → `be get ssh://URL`; `git fetch` → `be head ssh://origin?*`; `git checkout feat` → `be get ?feat`.
  -  `git checkout -b feat` → `be put ?./feat && be get ?./feat` (mkdir, then cd).
  -  `git add f && commit -m` → `be put ./f && be post '#msg'`; `git commit -am` → `be put . && be post 'msg'`.
- -  `git merge trunk` → `be patch ?trunk '#sync' && be post`; `git cherry-pick <sha>` → `be patch '#<sha>' && be post`.
+ -  `git merge trunk` → `be patch '?trunk#sync' && be post`; `git cherry-pick <sha>` → `be patch '#<sha>' && be post`.
  -  `git push` → `be put ssh://origin`; `git branch -d feat` → `be delete ?feat`; `git status` → bare `be`.
  -  `git stash` → use a sub-branch (eager branching); `git log -n 20 feat` → `be log:?feat#20`.
 

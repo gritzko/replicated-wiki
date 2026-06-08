@@ -1,0 +1,25 @@
+#   DIS-028: `?main` against a git remote fails WIRECLFL — trunk⇔refs/heads/main alias eats the literal branch
+
+be's wire layer aliases be-side trunk (empty branch `""`) to git's default `refs/heads/main` (`keeper/WIRECLI.c:304-324`). The collapse is one-directional-blind: `wcli_wire_to_be` maps a fetched `refs/heads/main` entry to be-side EMPTY (trunk), so when a user asks EXPLICITLY for `?main` (`want_branch = "main"`, non-empty) the peer's `refs/heads/main` is recorded as trunk and never matches the literal want → no ref found → `fatal: the remote end hung up unexpectedly` / `WIRECLFL`. Every other branch name works (`?master`, `?feat/x`); only the literal `main` is unsatisfiable. This is the read-only `WIRECLFL` first seen on `be head ssh://localhost/src/dogs/abc?main` (DIS-026 Issues) and is independent of the DIS-026 push fix. The goal: an explicit `?main` resolves the peer's `refs/heads/main` like any other name, while the bare-trunk (`""`) alias keeps working. See [[DIS-026]], [POST].
+
+##  Issues
+The trunk⇔main alias cannot tell "trunk requested (empty)" from "main requested literally".
+
+ -  `wcli_be_to_wire`/`wcli_wire_to_be` (`keeper/WIRECLI.c:304-324`): `""` ⇔ `refs/heads/main`; the wire→be direction collapses `refs/heads/main` to empty unconditionally (`:468-491`, the "refs/heads/main — be's canonical trunk wire alias" branch).
+ -  Ref-match (`wcli_*` matcher ~`:375-491`): with `want_branch = "main"`, the fetched `refs/heads/main` becomes be-side empty, so it fails to match the non-empty want → fetch finds nothing → WIRECLFL.
+ -  Repro: `be head ssh://peer?master` → OK (ahead/behind); `be head ssh://peer?main` → `the remote end hung up unexpectedly` / `WIRECLFL`, against the SAME peer.
+ -  Read-only path — a `be head` dry-run should never fail to resolve a ref the peer plainly advertises.
+
+##  Blockers
+None. Mostly disjoint from the landed DIS-026 (sniff) / DIS-027 (`keeper/WIRECLI.c` push `wpush_*`); this is the FETCH/ref-mapping region of the same file — keep the change localized.
+
+##  Planned
+Make `?main` resolve the peer's literal `refs/heads/main`; keep the bare-trunk alias intact.
+
+ -  Repro first ([CLAUDE] §17): a hermetic BARE git peer with `refs/heads/main` at a tip (and a `master` at the same tip to show the contrast); assert `be head ssh://peer?main` resolves it (ahead/behind, exit 0) — FAILS with WIRECLFL pre-fix — while `be head ssh://peer?master` already works, and bare-trunk `be get ssh://peer` (no `?ref`) still maps to `refs/heads/main`.
+ -  Trace `keeper/WIRECLI.c` wire↔be mapping (`:304-324`, `:449-491`): the collapse of `refs/heads/main`→empty must fire ONLY when the caller wants trunk (empty `want_branch`), NOT when `want_branch` is the literal `"main"`. Resolve the explicit `main` to be-side `"main"` and match `refs/heads/main` to it.
+ -  Verify no regression to the bare-trunk alias (empty want still picks up `refs/heads/main`) and to push (`wpush_*`, DIS-027) — run the full ssh suite.
+ -  Regression test under `test/` (a `get`/`head` case): `?main` against a peer resolves; bare-trunk still maps to `refs/heads/main`; register + INDEX.md.
+
+[POST]: ../wiki/POST.mkd "POST verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

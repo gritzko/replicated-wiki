@@ -48,7 +48,7 @@ The everyday git commands map onto verb + URI combinations, no extra flags.
 <li><code>git clone URL</code> → <code>be get ssh://URL</code>; <code>git fetch</code> → <code>be head ssh://origin?*</code>; <code>git checkout feat</code> → <code>be get ?feat</code>.</li>
 <li><code>git checkout -b feat</code> → <code>be put ?./feat &amp;&amp; be get ?./feat</code> (mkdir, then cd).</li>
 <li><code>git add f &amp;&amp; commit -m</code> → <code>be put ./f &amp;&amp; be post '#msg'</code>; <code>git commit -am</code> → <code>be put . &amp;&amp; be post 'msg'</code>.</li>
-<li><code>git merge trunk</code> → <code>be patch ?trunk '#sync' &amp;&amp; be post</code>; <code>git cherry-pick &lt;sha&gt;</code> → <code>be patch '#&lt;sha&gt;' &amp;&amp; be post</code>.</li>
+<li><code>git merge trunk</code> → <code>be patch '?trunk#sync' &amp;&amp; be post</code>; <code>git cherry-pick &lt;sha&gt;</code> → <code>be patch '#&lt;sha&gt;' &amp;&amp; be post</code>.</li>
 <li><code>git push</code> → <code>be put ssh://origin</code>; <code>git branch -d feat</code> → <code>be delete ?feat</code>; <code>git status</code> → bare <code>be</code>.</li>
 <li><code>git stash</code> → use a sub-branch (eager branching); <code>git log -n 20 feat</code> → <code>be log:?feat#20</code>.</li>
 </ul>

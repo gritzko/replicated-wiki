@@ -1,8 +1,7 @@
 #   HEAD tickets
 
-`be head` is the read-only dry-run preview (the POST/GET "what would change" verb). Open gaps below; a fully-resolved ticket drops from this list.
+`be head` is the read-only dry-run preview (the POST/GET "what would change" verb). No open tickets — landed ones kept as breadcrumbs below.
 
- -  [HEAD-002] — bare `be head` / `be head .` fails to resolve the parent head (`graf: head: cannot resolve target` / GRAFNONE, exit 206) on a stale `~/.be/.refs.idx`, swallows the error (trailing `Error: NONE`), and reports a hard GRAFFAIL leg as exit 0 when the idx is absent.
-    Fix both facets: resolve a resolvable tip against a lagging idx, and propagate sub-leg failure into the `Error:` line + exit code. Worker in flight.
+ -  [HEAD-002] — **LANDED `90f4a362`.** bare `be head` / `be head .` on a self-hosted trunk with no cached remote-tracking row now resolves the trunk's own `?` tip → "up to date" (0/0/0) instead of `graf: head: cannot resolve target` / GRAFNONE; and the head leg's `NONE` is re-flavoured to `GRAFNONE` so the be-level `Error:` agrees with graf's (exit stays non-zero). Regression: `test/head/23-trunk-no-remote` (+ corrected the stale `Error: NONE` assertion in head/02-msg-search).
 
 [HEAD-002]: HEAD-002.mkd "parent head GRAFNONE on stale .refs.idx"

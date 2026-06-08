@@ -1,0 +1,28 @@
+#   DIS-026: no way to push a sub's commits to a git remote's named branch (`//git-remote?<branch>`)
+
+DIS-019 made a direct `be post ssh://…/<sub>` a clean no-op so the synthetic dot-coordinate `?/<sub>/.<parent>` never reaches a git wire as a funny refname — correct, but it left **no** path to push the sub's actual commits to the git remote's real branch. Per [POST] the slot model says `//remote` FF-pushes cur's tip and `?branch` advances that (remote) label, so `be post ssh://…/<sub>?main` *should* push cur onto the remote's `main`. It doesn't: POST reads `?main` as a required **local** label (`NOBRANCH`), the bare form no-ops on the synthetic cur (DIS-019), and even a read-only `be head …?main` hangs the wire (`WIRECLFL`). The keeper help already flags `put //remote?ref → push to remote (stub)` (`keeper/KEEP.exe.c:46`). Net: a sub's commits (the 10 abc MEM fixes on `?.beagle/`) are stranded — they fast-forward git `main` cleanly and their objects are already in the peer, but be has no command to advance the remote branch. See [POST], [Submodules], [[DIS-019]].
+
+##  Issues
+`?<branch>` against a git remote is misread as a local label requirement, not the remote push target.
+
+ -  `be post ssh://localhost/src/dogs/abc` → `keeper: post: branch ?.beagle/ is a be-only synthetic coordinate; not pushing to git remote` (DIS-019 no-op, exit 0).
+ -  `be post ssh://localhost/src/dogs/abc?main` → `sniff: post: ?main does not exist — be put ?<branch> first` / `NOBRANCH` / `BEDOGEXIT` — `?main` treated as a local branch, not the remote target.
+ -  `be head ssh://localhost/src/dogs/abc?main` (read-only, receiving checkout clean) → `fatal: the remote end hung up unexpectedly` / `WIRECLFL` — a dry-run preview should never reach receive-pack.
+ -  `put //remote?ref` is a documented STUB (`keeper/KEEP.exe.c:46`); the named-remote-branch push is simply unimplemented for both PUT and POST.
+ -  Confirmed safe target: git `main` (`85c94d1`) is an ancestor of cur tip `cb5ea30e` (clean FF), all objects already in the peer; only the ref advance is missing.
+
+##  Blockers
+None. The receiving side's own constraints are orthogonal (a non-bare `updateInstead` checkout refuses a FF while its worktree is dirty — that is the peer's git config, not be's bug; note it in the repro so the fixture uses a bare or clean peer).
+
+##  Planned
+Implement `//git-remote?<branch>`: push cur's tip onto the peer's `refs/heads/<branch>` (FF), with `?<branch>` read as the REMOTE target — never requiring a local label.
+
+ -  Repro first ([CLAUDE] §17): a hermetic git peer (bare, or clean `updateInstead`) whose `main` is an ancestor of a mounted sub's `?.beagle/` tip; `be post ssh://…/<sub>?main` must advance the peer's `main` to cur and exit 0; assert the peer ref moved. Mirror the three failing forms above as negative/positive cases.
+ -  Distinguish the DIS-019 case from this one: a synthetic dot-coordinate is forbidden only as the wire *refname* (DIS-019); when an explicit `?<branch>` names the remote target it IS the refname, so the synthetic cur is a legal *source* — push it.
+ -  Trace where POST turns `?<branch>` for a `//git-remote` into a local-label lookup (sniff post path raising `NOBRANCH` + `keeper/KEEP.exe.c` `cur_branch`/`local_branch` derivation ~226/375, the DIS-019 guard ~849-861, `wcli_be_to_wire`/`GITFeedRef` `keeper/WIRECLI.c:314`); make the remote `?<branch>` the wire refname and FF-check against the peer's advertised tip (`POSTNOFF` if not a descendant).
+ -  Decide PUT vs POST surface: `be put //remote?ref` is the documented (stub) verb for a pure ref advance; `be post //remote?ref` composes commit+push. Implement the shared wire path once; a real design fork (which verb owns it) is a stop-and-ask.
+ -  Regression test under `test/` (post or a new `push/` family); update the keeper help to drop "(stub)".
+
+[POST]: ../wiki/POST.mkd "POST verb"
+[Submodules]: ../wiki/Submodules.mkd "submodules"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

@@ -22,7 +22,7 @@ The common PATCH CLI forms cover squash, rebase-one, merge, cherry-pick, remote 
 
  -  `be patch ?..` squashes the parent's stack into the wt, while `be patch ?./fix` squashes a child branch.
  -  `be patch ?feat/fix#` rebases one commit from `feat/fix` onto cur.
- -  `be patch ?trunk '#sync from trunk'` merges trunk with an explicit message.
+ -  `be patch '?trunk#sync from trunk'` merges trunk with an explicit message — query and message ride in one URI token.
  -  `be patch '#abc1234'` cherry-picks one commit, while `be patch ssh://origin?main` fetches then squashes.
  -  `be patch file.c?feat` applies one file's version from `?feat`, recording no foster row.
  -  `be patch spot:#'Old'->'New'.c` delegates an in-place structural rewrite to spot.
