@@ -1,0 +1,28 @@
+#   HEAD-002: be head fails to resolve parent head (GRAFNONE), swallows the error, contradictory exit
+
+A bare `be head` run in `~/beagle` does not resolve the **parent** project's head: stderr shows `graf: head: cannot resolve target` → `Error: GRAFNONE` for `be: head .`, yet the command still prints the recursed `abc` submodule's head/status and a trailing `Error: NONE`, exiting **206**. The same invocation earlier in the session resolved fine and printed the parent's commit list ("10 ahead, 44 changed") — so it is **state-dependent, not deterministic**: identical command, same cwd, materially different output. The trigger is a **stale global `~/.be/.refs.idx`**: its mtime (06:21) predates project `refs` updated as late as 15:23 (dogs/libabc/abc/gritzko/spot/src-abc/src-dogs/sub/parent), and `be head` neither rebuilds nor self-heals it. This blocks the loop's "post the beagle repo" check because `be head` (the POST dry-run preview, per HEAD.mkd) can no longer be trusted to show the parent's state, and it actively misleads — a failed parent head looks like a clean sub-only report.
+
+##  Issues
+Parent head resolution depends on an unmaintained global refs index and fails silently-ish, with an exit code that disagrees with the printed `Error:` line.
+
+ -  Stale `~/.be/.refs.idx` (06:21) vs project `refs` mutated through 15:23 → `graf: head: cannot resolve target` / `Error: GRAFNONE` for `be: head .` (the parent), exit 206.
+ -  Non-deterministic: the same `be head` earlier resolved the parent (tip `391a0d33` MEM-022, "10 ahead, 0 behind, 44 changed"); later it returns only `--- head:abc ---` + `--- status:abc ---` with "0 ahead, 0 behind, 0 changed".
+ -  Error swallowed / incoherent exit: the recursive walk's sticky-`worst` aggregator (`beagle/BE.cli.c` ~898–967) treats `NONE` as a no-op and prints a trailing `Error: NONE` even though the parent leg returned GRAFNONE; exit is 206.
+ -  Removing the idx flips the failure mode and the exit: `rm ~/.be/.refs.idx; be head .` → `graf: head: --at sha not set` / `Error: GRAFFAIL` / `Error: BEDOGEXIT` but exit **0** — a hard failure reported as success.
+ -  Multi-agent hazard: the fix-and-land loop runs many clones against the shared `~/.be`; refs advance under concurrent agents while the single global `.refs.idx` is not kept in sync, which is the plausible real-world trigger of the staleness.
+
+##  Blockers
+None known. Need an `ABC_TRACE` of the parent `head .` leg (graf target resolution + the `.refs.idx` lookup) to confirm the idx is consulted-but-stale rather than missing, and to see why the `worst` aggregator and the process exit code diverge.
+
+##  Planned
+Make `be head` resolve the parent head reliably against a stale/lagging refs index, and make its error/exit reporting coherent; keep both as regressions.
+
+ -  Repro first (CLAUDE.md §17): in an isolated clone, advance `refs` (or hand-stale the idx so its mtime/content lags `refs`), then `be head` and `be head .`; confirm `GRAFNONE` (exit 206) with idx present and `GRAFFAIL`/`--at sha not set` (exit 0) with idx absent, both against a parent whose tip is actually resolvable. Reproduce in `$HOME/tmp` (ext4), hermetic `.be` — never against the shared `~/.be`.
+ -  Trace the parent leg: graf head/`--at` resolution (`graf/GRAF.exe.c`, `graf/GRAF.h` GRAFNONE/GRAFFAIL) and the `~/.be/.refs.idx` read; find where a stale idx yields "cannot resolve target" instead of a rebuild-from-`refs` fallback.
+ -  Fix resolution: `be head` must rebuild/validate the refs index when it lags `refs` (or fall back to reading `refs` directly) so a resolvable tip is never reported unresolvable. Decide the idx-staleness contract (mtime vs content hash) — a real design fork here is a stop-and-ask.
+ -  Fix reporting: the recursive aggregator (`beagle/BE.cli.c` ~875–967) must propagate a real sub-leg failure into both the trailing `Error:` line and the process exit — no `Error: NONE` over a GRAFNONE leg, and never exit 0 on a GRAFFAIL/BEDOGEXIT leg.
+ -  Regression: table-driven cases for (a) stale-idx parent head resolves correctly, (b) a genuinely-unresolvable leg yields a consistent non-zero exit matching the printed `Error:` code. Add alongside the existing HEAD tests.
+
+[HEAD]: ../../wiki/HEAD.mkd "HEAD verb"
+[POST]: ../../wiki/POST.mkd "POST verb"
+[Issues]: ../../skill/Issues.mkd "the parallel agent fix-and-land loop"

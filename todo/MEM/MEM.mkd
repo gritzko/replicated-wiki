@@ -2,6 +2,8 @@
 
 Digest of the 2026-06-05 whole-codebase memory-safety audit: 11 dogs / ~78k LOC swept by per-shard finders, each finding adversarially verified by two lenses, 67 confirmed defects clustered into 36 tickets (11 high, 23 medium, 2 low). One bullet per ticket below; fix each via the [Issues] loop, repro-first.
 
+**Landed 2026-06-07** (12, full suite 311/311 green): MEM-001 `6897aa67`, MEM-002 `e42bcd6e`, MEM-003 `6bdc4638`, MEM-004 `20febb41`, MEM-005 `c319bdd0`, MEM-006 `a102d9a7`, MEM-008 `955c72cc`, MEM-009 `6f18a3c5`, MEM-011 `2c646a54`, MEM-013 `69ef92ff`, MEM-017 `19959f2a`, MEM-030 `5256ee12`. **Blocked:** MEM-007/032/033 (js) need JavaScriptCore — unbuildable offline on this host (verified static fixes ready, see each ticket). **Pending:** the remaining mediums/lows (010,012,014–016,018–029,031,034–036).
+
 ##  High
 Reachable OOB / overflow / UAF / type-confusion on a plausible path.
 

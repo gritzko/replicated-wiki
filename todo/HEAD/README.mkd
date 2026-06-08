@@ -1,0 +1,8 @@
+#   HEAD tickets
+
+`be head` is the read-only dry-run preview (the POST/GET "what would change" verb). Open gaps below; a fully-resolved ticket drops from this list.
+
+ -  [HEAD-002] — bare `be head` / `be head .` fails to resolve the parent head (`graf: head: cannot resolve target` / GRAFNONE, exit 206) on a stale `~/.be/.refs.idx`, swallows the error (trailing `Error: NONE`), and reports a hard GRAFFAIL leg as exit 0 when the idx is absent.
+    Fix both facets: resolve a resolvable tip against a lagging idx, and propagate sub-leg failure into the `Error:` line + exit code. Worker in flight.
+
+[HEAD-002]: HEAD-002.mkd "parent head GRAFNONE on stale .refs.idx"
