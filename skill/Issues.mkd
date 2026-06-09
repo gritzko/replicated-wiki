@@ -9,10 +9,10 @@ Every discrepancy is a numbered ticket e.g. `todo/TOPIC/TOPIC-001.mkd`, and the 
  -  Decide the fix first (the Planned section, or a design pass for open-ended ones), then fork — never on a vague idea.
  -  A discrepancy found mid-fix becomes its OWN ticket, never a silent patch (this session spawned POST-001/002, GET-002).
 
-##  One agent per ticket, in an isolated clone
-Each agent clones the source into its own scratch tree WITH BEAGLE, builds a debug tree there, and never touches another agent's files.
+##  One agent per ticket, in an isolated tree (worktree or clone)
+Each agent gets its own tree WITH BEAGLE — either a store-backed worktree (cheap, shares the local `.be`) or a full independent clone — builds a debug tree there, and never touches another agent's files.
 
- -  `mkdir $HOME/todo/<TICKET>`, `be get --nosub ssh://<src>`, debug build per `CLAUDE.md`, work only in that clone.
+ -  `mkdir $HOME/todo/<TICKET>`, then either (a) a **store-backed worktree** — `cd $HOME/todo/<TICKET>` and `be get file:///home/gritzko/.be?/beagle` (shares the global store, no full object copy), or (b) a **full clone** — `be get be://localhost?/beagle` (its own store + worktree). Debug build per `CLAUDE.md`; work only in that tree.
  -  Drive `be` with the known-good binary on `PATH`, not the clone's freshly-built one, for the clone/commit/post steps.
  -  Independent tickets run as concurrent background agents; disjoint files mean no collision while implementing.
 

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-013</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>POST-013: pushing a submodule on the synthetic <code>?.beagle/</code> branch to a git remote refuses instead of defaulting to the remote's default branch</h1>
+<p>
+A mounted submodule whose cur is the be-only synthetic coordinate <code>?.beagle/&lt;parent&gt;</code> (the normal state after a parent POST — the <a href="">[submodule synthetic-branch POST</a>]) cannot be pushed to a git remote without naming a branch. <code>be post ssh://localhost/src/dogs/abc</code> (from inside the sub) reports <code>0 change(s)</code> then refuses:
+</p>
+<pre><code>    keeper: post: branch ?.beagle/ is a be-only synthetic coordinate;
+            not pushing to git remote ssh://localhost/src/dogs/abc
+</code></pre>
+<p>
+The user must know to add an explicit <code>?main</code>; only then does it land — <code>be post ssh://localhost/src/dogs/abc?main</code> → <code>keeper: pushed ?main → 5163fa54…</code>. A push to a *<strong>git</strong>* remote should DEFAULT to that remote's default branch (<code>main</code>/<code>master</code> / its <code>HEAD</code>) when the local branch is a be-only synthetic coordinate, rather than refusing. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The synthetic sub-branch has no git counterpart, so a no-branch push to git refuses.
+</p>
+<ul>
+<li><code>be post &lt;git-remote&gt;/abc</code> from a sub on <code>?.beagle/&lt;parent&gt;</code> → <code>branch ?.beagle/ is a be-only synthetic coordinate; not pushing</code> — nothing pushed.</li>
+<li>Explicit <code>?main</code> works (<code>pushed ?main → &lt;sha&gt;</code>) — so the only gap is the DEFAULT target when the local branch is synthetic.</li>
+<li><code>?.beagle/&lt;parent&gt;</code> is the <strong>normal</strong> cur of a posted sub; requiring the user to remember <code>?main</code> for every git push is friction (and easy to miss — it silently does <code>0 change(s)</code>).</li>
+<li>Relates to the trunk⇔<code>refs/heads/main</code> alias work (<a href="">[DIS-025 patch squash fork</a>]/DIS-028).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None blocking; the branch-resolution lives in the keeper push path (synthetic-coordinate guard).
+</p>
+<h2>Planned</h2>
+<p>
+Default a git-remote push to the remote's default branch when cur is a be-only synthetic coordinate.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a sub on <code>?.beagle/&lt;parent&gt;</code>; <code>be post &lt;git-remote&gt;/abc</code> (no <code>?branch</code>) pushes to the remote's default branch (<code>main</code>/<code>master</code>) — fails today (refuses).</li>
+<li>When the local branch is a be-only synthetic coordinate AND the target is a git transport, resolve the push branch to the remote's default (advertised <code>HEAD</code>, else <code>main</code>/<code>master</code>) instead of refusing; keep explicit <code>?branch</code> working and keep refusing for be peers where the synthetic coordinate is meaningful.</li>
+<li>Regression test under <code>test/post</code> (a mounted-sub → git-remote fixture).</li>
+</ul>
+</body>
+</html>

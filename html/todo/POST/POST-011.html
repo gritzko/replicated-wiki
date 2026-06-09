@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-011</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>POST-011: a noop <code>be patch</code> still records a patch row → poisons the next <code>be post</code> (<code>POSTNOMSG</code>); no way to clear staged patch rows</h1>
+<p>
+A <code>be patch</code> that absorbs *<strong>zero changes</strong>* (noop — the source commit's changes are already present, or its objects aren't fully readable) still appends a <code>patch</code> row to <code>.be/wtlog</code>. The rows accumulate, and the next <code>be post</code> then fails: <code>sniff: post: cannot auto-resolve commit msg from 2 patch row(s); supply #msg</code> / <code>POSTNOMSG</code> (and any later <code>be post</code> to a remote dies the same way). There is *<strong>no <code>be patch --abort</code> / unstage</strong>* to clear them — the only recovery is hand-editing <code>.be/wtlog</code> to delete the rows + <code>rm .refs.idx</code>. Hit after two noop <code>be patch #&lt;sha&gt;</code> / <code>?&lt;sha&gt;!</code> attempts (against a sha whose changes were already on the trunk / incompletely fetched) left two dead rows that blocked an unrelated <code>be post ssh://localhost/src/dogs</code>. A noop patch should stage no provenance, and a poisoned wtlog must be recoverable without surgery. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+A patch that does nothing still leaves a staged row, and rows can't be cleared.
+</p>
+<ul>
+<li>noop <code>be patch</code> (<code>applied=0 added=0 take-theirs=0</code>) still records a <code>patch</code> row — e.g. <code>patch #&lt;sha&gt;</code>, <code>patch ?&lt;sha&gt;!</code> — observed at <code>.be/wtlog</code> tail after two noop attempts.</li>
+<li>Two such rows ⇒ <code>be post</code> → <code>nothing to promote</code> + <code>cannot auto-resolve commit msg from 2 patch row(s)</code> / <code>POSTNOMSG</code> (the mixed-shape ambiguity guard, <code>sniff/POST.c</code> <code>POSTPatchDefaults</code>), blocking even an unrelated post.</li>
+<li>No <code>be</code> command unstages/aborts staged patch rows; recovery = hand-edit <code>.be/wtlog</code> (drop the lines) then <code>rm .refs.idx</code> (else stale-idx, <a href="">[DIS-033</a>]).</li>
+<li>Repro: <code>be patch #&lt;sha&gt;</code> where <code>&lt;sha&gt;</code> is already reachable from cur (noop) leaves a <code>patch</code> row; a second noop patch → <code>be post</code> → <code>POSTNOMSG</code>.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. The noop-detection sits in the patch-staging path (<code>sniff/PATCH.c</code> row append); the abort/unstage is a new small verb-flag.
+</p>
+<h2>Planned</h2>
+<p>
+Don't stage a noop, and make staged patches clearable.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): <code>be patch #&lt;already-reachable-sha&gt;</code> asserts NO <code>patch</code> row is appended and <code>be post</code> stays clean; two noop patches don't produce <code>POSTNOMSG</code>.</li>
+<li>Skip the <code>patch</code> row when the absorption is a true noop (zero applied / zero provenance shas).</li>
+<li>Add a clear/abort for staged patch rows (<code>be patch --abort</code>, or <code>be delete</code> of the staged patch set) so a poisoned wtlog recovers without hand-editing.</li>
+</ul>
+</body>
+</html>

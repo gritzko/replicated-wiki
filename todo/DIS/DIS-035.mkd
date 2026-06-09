@@ -1,0 +1,27 @@
+#   DIS-035: `be patch <scheme>://<host>?br` (remote-source fetch-then-merge) fails `WIREFAIL` after the bang-model landing
+
+A `be patch` against a **remote/foreign source** — the fetch-then-merge form `be patch ssh://origin?main` that [PATCH] §"CLI use" documents ("fetches then squashes") — fails after the DIS-030+031 bang-model landed (`bbefb693`). Both `be patch be://localhost?/beagle!` and `be patch file://$HOME/beagle?/beagle!` die `WIREFAIL` / `WIRECLFL` / `BEDOGEXIT`; the source is never fetched. Surfaced trying to merge the current trunk **into** a clone (to land GET-006/GET-004 from their be:// clones without fighting the corrupted `~/.be` copies). This blocks the loop's reconcile-in-clone path. Likely a regression in the bang-model patch shape/URI handling ([[DIS-030 patch squash fork]] / DIS-030+031) or the patch-side wire-fetch path. See [PATCH], [GET], [CLAUDE].
+
+##  Issues
+The host-prefixed `be patch` form no longer fetches its source.
+
+ -  `be patch be://localhost?/beagle!` → `WIREFAIL` / `WIRECLFL` / `BEDOGEXIT` (the `be://` wire is also flaky/overfetches — see [[GET-005]]/GET-007).
+ -  `be patch file://$HOME/beagle?/beagle!` → SAME `WIREFAIL` — a *local* source, so this is not just an ssh hiccup; the patch-fetch path itself is broken.
+ -  Old model supported it: [PATCH] §"CLI use" — `be patch ssh://origin?main` fetches then squashes/merges.
+ -  Bang-model `PATCHShape` (`sniff/PATCH.c:1314-1323`) accepts `?<br>`/`?<br>!`/`#<sha>`; the `<scheme>://<host>` prefix + the fetch handoff may be mis-parsed or dropped, or the patch-side fetch never runs.
+ -  Repro context: pulling the trunk into a clone to MERGE there (the correct integrate-a-diverged-branch operation) is unreachable, so be:// clones can't be reconciled-and-landed this way.
+
+##  Blockers
+Relates to DIS-030+031 (bang model just landed) and the wire-fetch path ([[GET-005]] ingest, GET-007 overfetch). Needs a trace to attribute root cause (shape-parse regression vs wire client).
+
+##  Planned
+Restore remote-source `be patch` fetch-then-merge.
+
+ -  Repro first ([CLAUDE] §17): a hermetic peer (under `$HOME/tmp`, never `~/.be`); `be patch file://<peer>?/proj!` (and `?br`/`?br#`) fetches the source and weaves it — fails today `WIREFAIL`.
+ -  Trace the `WIRECLFL` origin (redirect `ABC_TRACE` to a file, grep — never stdout): does the bang-model shape parse drop/`!`-mangle the host before the fetch, or does the patch-side wire client fail outright?
+ -  Restore the fetch handoff for `<scheme>://<host>?br[!|#]` patch URIs; keep the local `?br`/`#sha` forms working.
+ -  Regression test under `test/patch` (a local-exec `file://` source, hermetic).
+
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[GET]: ../../wiki/GET.mkd "GET verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

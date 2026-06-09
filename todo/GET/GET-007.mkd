@@ -1,0 +1,28 @@
+#   GET-007: `be://` fetch re-ships already-present objects → unbounded shard bloat (498 MB pack vs 36 MB fresh clone)
+
+A clean fresh clone's `.be/` is **36 MB**, yet a re-fetched shard grew to a **498 MB / 290,853-object pack** — the *same* objects at ~14× the bytes. The root cause is NOT a missing client-side negotiation (the client DOES advertise haves from the store) — it is **server-side have-pruning that fails and re-ships the whole log**, which the client then re-appends. The real fix is to make the peer ship only the objects the client lacks; the ingest-side dedup (below) is a held band-aid, not the cure. See [GET], [POST], [CLAUDE].
+
+##  Issues
+Negotiation machinery exists end-to-end, but the server's pruning is an offset-watermark within one pack file and silently degrades to "ship everything".
+
+ -  **Client advertises store refs correctly** (not worktree hashes): `wcli_collect_haves` (`keeper/WIRECLI.c:594`) walks `REFSEach($path(keepdir), …)` — the STORE — collecting both local `?<branch>` and peer-observed `<host>?<branch>` tips; they go out as `have <sha>` lines in `wcli_send_request` (`:652`), called on every fetch path (`WIREFetchAll:965`, multi-want `:827`). So "it only advertises worktree hashes" is NOT the bug — refs come from the store, as they should.
+ -  **Server prunes by an offset watermark within a single pack file** (`keeper/WIRE.c:272-330`): for each have it `wire_locate_sha` → `wire_find_pack`, takes `cand = hpoff + hplen` (the END of the pack containing that have), and the watermark is the max `cand`; it then ships the log segment `[watermark .. end_offset)`.
+ -  **The watermark fails across pack files / on unlocatable haves.** `if (hfid != want_fid) continue` (`WIRE.c:283`) DISCARDS any have not in the want's pack-log file_id; an unlocatable have is also skipped (`:282`). If no have anchors, `have_anchor` stays NO and `watermark = 12` (`:295-298`) → the server ships the WHOLE log from the first object → a full pack the client mostly already has.
+ -  **Offset ≠ reachability.** "Everything appended after the have's pack" is not "objects the client lacks": a later pack that re-appended duplicates (this very bloat) is shipped again; interleaved per-branch packs defeat a single max-watermark. The model is only correct for a clean linear append with no duplicates — a vicious cycle with the re-append bloat.
+ -  Fresh clone `.be` = 36 MB; the polluted shard = 570 MB (one 498 MB / 290,853-object pack) — same objects, ~14× bytes.
+
+##  Blockers
+The keeper pack log is append-only; any ingest-side safety net must stay append-only (decide-before-append, never truncate/`u8bShed` — see the held band-aid). The primary fix is server-side and protocol-level; trace it before coding.
+
+##  Planned
+Make the server ship only objects the client lacks; confirm the watermark failure first.
+
+ -  Repro/trace first ([CLAUDE] §17): a hermetic peer (store under `$HOME/tmp`, never `~/.be`) with a populated shard; clone, then re-fetch and TRACE the server `WIRE.c` path — capture `req->nhaves`, each have's `wire_locate_sha` result, `hfid` vs `want_fid`, and the resulting `watermark`. Confirm whether the anchor fails because haves land in a different file_id, are unlocatable, or the segment still includes duplicates. Pin the EXACT reason before changing code.
+ -  Fix the server-side pruning so the shipped set excludes what the client has: either (a) make the watermark span pack files / multiple anchors instead of `hfid == want_fid` only, or (b) move to a reachability-based exclusion (closure(wants) − closure(haves)) like real upload-pack. The peer must ship ~0 objects when the client's haves already cover the wants.
+ -  Assert: after the fix, a re-fetch of an unchanged repo transfers ~0 objects and the shard does not grow; an incremental fetch transfers only the new commits' objects.
+ -  Held band-aid (ingest dedup, NOT the fix): a prior worker added decide-before-append dedup (`keep_pack_all_present`/`KEEPHas` in `keeper/KEEP.c`) — append-only-preserving, but it only triggers on an all-duplicate full pack (re-fetch of an unchanged repo) and filters on the 60-bit `hashlet` (a prefix match → a 60-bit collision would SILENTLY DROP a genuinely-new object). Keep it on a branch as a possible safety net, but do not rely on it; the negotiation fix makes it largely moot and avoids the silent-drop risk.
+ -  Regression test under `test/get` / `keeper/test`; update `keeper/INDEX.md`.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[POST]: ../../wiki/POST.mkd "POST verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

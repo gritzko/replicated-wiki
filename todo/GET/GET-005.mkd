@@ -1,0 +1,25 @@
+#   GET-005: `SNOROOM` ingesting a large pack over the wire (`KEEPIngestStream`) — beagle clone fails
+
+A `be://` (or `ssh://` git) fetch of a LARGE repo dies with `SNOROOM` in `KEEPIngestStream` (`keeper/KEEP.c:2379`) *after* the wire negotiation succeeds. Found during [[GET-003]] verification: `be get be://localhost?/beagle` and the pathful `be://localhost/beagle?` both negotiate fine, then fail `SNOROOM` on beagle's large pack, while smaller repos clone fully. So it is independent of GET-003 (the empty-path guard) — a pre-existing pack-size / scratch-sizing limit, and it is the real remaining blocker to cloning beagle for the [Issues] fix-and-land loop. The pack log itself is booked at 16 GB (`:2401`/`:2405`), so the `SNOROOM` is almost certainly a **fixed-size scratch downstream** in the ingest→index path that does not scale to beagle's object count — the [[BASS scratch acquisition]] failure mode (size scratch from the input via `a_carve`, never a fixed heap buffer). See [GET], [CLAUDE].
+
+##  Issues
+A large wire fetch overflows a fixed scratch during ingest; the 16 GB pack log is not the limit.
+
+ -  Repro: clone beagle (a large repo) over the wire → `SNOROOM`; smaller repos clone fully. Both pathful (`be://localhost/beagle?`) and pathless (`be://localhost?/beagle`) hit it — NOT a GET-003 regression.
+ -  Entry `KEEPIngestStream` (`keeper/KEEP.c:2379`): the log is `FILEBook`ed at `16ULL<<30` and grown with `FILEBookEnsure` (`:2401`/`:2405`/`:2435`), so the overflow is elsewhere — a per-object or index/ROCK-build scratch, or downstream `UNPK`.
+ -  Not get-specific: any large wire fetch (get / patch-fetch, possibly head) routes through `KEEPIngestStream` (`keeper/WIRECLI.c:862`/`:973`).
+ -  `SNOROOM = 0x1c5d86d8616` (`abc/01.h:124`) — a slice/buffer "no room"; needs a trace to pin the exact site.
+
+##  Blockers
+None known. Needs an `ABC_TRACE` run to pinpoint the overflowing scratch before sizing it.
+
+##  Planned
+Find the fixed scratch that overflows on a large pack and size it from the input.
+
+ -  Repro first ([CLAUDE] §17): a hermetic large-enough fixture (or beagle itself via a local keeper peer; scratch under `$HOME/tmp`, NEVER `~/.be`) that triggers `SNOROOM` in `KEEPIngestStream` — assert it currently fails.
+ -  Trace (`ABC_TRACE=ON`, redirect to a file then grep — never stdout) to locate the exact `SNOROOM` site in the ingest→index path (index/ROCK build, per-object buffer, or `UNPK`).
+ -  Resize the offending scratch from the input with `a_carve`/BASS instead of a fixed buffer; re-verify the large clone completes end-to-end.
+ -  Regression: a `build-load` (`WITH_LOAD`) clone-a-large-fixture test so the limit can't silently return; update `keeper/INDEX.md`.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>GET tickets: checkout / fetch / view / search</h1>
+<p>
+<code>be get</code> fetches, checks out, and indexes a version/branch/project (with <code>be head</code> as its dry-run). Tickets below close gaps in <code>be://</code> store resolution and wire-fetch sizing/dedup. Each entry is one active ticket with its live state; an entry drops off once the whole ticket lands (landed commits stay on the board's GET line). The fix-and-land method is <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="GET-004.html">GET-004</a> — full <code>be://</code> path→store resolution: <code>user@</code> selects the peer home, an empty path = <code>&lt;home&gt;/.be</code>, a <code>*.be</code> path is the store itself, any other path gets <code>/.be</code> appended (dir-or-file). Two of the four cases are unverified; builds on the landed empty-path base case.</li>
+<li><a href="GET-009.html">GET-009</a> — efficient beagle↔beagle (<code>be://</code>) sync umbrella: replace <code>WIRE.c</code>'s byte-offset watermark with object-level reachability serving (<code>closure(wants) − closure(haves)</code>), cross-<code>file_id</code> serving, and a redundant-pack GC/compaction for already-bloated shards. St.1 (<a href="">[GET-007</a>] latest-copy) landed; St.2-4 open.</li>
+</ul>
+</body>
+</html>

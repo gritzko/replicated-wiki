@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>URI</title>
-<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
 </head>
 <body>
 <h1>URI: scheme://authority/path?ref#fragment</h1>
@@ -12,7 +19,7 @@
 Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the revision controlled resources (surprise!). URIs address any repos, files, branches, revisions, blobs and any views/projections the system can produce. URI format is <code>[scheme:][//authority][path][?ref][#fragment]</code> and each component reflects one orthogonal aspect:
 </p>
 <ul>
-<li><code>scheme:</code> is the transport (<code>ssh:</code>/<code>https:</code>/<code>file:</code>) or a <a href="Projector.html">Projector</a> view (<code>sha1:</code>/<code>diff:</code>/…);</li>
+<li><code>scheme:</code> is the transport (<code>ssh:</code>/<code>https:</code>/<code>be:</code>/<code>file:</code>) or a <a href="Projector.html">Projector</a> view (<code>sha1:</code>/<code>diff:</code>/…);</li>
 <li><code>//authority</code> is a host, implies a remote repo, e.g. https://github.com;</li>
 <li><code>/path</code> is the file path (normally: within a project, legacy: repo path on a host); </li>
 <li><code>?ref</code> is a revision specifier: project, branch, tag, or a detached commit sha hash;</li>
@@ -20,11 +27,12 @@ Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the
 </ul>
 <h2>Shape changes semantics</h2>
 <p>
-Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for <a href="PATCH.html">PATCH</a> where the <code>?</code>/<code>#</code> shape alone selects the merge mode.
+Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for <a href="PATCH.html">PATCH</a> where the <code>?</code>/<code>!</code> shape selects the absorb scope while <a href="">POST</a> sets the provenance.
 </p>
 <ul>
-<li><code>be patch ?feat</code> squashes, <code>?feat#msg</code> merges, <code>?feat#</code> rebases one, <code>#sha</code> cherry-picks — one <a href="PATCH.html">PATCH</a> verb, varied shape.</li>
+<li><code>be patch ?feat</code> absorbs one commit, <code>?feat!</code> the whole branch, <code>#sha</code> one named commit — scope at <a href="PATCH.html">PATCH</a>, provenance at <a href="">POST</a>.</li>
 <li>A bare <code>//host</code> reads the cache while <code>ssh://host</code> opens the wire — the scheme alone flips cached vs network.</li>
+<li>The scheme also picks the protocol: <code>ssh:</code>/<code>https:</code>/<code>http:</code>/<code>git:</code> run git's pack wire, <code>be:</code> runs beagle's keeper wire (a <code>.git</code> path forces git).</li>
 <li><code>diff:</code> vs <code>diff:?br</code> vs <code>diff:?a#b</code> change the diff from/to sides — projector slots compose like verb slots.</li>
 <li>An empty <code>?</code> slot in a URI means the project trunk; no <code>?</code> slot at all means cur (see Refs rule 0).</li>
 </ul>

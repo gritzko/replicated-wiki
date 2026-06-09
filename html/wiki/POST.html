@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>POST</title>
-<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
 </head>
 <body>
 <h1>POST: the only commit-maker — advance cur, FF labels, push</h1>
@@ -22,7 +29,7 @@ POST is the only commit-maker: it advances cur — the current branch's tip — 
 POST's three URI slots are orthogonal — each adds its own effect, none implies another — and cur is the only ref POST ever commits onto, never another branch; the slots follow the shared <a href="Verbs.html">Verbs</a> vocabulary.
 </p>
 <ul>
-<li><code>#frag</code> (and stage scope): commit on cur; without it, the message is derived from <code>patch</code> rows since the pd boundary.</li>
+<li><code>#frag</code> (and stage scope): commit on cur; an empty fragment reuses the absorbed message, and a trailing <code>!</code> forgets the origin.</li>
 <li><code>?branch</code>: FF-advance it to cur's post-commit tip; <code>POSTNOFF</code> if cur isn't a descendant. Standalone is a pure label move.</li>
 <li><code>//remote</code>: FF-push cur's tip to the remote's counterpart, same FF check. Standalone is a pure push (≡ <code>be put //origin</code>).</li>
 <li>Empty intent in one slot is not an error when another slot is populated — it just skips the commit step.</li>
@@ -33,32 +40,34 @@ POST's three URI slots are orthogonal — each adds its own effect, none implies
 A bare POST is a dry-run status printer (the same read-only preview as <a href="HEAD.html">HEAD</a>); with intent it commits on cur and, per any populated slot, also FF-advances a label or pushes to a remote.
 </p>
 <ul>
-<li><code>be post 'fix the typo'</code> commits on cur; <code>be post '#fix'</code> is the single-word form.</li>
+<li><code>be post 'fix the typo'</code> commits with a new message and refers back (merge); <code>be post '#fix'</code> is the single-word form.</li>
+<li><code>be post '#msg!'</code> commits a new message but forgets the origin (squash); <code>be post #!</code> reuses the message and forgets (rebase-step).</li>
 <li><code>be post '#fix' ?feat</code> commits, then FF-advances <code>?feat</code> to cur's new tip.</li>
 <li><code>be post ?..</code> FF-advances the parent (no commit); <code>be post //origin</code> FF-pushes cur's tip (no commit).</li>
 <li><code>be post '#sync' //origin</code> commits, then FF-pushes cur's new tip to origin.</li>
-<li>Bare <code>be post</code> with no slot prints dry-run status; with in-scope patch rows it commits using the auto-resolved message.</li>
-<li>Commit message: a quoted spaced arg is the fragment; a single word needs <code>#</code>; legacy <code>-m &quot;msg&quot;</code> still works.</li>
+<li>Bare <code>be post</code> reuses the absorbed message and refers back; with no slot and no patch rows it prints dry-run status.</li>
+<li>Commit message: a quoted spaced arg is the fragment; a single word needs <code>#</code>; a trailing <code>!</code> forgets the origin; legacy <code>-m &quot;msg&quot;</code> still works.</li>
 <li>Each POST appends one entry to cur's <code>REFS</code>; patch-id dedup (<code>GRAFPatchId</code>) skips an absorption already reachable from cur.</li>
 </ul>
 <h2>Commit assembly</h2>
 <p>
-For each in-scope <code>patch</code> row POST classifies by URI shape and emits the matching header; the first parent is always cur's previous tip, so walking first-parents reaches the fork point in a straight line.
+The first parent is always cur's previous tip, so walking first-parents reaches the fork point in a straight line; the absorbed-branch provenance header comes from the post fragment, not the patch row.
 </p>
 <ul>
-<li><code>?&lt;sha&gt;</code> squash → one <code>foster &lt;sha&gt;</code> header; <code>?&lt;sha&gt;#&lt;msg&gt;</code> merge → a <code>parent &lt;sha&gt;</code> header.</li>
-<li><code>?&lt;sha&gt;#</code> rebase-one → a <code>foster &lt;sha&gt;</code> header; <code>#&lt;sha&gt;</code> cherry-pick → a <code>picked: &lt;sha&gt;</code> trailer.</li>
-<li>Headers emit in patch-row order and compose freely: two rebase-ones plus a cherry-pick give two fosters and one picked.</li>
+<li>Refer (no trailing <code>!</code>) → a <code>parent &lt;sha&gt;</code> header (merge); forget (<code>#msg!</code> or <code>#!</code>) → a <code>foster &lt;sha&gt;</code> header (rebase/squash).</li>
+<li>A named-sha (<code>be patch #&lt;sha&gt;</code>) patch row always records a <code>picked &lt;sha&gt;</code> header (next to <code>foster</code>), dedup-only.</li>
+<li>Headers emit in patch-row order and compose freely: two forgets plus a named-sha give two fosters and one picked.</li>
 <li>Cross-branch dedup: foster/parent reachability once the work is in the DAG, plus patch-id matching for replays.</li>
 </ul>
 <h2>Message resolution</h2>
 <p>
-POST picks the commit message in a fixed order, and a squash never auto-supplies one because it collapses many commits.
+POST picks the commit message in a fixed order; the fragment's trailing <code>!</code> is the forget modifier, not part of the text, so a commit message may never end in <code>!</code>.
 </p>
 <ul>
-<li>The supplied <code>#frag</code> wins if present.</li>
-<li>Else, if exactly one in-scope patch row carries a usable msg (rebase-one, cherry-pick, or <code>?br#msg</code> merge), reuse it.</li>
-<li>Else refuse with <code>POSTNOMSG</code>; a squash always needs an explicit message.</li>
+<li>The supplied <code>#frag</code> wins if present, with any trailing <code>!</code> stripped as the forget modifier (<code>#msg!</code>, <code>#!</code>).</li>
+<li>Else (bare POST or <code>#</code>/<code>#!</code> empty fragment), reuse the absorbed message if exactly one in-scope patch row carries a usable one.</li>
+<li>Else refuse with <code>POSTNOMSG</code>; a multi-commit absorption with no reusable message needs an explicit one.</li>
+<li>A message text that itself ends in <code>!</code> is refused, since the trailing <code>!</code> is reserved for the forget modifier.</li>
 <li><code>POSTNONE</code> is the separate case: a commit was asked for but every candidate path is an unchanged baseline.</li>
 </ul>
 <h2>File classification</h2>
@@ -84,10 +93,11 @@ Two <code>.be/wtlog</code> boundaries, both anchored at the most recent <a href=
 </ul>
 <h2>Flags</h2>
 <p>
-POST refuses by default to commit any tracked file holding PATCH's conflict-marker triple; <code>be post --force</code> bypasses that one scan and nothing else.
+POST refuses by default to commit any tracked file holding PATCH's conflict-marker triple; <code>--force</code> (or the verb bang <code>be post!</code>) bypasses that one scan and nothing else.
 </p>
 <ul>
 <li>The scan stops an unattended <code>patch &amp;&amp; post</code> from recording a half-merged commit (<code>&lt;&lt;&lt;&lt;…||||…&gt;&gt;&gt;&gt;</code>).</li>
+<li><code>be post!</code> (bang on the verb) is the shorthand for <code>--force</code>; the fragment's trailing <code>!</code> is the unrelated forget modifier.</li>
 <li>Use <code>--force</code> only for false positives — source or prose describing the marker shape — never a genuinely unmerged file.</li>
 <li><code>--force</code> does not relax the FF rule, change <code>?branch</code>/<code>//remote</code> advance, or affect message resolution.</li>
 </ul>
@@ -104,10 +114,10 @@ POST's refusals are all fast-forward, message, or safety guards; each has its ow
 </ul>
 <h2>Open questions</h2>
 <p>
-The provenance-trailer wire format is the one POST-side detail still unsettled.
+The provenance wire format is settled: <code>picked &lt;sha&gt;</code> is a commit header next to <code>foster</code>, dedup-only and not a reachability edge.
 </p>
 <ul>
-<li><code>picked</code> trailer — exact key and parser contract TBD; multiple accumulate in row order.</li>
+<li><code>picked</code> header — multiple accumulate in row order; a &quot;partial picked&quot; <code>&lt;sha&gt;:&lt;path&gt;</code> for path-scoped forensics is a possible future extension.</li>
 </ul>
 </body>
 </html>

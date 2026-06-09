@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PATCH</title>
-<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
 </head>
 <body>
 <h1>PATCH: absorb another branch's work into the worktree</h1>
@@ -13,50 +20,49 @@ PATCH absorbs commits from another branch into cur's worktree and records the ab
 </p>
 <ul>
 <li>Does not commit: the absorbed sha(s) are staged in <code>.be/wtlog</code>, and the next <a href="POST.html">POST</a> turns them into a commit with a header.</li>
-<li>The URI shape is the operation: <code>?</code>/<code>#</code> presence and emptiness alone select squash, cherry-pick, merge, or rebase-one.</li>
+<li>PATCH selects scope only: the trailing <code>!</code> picks one commit vs the whole branch; provenance is decided later, at <a href="POST.html">POST</a>.</li>
 <li>A dirty wt is fine: a 3-way WEAVE merges theirs against the wt's current bytes, so dirty files never cause a refusal.</li>
 <li>Conflicts are loud: a conflict hits stderr and exits non-zero, stopping an unattended <code>patch &amp;&amp; post</code> before a bad commit.</li>
 </ul>
-<h2>Four shapes</h2>
+<h2>Three shapes</h2>
 <p>
-The PATCH URI form alone classifies the operation — <code>?</code> presence and <code>#</code> presence/emptiness — and every shape takes the usual extras (<code>//host</code> to fetch first, <code>./path</code> to scope).
+The PATCH URI form selects scope only — the bang <code>!</code> on <code>?br</code> is the whole-branch toggle — and every shape takes the usual extras (<code>//host</code> to fetch first, <code>./path</code> to scope). The operation (merge/rebase/squash/cherry) is scope-at-patch plus provenance-at-<a href="POST.html">POST</a>; PATCH never carries a <code>#message</code>.
 </p>
 <ul>
-<li><code>?&lt;br&gt;</code> squash: replay <code>fork..br.tip</code> as one wt-merge, after which <a href="POST.html">POST</a> records one <code>foster</code> commit header.</li>
-<li><code>?&lt;br&gt;#&lt;msg&gt;</code> merge: the same full replay as squash, after which <a href="POST.html">POST</a> records a <code>parent</code> commit header.</li>
-<li><code>?&lt;br&gt;#</code> rebase-one: the next not-yet-replayed commit on <code>?br</code>, after which <a href="POST.html">POST</a> records a <code>foster</code> header.</li>
-<li><code>#&lt;hash&gt;</code> cherry-pick: the one named commit, after which <a href="POST.html">POST</a> records a <code>picked:</code> trailer.</li>
+<li><code>?&lt;br&gt;</code> one commit: absorb the next not-yet-replayed commit on <code>?br</code> (bare branch = one — a flip from the old squash).</li>
+<li><code>?&lt;br&gt;!</code> whole branch: replay <code>fork..br.tip</code> in one wt-merge — the bang means &quot;the entire branch&quot;, not &quot;one&quot;.</li>
+<li><code>#&lt;hash&gt;</code> named commit: absorb the one named commit, after which <a href="POST.html">POST</a> records a <code>picked</code> header (next to <code>foster</code>).</li>
 </ul>
 <h2>CLI use</h2>
 <p>
-The common PATCH CLI forms cover squash, rebase-one, merge, cherry-pick, remote fetch, path scope, and delegated structural rewrites.
+PATCH chooses scope; the named op is PATCH-scope plus <a href="POST.html">POST</a>-provenance — rebase-one = <code>?br</code> + <code>post #!</code>, merge = <code>?br!</code> + <code>post '#msg'</code>, squash = <code>?br!</code> + <code>post '#msg!'</code>, cherry = <code>#sha</code> + <code>post #!</code>.
 </p>
 <ul>
-<li><code>be patch ?..</code> squashes the parent's stack into the wt, while <code>be patch ?./fix</code> squashes a child branch.</li>
-<li><code>be patch ?feat/fix#</code> rebases one commit from <code>feat/fix</code> onto cur.</li>
-<li><code>be patch '?trunk#sync from trunk'</code> merges trunk with an explicit message — query and message ride in one URI token.</li>
-<li><code>be patch '#abc1234'</code> cherry-picks one commit, while <code>be patch ssh://origin?main</code> fetches then squashes.</li>
+<li><code>be patch ?feat</code> absorbs the next commit of <code>feat</code>; pair with <code>be post #!</code> for a rebase-step, loop it for a full rebase.</li>
+<li><code>be patch ?feat!</code> absorbs the whole branch; <code>be post '#msg'</code> then merges (refer), <code>be post '#msg!'</code> squashes (forget).</li>
+<li><code>be patch ?..!</code> replays the parent's whole stack into the wt, while <code>be patch ?./fix</code> absorbs one commit of a child branch.</li>
+<li><code>be patch '#abc1234'</code> absorbs one named commit (cherry-pick with <code>be post #!</code>); <code>be patch ssh://origin?main!</code> fetches then absorbs the whole branch.</li>
 <li><code>be patch file.c?feat</code> applies one file's version from <code>?feat</code>, recording no foster row.</li>
 <li><code>be patch spot:#'Old'-&gt;'New'.c</code> delegates an in-place structural rewrite to spot.</li>
 <li>Multiple PATCHes compose: each PATCH appends a <code>patch</code> row the next POST consumes.</li>
 </ul>
 <h2>Ancestor-skip walk</h2>
 <p>
-Squash and merge replay only the commits cur doesn't already have; rebase-one finds the next un-absorbed commit by walking the source's first-parent chain.
+A whole-branch <code>?br!</code> replays only the commits cur doesn't already have; a one-commit <code>?br</code> finds the next un-absorbed commit by walking the source's first-parent chain.
 </p>
 <ul>
-<li>Squash and merge replay only commits not already reachable from cur via parent ∪ foster.</li>
-<li><code>picked</code> trailers are dedup-only and do not participate in reachability.</li>
-<li>Rebase-one walks <code>?br</code>'s first-parent chain and stops at the first sha already reachable from cur.</li>
+<li>Whole-branch <code>?br!</code> replays only commits not already reachable from cur via parent ∪ foster.</li>
+<li><code>picked</code> headers are dedup-only and do not participate in reachability.</li>
+<li>One-commit <code>?br</code> walks <code>?br</code>'s first-parent chain and stops at the first sha already reachable from cur.</li>
 </ul>
 <h2>Merge base: full stack vs single commit</h2>
 <p>
-The shapes split by merge base, which lets one verb be git's merge, rebase, and cherry-pick: squash and merge weave the full <code>fork..tip</code> stack against auto-LCA(cur, theirs), while cherry-pick and rebase-one weave one commit against its parent.
+The scope splits by merge base, which lets one verb be git's merge, rebase, and cherry-pick: whole-branch <code>?br!</code> weaves the full <code>fork..tip</code> stack against auto-LCA(cur, theirs), while a named commit or one-commit <code>?br</code> weaves one commit against its parent.
 </p>
 <ul>
-<li>Squash and merge use auto-LCA(cur, theirs) and replay the full not-yet-reachable stack — git's <code>merge</code> / <code>pull --squash</code>.</li>
-<li>Cherry-pick and rebase-one use the base parent(theirs), weaving that one commit's diff — git's <code>cherry-pick</code>/<code>rebase</code>.</li>
-<li>All four are merge-then-<a href="POST.html">POST</a>; only the base and the recorded provenance differ, so one verb covers four git commands.</li>
+<li>Whole-branch <code>?br!</code> uses auto-LCA(cur, theirs) and replays the full not-yet-reachable stack — git's <code>merge</code> / <code>pull --squash</code>.</li>
+<li>A named commit or one-commit <code>?br</code> uses the base parent(theirs), weaving that one commit's diff — git's <code>cherry-pick</code>/<code>rebase</code>.</li>
+<li>All shapes are merge-then-<a href="POST.html">POST</a>; only the base differs at PATCH and the provenance is recorded at POST, so one verb covers four git commands.</li>
 </ul>
 <h2>Weave merge</h2>
 <p>
@@ -92,7 +98,7 @@ Two PATCH-side formats are still unsettled, both about how downstream tools read
 </p>
 <ul>
 <li>The token-level 4-char conflict delimiters need a stable wire format for bro, graf-resolve, and a <code>git mergetool</code> adapter.</li>
-<li>A &quot;partial picked&quot; trailer naming <code>&lt;sha&gt;:&lt;path&gt;</code> for path-scoped forensics is a possible future extension.</li>
+<li>A &quot;partial picked&quot; header naming <code>&lt;sha&gt;:&lt;path&gt;</code> for path-scoped forensics is a possible future extension.</li>
 </ul>
 </body>
 </html>

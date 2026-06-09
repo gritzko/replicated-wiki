@@ -1,0 +1,30 @@
+#   DIS-032: bring PATCH/POST/URI/Verbs specs in line with the bang model
+
+[blog/uris.mkd] is now the authoritative design for the patch/post shape language; the wiki specs still document the old `?`/`#`-presence-and-emptiness model and must be rewritten once [[DIS-030]] (PATCH scope) and [[DIS-031]] (POST provenance) land. The shape language changes shape: PATCH carries scope via `!` (bare `?br` one commit, `?br!` whole branch, `#sha` named), POST carries message + refer/forget via a trailing `!` (`#msg` refer/`parent`, `#msg!` forget/`foster`, `#!` reuse+forget, named-sha→`picked`), `post!` = `--force`, and **commit messages may not end in `!`**. Every page that states the old mapping is now wrong. See [PATCH], [POST], [URI], [Verbs], [Invariants], [CLAUDE].
+
+##  Issues
+Multiple spec pages assert the superseded `?`/`#` op-mapping or omit the new rules.
+
+ -  [PATCH] §"Four shapes" (`PATCH.mkd:10-17`) and §"CLI use" — the `?br`/`?br#msg`/`?br#`/`#sha` table must become the scope model (`?br` one, `?br!` whole, `#sha` named); op = scope-at-patch + provenance-at-post.
+ -  [POST] — add: provenance from the post trailing-`!` (refer/`parent` vs forget/`foster`), `picked` for named-sha rows, message reuse on empty fragment, `post!` = `--force`, and the "message may not end in `!`" refusal.
+ -  [URI] `:15` — the inline PATCH example (`?feat` squashes, `?feat#msg` merges, `?feat#` rebases one, `#sha` cherry-picks) is fully superseded; restate with `!`.
+ -  [Verbs] — the `#frag` PATCH line, the bareword defaults, and the git→be cheat sheet (`git merge`/`git cherry-pick`/rebase rows) all encode the old shapes.
+ -  [Invariants] — add the message-`!` ban and the row-named-flag → `picked` rule as stated invariants.
+
+##  Blockers
+Follows [[DIS-030]] + [[DIS-031]] — specs must describe shipped behavior, not aspiration. Keep [blog/uris.mkd] and these pages in sync at land time (the blog is the source, the wiki is the normative spec). Per [[strictmark-wiki-reorg]] respect the StrictMark budgets.
+
+##  Planned
+Rewrite the five pages to the bang model in lockstep with the impl land.
+
+ -  Edit [PATCH], [POST], [URI], [Verbs], [Invariants] to the shape language above; one logical line per StrictMark block; keep within abstract/summary/bullet budgets.
+ -  Add the "messages may not end in `!`" invariant and the provenance-decision rule (named→`picked`, post-`!`→`foster`, else `parent`).
+ -  Cross-link the pages and [blog/uris.mkd]; re-render `html/`; verify no stale `?br#msg`/`?br#` references remain (grep the wiki).
+
+[blog/uris.mkd]: ../../blog/uris.mkd "Beagle: git objects and URIs (authoritative)"
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[POST]: ../../wiki/POST.mkd "POST verb"
+[URI]: ../../wiki/URI.mkd "URI grammar"
+[Verbs]: ../../wiki/Verbs.mkd "the verbs hub"
+[Invariants]: ../../wiki/Invariants.mkd "design invariants"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

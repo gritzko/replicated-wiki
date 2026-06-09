@@ -2,7 +2,7 @@
 
 Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the revision controlled resources (surprise!). URIs address any repos, files, branches, revisions, blobs and any views/projections the system can produce. URI format is `[scheme:][//authority][path][?ref][#fragment]` and each component reflects one orthogonal aspect:
 
- -  `scheme:` is the transport (`ssh:`/`https:`/`file:`) or a [Projector] view (`sha1:`/`diff:`/…);
+ -  `scheme:` is the transport (`ssh:`/`https:`/`be:`/`file:`) or a [Projector] view (`sha1:`/`diff:`/…);
  -  `//authority` is a host, implies a remote repo, e.g. https://github.com;
  -  `/path` is the file path (normally: within a project, legacy: repo path on a host); 
  -  `?ref` is a revision specifier: project, branch, tag, or a detached commit sha hash;
@@ -10,10 +10,11 @@ Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the
 
 ##  Shape changes semantics
 
-Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for [PATCH] where the `?`/`#` shape alone selects the merge mode.
+Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for [PATCH] where the `?`/`!` shape selects the absorb scope while [POST] sets the provenance.
 
- -  `be patch ?feat` squashes, `?feat#msg` merges, `?feat#` rebases one, `#sha` cherry-picks — one [PATCH] verb, varied shape.
+ -  `be patch ?feat` absorbs one commit, `?feat!` the whole branch, `#sha` one named commit — scope at [PATCH], provenance at [POST].
  -  A bare `//host` reads the cache while `ssh://host` opens the wire — the scheme alone flips cached vs network.
+ -  The scheme also picks the protocol: `ssh:`/`https:`/`http:`/`git:` run git's pack wire, `be:` runs beagle's keeper wire (a `.git` path forces git).
  -  `diff:` vs `diff:?br` vs `diff:?a#b` change the diff from/to sides — projector slots compose like verb slots.
  -  An empty `?` slot in a URI means the project trunk; no `?` slot at all means cur (see Refs rule 0).
 

@@ -11,7 +11,7 @@ POST is the only commit-maker: it advances cur — the current branch's tip — 
 
 POST's three URI slots are orthogonal — each adds its own effect, none implies another — and cur is the only ref POST ever commits onto, never another branch; the slots follow the shared [Verbs] vocabulary.
 
- -  `#frag` (and stage scope): commit on cur; without it, the message is derived from `patch` rows since the pd boundary.
+ -  `#frag` (and stage scope): commit on cur; an empty fragment reuses the absorbed message, and a trailing `!` forgets the origin.
  -  `?branch`: FF-advance it to cur's post-commit tip; `POSTNOFF` if cur isn't a descendant. Standalone is a pure label move.
  -  `//remote`: FF-push cur's tip to the remote's counterpart, same FF check. Standalone is a pure push (≡ `be put //origin`).
  -  Empty intent in one slot is not an error when another slot is populated — it just skips the commit step.
@@ -21,30 +21,32 @@ POST's three URI slots are orthogonal — each adds its own effect, none implies
 
 A bare POST is a dry-run status printer (the same read-only preview as [HEAD]); with intent it commits on cur and, per any populated slot, also FF-advances a label or pushes to a remote.
 
- -  `be post 'fix the typo'` commits on cur; `be post '#fix'` is the single-word form.
+ -  `be post 'fix the typo'` commits with a new message and refers back (merge); `be post '#fix'` is the single-word form.
+ -  `be post '#msg!'` commits a new message but forgets the origin (squash); `be post #!` reuses the message and forgets (rebase-step).
  -  `be post '#fix' ?feat` commits, then FF-advances `?feat` to cur's new tip.
  -  `be post ?..` FF-advances the parent (no commit); `be post //origin` FF-pushes cur's tip (no commit).
  -  `be post '#sync' //origin` commits, then FF-pushes cur's new tip to origin.
- -  Bare `be post` with no slot prints dry-run status; with in-scope patch rows it commits using the auto-resolved message.
- -  Commit message: a quoted spaced arg is the fragment; a single word needs `#`; legacy `-m "msg"` still works.
+ -  Bare `be post` reuses the absorbed message and refers back; with no slot and no patch rows it prints dry-run status.
+ -  Commit message: a quoted spaced arg is the fragment; a single word needs `#`; a trailing `!` forgets the origin; legacy `-m "msg"` still works.
  -  Each POST appends one entry to cur's `REFS`; patch-id dedup (`GRAFPatchId`) skips an absorption already reachable from cur.
 
 ##  Commit assembly
 
-For each in-scope `patch` row POST classifies by URI shape and emits the matching header; the first parent is always cur's previous tip, so walking first-parents reaches the fork point in a straight line.
+The first parent is always cur's previous tip, so walking first-parents reaches the fork point in a straight line; the absorbed-branch provenance header comes from the post fragment, not the patch row.
 
- -  `?<sha>` squash → one `foster <sha>` header; `?<sha>#<msg>` merge → a `parent <sha>` header.
- -  `?<sha>#` rebase-one → a `foster <sha>` header; `#<sha>` cherry-pick → a `picked: <sha>` trailer.
- -  Headers emit in patch-row order and compose freely: two rebase-ones plus a cherry-pick give two fosters and one picked.
+ -  Refer (no trailing `!`) → a `parent <sha>` header (merge); forget (`#msg!` or `#!`) → a `foster <sha>` header (rebase/squash).
+ -  A named-sha (`be patch #<sha>`) patch row always records a `picked <sha>` header (next to `foster`), dedup-only.
+ -  Headers emit in patch-row order and compose freely: two forgets plus a named-sha give two fosters and one picked.
  -  Cross-branch dedup: foster/parent reachability once the work is in the DAG, plus patch-id matching for replays.
 
 ##  Message resolution
 
-POST picks the commit message in a fixed order, and a squash never auto-supplies one because it collapses many commits.
+POST picks the commit message in a fixed order; the fragment's trailing `!` is the forget modifier, not part of the text, so a commit message may never end in `!`.
 
- -  The supplied `#frag` wins if present.
- -  Else, if exactly one in-scope patch row carries a usable msg (rebase-one, cherry-pick, or `?br#msg` merge), reuse it.
- -  Else refuse with `POSTNOMSG`; a squash always needs an explicit message.
+ -  The supplied `#frag` wins if present, with any trailing `!` stripped as the forget modifier (`#msg!`, `#!`).
+ -  Else (bare POST or `#`/`#!` empty fragment), reuse the absorbed message if exactly one in-scope patch row carries a usable one.
+ -  Else refuse with `POSTNOMSG`; a multi-commit absorption with no reusable message needs an explicit one.
+ -  A message text that itself ends in `!` is refused, since the trailing `!` is reserved for the forget modifier.
  -  `POSTNONE` is the separate case: a commit was asked for but every candidate path is an unchanged baseline.
 
 ##  File classification
@@ -68,9 +70,10 @@ Two `.be/wtlog` boundaries, both anchored at the most recent [GET] (a hard reset
 
 ##  Flags
 
-POST refuses by default to commit any tracked file holding PATCH's conflict-marker triple; `be post --force` bypasses that one scan and nothing else.
+POST refuses by default to commit any tracked file holding PATCH's conflict-marker triple; `--force` (or the verb bang `be post!`) bypasses that one scan and nothing else.
 
  -  The scan stops an unattended `patch && post` from recording a half-merged commit (`<<<<…||||…>>>>`).
+ -  `be post!` (bang on the verb) is the shorthand for `--force`; the fragment's trailing `!` is the unrelated forget modifier.
  -  Use `--force` only for false positives — source or prose describing the marker shape — never a genuinely unmerged file.
  -  `--force` does not relax the FF rule, change `?branch`/`//remote` advance, or affect message resolution.
 
@@ -86,9 +89,9 @@ POST's refusals are all fast-forward, message, or safety guards; each has its ow
 
 ##  Open questions
 
-The provenance-trailer wire format is the one POST-side detail still unsettled.
+The provenance wire format is settled: `picked <sha>` is a commit header next to `foster`, dedup-only and not a reachability edge.
 
- -  `picked` trailer — exact key and parser contract TBD; multiple accumulate in row order.
+ -  `picked` header — multiple accumulate in row order; a "partial picked" `<sha>:<path>` for path-scoped forensics is a possible future extension.
 
 [Verbs]: Verbs.mkd "the verbs hub"
 [PATCH]: PATCH.mkd "PATCH verb"

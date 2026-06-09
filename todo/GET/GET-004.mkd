@@ -1,0 +1,28 @@
+#   GET-004: `be://` path → store resolution (userinfo home, `.be` default, non-hidden `*.be`, worktree)
+
+[[GET-003]] fixed the empty-path case; this ticket specifies the **full `be://` path→store resolution** (authoritative semantics from the user). For `be://[user@]host[/path]`: the **userinfo selects the peer home** (`be://gritzko@localhost` → `/home/gritzko`, default = the ssh-login user); an **empty path** denotes that home's hidden default store `<home>/.be` (GET-003); a **non-empty path is HOME-relative** with one uniform rule — a path **ending in `.be` is the store itself** (`be://localhost/store.be` → `$HOME/store.be`, the `*.git` analogue), and **any other path gets `/.be` appended** (`be://localhost/src/beagle` → `$HOME/src/beagle/.be`), where that `.be` resolves **whether it is a directory (a store) or a file (a worktree pointer) — it does not matter which**. Today keeper resolves a pathless `?/proj` via a cwd walk-up from the login HOME to `<home>/.be` (GET-003) and a worktree/pathful form already negotiates (`be://localhost/beagle?`), but the explicit `<path>/.be` append, the `*.be` named-store form, and the `user@` → home selection are unspecified/unverified. See [GET], [URI], [blog/uris.mkd], [CLAUDE].
+
+##  Issues
+The path slot of a `be://` URL means "which store on the peer", but only two of the four cases are wired.
+
+ -  `be://[user@]host` (empty path) → `<home>/.be`, where `<home>` is the userinfo user's home (`gritzko@` → `/home/gritzko`), default = ssh-login user. GET-003 handles the login-user default; the explicit `user@` selection is untested.
+ -  `be://host/<name>.be` → `<home>/<name>.be`, a **non-hidden** store dir named in the path (HOME-relative). Keeper must recognize a `*.be` path as a store (not a worktree) — the `*.git` analogue. Currently unverified.
+ -  `be://host/<worktree>` → the worktree's repo, resolved through its `.be`. Confirm this already works (the pathful `be://localhost/beagle?` form negotiates) and is HOME-relative.
+ -  Disambiguation rule on the server: how keeper decides store-vs-worktree for a given path — `*.be` suffix ⇒ store; else a dir containing a `.be` ⇒ worktree. Must be explicit and tested.
+ -  HOME-relative convention already exists client-side (`keeper/WIRECLI.c:231-237` strips the leading `/`); the server resolves the rest relative to the login HOME.
+
+##  Blockers
+Builds on [[GET-003]] (the empty-path/`.be` base case) — land that first. Pure server-side store-resolution; no client grammar change beyond GET-003.
+
+##  Planned
+Specify and implement the four-case `be://` path→store resolution; verify each against a hermetic peer.
+
+ -  Repro first ([CLAUDE] §17): a hermetic localhost keeper peer (under `$HOME/tmp`, never `~/.be`) holding (a) `$HOME/.be` default, (b) a `$HOME/store.be` non-hidden store, (c) a worktree. Assert `be://host?/proj`→`.be`, `be://host/store.be?/proj`→that store, `be://host/wt`→wt's repo, `be://user@host?/proj`→that user's home. The `store.be` and `user@` cases FAIL pre-change.
+ -  Server (keeper upload-pack / `keeper_served_at` + `home_open_inner`, `dog/HOME.c`): recognize a `*.be` path as a non-hidden store dir; resolve a worktree path through its `.be`; resolve all paths HOME-relative to the login (or `user@`) home.
+ -  Keep git transports unaffected; keep GET-003's empty→`.be` default intact.
+ -  Regression tests under `test/get`; update `keeper/INDEX.md` / `test/get/INDEX.md`.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[URI]: ../../wiki/URI.mkd "URI grammar"
+[blog/uris.mkd]: ../../blog/uris.mkd "Beagle: git objects and URIs"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-005</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>GET-005: <code>SNOROOM</code> ingesting a large pack over the wire (<code>KEEPIngestStream</code>) — beagle clone fails</h1>
+<p>
+A <code>be://</code> (or <code>ssh://</code> git) fetch of a LARGE repo dies with <code>SNOROOM</code> in <code>KEEPIngestStream</code> (<code>keeper/KEEP.c:2379</code>) <strong>after</strong> the wire negotiation succeeds. Found during <a href="">[GET-003</a>] verification: <code>be get be://localhost?/beagle</code> and the pathful <code>be://localhost/beagle?</code> both negotiate fine, then fail <code>SNOROOM</code> on beagle's large pack, while smaller repos clone fully. So it is independent of GET-003 (the empty-path guard) — a pre-existing pack-size / scratch-sizing limit, and it is the real remaining blocker to cloning beagle for the <a href="">Issues</a> fix-and-land loop. The pack log itself is booked at 16 GB (<code>:2401</code>/<code>:2405</code>), so the <code>SNOROOM</code> is almost certainly a *<strong>fixed-size scratch downstream</strong>* in the ingest→index path that does not scale to beagle's object count — the <a href="">[BASS scratch acquisition</a>] failure mode (size scratch from the input via <code>a_carve</code>, never a fixed heap buffer). See <a href="../../wiki/GET.html">GET</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+A large wire fetch overflows a fixed scratch during ingest; the 16 GB pack log is not the limit.
+</p>
+<ul>
+<li>Repro: clone beagle (a large repo) over the wire → <code>SNOROOM</code>; smaller repos clone fully. Both pathful (<code>be://localhost/beagle?</code>) and pathless (<code>be://localhost?/beagle</code>) hit it — NOT a GET-003 regression.</li>
+<li>Entry <code>KEEPIngestStream</code> (<code>keeper/KEEP.c:2379</code>): the log is <code>FILEBook</code>ed at <code>16ULL&lt;&lt;30</code> and grown with <code>FILEBookEnsure</code> (<code>:2401</code>/<code>:2405</code>/<code>:2435</code>), so the overflow is elsewhere — a per-object or index/ROCK-build scratch, or downstream <code>UNPK</code>.</li>
+<li>Not get-specific: any large wire fetch (get / patch-fetch, possibly head) routes through <code>KEEPIngestStream</code> (<code>keeper/WIRECLI.c:862</code>/<code>:973</code>).</li>
+<li><code>SNOROOM = 0x1c5d86d8616</code> (<code>abc/01.h:124</code>) — a slice/buffer &quot;no room&quot;; needs a trace to pin the exact site.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None known. Needs an <code>ABC_TRACE</code> run to pinpoint the overflowing scratch before sizing it.
+</p>
+<h2>Planned</h2>
+<p>
+Find the fixed scratch that overflows on a large pack and size it from the input.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a hermetic large-enough fixture (or beagle itself via a local keeper peer; scratch under <code>$HOME/tmp</code>, NEVER <code>~/.be</code>) that triggers <code>SNOROOM</code> in <code>KEEPIngestStream</code> — assert it currently fails.</li>
+<li>Trace (<code>ABC_TRACE=ON</code>, redirect to a file then grep — never stdout) to locate the exact <code>SNOROOM</code> site in the ingest→index path (index/ROCK build, per-object buffer, or <code>UNPK</code>).</li>
+<li>Resize the offending scratch from the input with <code>a_carve</code>/BASS instead of a fixed buffer; re-verify the large clone completes end-to-end.</li>
+<li>Regression: a <code>build-load</code> (<code>WITH_LOAD</code>) clone-a-large-fixture test so the limit can't silently return; update <code>keeper/INDEX.md</code>.</li>
+</ul>
+</body>
+</html>

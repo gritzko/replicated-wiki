@@ -1,0 +1,30 @@
+#   POST-013: pushing a submodule on the synthetic `?.beagle/` branch to a git remote refuses instead of defaulting to the remote's default branch
+
+A mounted submodule whose cur is the be-only synthetic coordinate `?.beagle/<parent>` (the normal state after a parent POST — the [[submodule synthetic-branch POST]]) cannot be pushed to a git remote without naming a branch. `be post ssh://localhost/src/dogs/abc` (from inside the sub) reports `0 change(s)` then refuses:
+````
+    keeper: post: branch ?.beagle/ is a be-only synthetic coordinate;
+            not pushing to git remote ssh://localhost/src/dogs/abc
+````
+The user must know to add an explicit `?main`; only then does it land — `be post ssh://localhost/src/dogs/abc?main` → `keeper: pushed ?main → 5163fa54…`. A push to a **git** remote should DEFAULT to that remote's default branch (`main`/`master` / its `HEAD`) when the local branch is a be-only synthetic coordinate, rather than refusing. See [POST], [Submodules], [CLAUDE].
+
+##  Issues
+The synthetic sub-branch has no git counterpart, so a no-branch push to git refuses.
+
+ -  `be post <git-remote>/abc` from a sub on `?.beagle/<parent>` → `branch ?.beagle/ is a be-only synthetic coordinate; not pushing` — nothing pushed.
+ -  Explicit `?main` works (`pushed ?main → <sha>`) — so the only gap is the DEFAULT target when the local branch is synthetic.
+ -  `?.beagle/<parent>` is the *normal* cur of a posted sub; requiring the user to remember `?main` for every git push is friction (and easy to miss — it silently does `0 change(s)`).
+ -  Relates to the trunk⇔`refs/heads/main` alias work ([[DIS-025 patch squash fork]]/DIS-028).
+
+##  Blockers
+None blocking; the branch-resolution lives in the keeper push path (synthetic-coordinate guard).
+
+##  Planned
+Default a git-remote push to the remote's default branch when cur is a be-only synthetic coordinate.
+
+ -  Repro first ([CLAUDE] §17): a sub on `?.beagle/<parent>`; `be post <git-remote>/abc` (no `?branch`) pushes to the remote's default branch (`main`/`master`) — fails today (refuses).
+ -  When the local branch is a be-only synthetic coordinate AND the target is a git transport, resolve the push branch to the remote's default (advertised `HEAD`, else `main`/`master`) instead of refusing; keep explicit `?branch` working and keep refusing for be peers where the synthetic coordinate is meaningful.
+ -  Regression test under `test/post` (a mounted-sub → git-remote fixture).
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[Submodules]: ../../wiki/Submodules.mkd "submodule recursion"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

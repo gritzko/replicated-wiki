@@ -7,8 +7,9 @@ The design invariants are the load-bearing rules every [Verbs] and dog upholds â
 The write path has exactly one commit-maker and one ref-writer, a linear first-parent spine, and a strict fast-forward rule, so history stays simple and safe.
 
  -  POST is the only commit-maker, PUT the only ref-writer: [POST] advances cur; [PUT] writes a `refs` row but never a commit.
- -  First-parent linear, multi-parent at POST: first parent is cur's prior tip; `parent`/`foster`/`picked` come from patch rows.
+ -  First-parent linear, multi-parent at POST: first parent is cur's prior tip; the post fragment's `!` picks `parent`/`foster`, named-sha rows â†’ `picked`.
  -  POST is fast-forward only, PUT unconstrained: POST refuses non-FF advance or push; PUT force-writes any ref on either side.
+ -  Commit messages may not end in `!`: a trailing `!` is reserved for POST's forget modifier, so the parse stays unambiguous.
 
 ##  Branch and worktree invariants
 
@@ -33,7 +34,7 @@ URI shape alone fixes the resource, remotes are cached unless a transport scheme
 A few cross-cutting contracts are still unsettled; the per-verb pages carry their own TBDs, this section the architectural ones.
 
  -  Conflict-marker wire format: PATCH's token-level 4-char delimiters need a stable format for [Bro] and a `git mergetool` adapter.
- -  Provenance trailers: the `picked:` cherry-pick key and a possible path-scoped `<sha>:<path>` trailer are both still TBD.
+ -  Provenance headers: `picked <sha>` is settled (a commit header next to `foster`, dedup-only); a path-scoped `<sha>:<path>` extension is still TBD.
  -  Real squash and repack: today GC is "drop a branch"; consolidating a branch's `refs` into one commit is still TODO.
  -  Bulk fetch `?*` orders parents-before-children over the delta DAG; the bare `be head` summary output format is still TBD.
 

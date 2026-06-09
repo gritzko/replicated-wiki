@@ -1,0 +1,24 @@
+#   POST-006: `be post` `POSTCFLCT` false-fires on conflict-marker strings in tracked source comments/literals
+
+`be post` scans staged tracked files for WEAVE conflict markers (`<<<<` / `||||` / `>>>>`) and refuses with `POSTCFLCT` if a full triple is found. But a source file that legitimately CONTAINS those marker strings — e.g. `sniff/PATCH.c`, the conflict-handling code itself, whose comments show `<<<<theirs||||ours>>>>` at `:339-340` — false-fires, blocking the commit and forcing `be post --force`. Hit this session committing the `picked`-header move: the triple is documentation, not an unresolved merge. Resolution: best-effort detect the real WEAVE output shape so obvious doc/literal markers don't refuse; where a file genuinely contains a full conflict-shaped block we cannot disambiguate, `be post!` (the bang/`--force` override, DIS-030/031) is the sanctioned escape — accepted, not a bug. See [POST], [PATCH], [CLAUDE].
+
+##  Issues
+The scan can't tell a real unresolved marker from a marker string in a comment or literal.
+
+ -  Any edit to the conflict-handling code (or any file that quotes the markers) is uncommittable without `--force`; `be post` refuses on the doc triple at `sniff/PATCH.c:339-340`.
+ -  `--force` overrides the WHOLE conflict scan, not just the false-positive — too blunt; a real conflict elsewhere in the same commit would also be waved through.
+ -  Repro: stage a `.c` file containing a `<<<<…||||…>>>>` triple inside a `//` comment → `be post` → `POSTCFLCT` / `BEDOGEXIT`.
+
+##  Blockers
+None. Localized to the post conflict-marker scan.
+
+##  Planned
+Best-effort detect the real WEAVE output shape; where undetectable, `be post!` is the accepted override.
+
+ -  Repro first ([CLAUDE] §17): a test staging a file with a marker triple inside a `//` comment / string literal (the common false-positive), asserting `be post` does NOT refuse; and a file with a genuinely WEAVE-shaped unresolved block still DOES refuse.
+ -  Recognize only the WEAVE output shape — the full `<<<<` / `||||` / `====` / `>>>>` sequence at line starts in the structural order a real conflict emits — not any inline occurrence in a comment/literal. This clears the obvious documentation cases (e.g. `sniff/PATCH.c`).
+ -  Where the file legitimately contains a full, well-formed conflict-shaped block the scan cannot distinguish from a real one, do NOT try to be cleverer — `be post!` (bang = `--force`, DIS-030/031) is the documented, sanctioned override. Accept the bluntness there; that is the intended escape, not a defect.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

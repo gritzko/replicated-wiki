@@ -3,46 +3,45 @@
 PATCH absorbs commits from another branch into cur's worktree and records the absorbed sha(s) in `.be/wtlog` for the next [POST] to consume; it never commits on its own. The cycle is patch → test → post — run once per merge, cherry-pick, or squash, or looped per commit for rebase — so every commit that lands is a tested commit, never a chain of unverified work. PATCH is one verb in the Beagle [Verbs] vocabulary, and unlike [GET] it weave-merges theirs rather than overwriting the worktree.
 
  -  Does not commit: the absorbed sha(s) are staged in `.be/wtlog`, and the next [POST] turns them into a commit with a header.
- -  The URI shape is the operation: `?`/`#` presence and emptiness alone select squash, cherry-pick, merge, or rebase-one.
+ -  PATCH selects scope only: the trailing `!` picks one commit vs the whole branch; provenance is decided later, at [POST].
  -  A dirty wt is fine: a 3-way WEAVE merges theirs against the wt's current bytes, so dirty files never cause a refusal.
  -  Conflicts are loud: a conflict hits stderr and exits non-zero, stopping an unattended `patch && post` before a bad commit.
 
-##  Four shapes
+##  Three shapes
 
-The PATCH URI form alone classifies the operation — `?` presence and `#` presence/emptiness — and every shape takes the usual extras (`//host` to fetch first, `./path` to scope).
+The PATCH URI form selects scope only — the bang `!` on `?br` is the whole-branch toggle — and every shape takes the usual extras (`//host` to fetch first, `./path` to scope). The operation (merge/rebase/squash/cherry) is scope-at-patch plus provenance-at-[POST]; PATCH never carries a `#message`.
 
- -  `?<br>` squash: replay `fork..br.tip` as one wt-merge, after which [POST] records one `foster` commit header.
- -  `?<br>#<msg>` merge: the same full replay as squash, after which [POST] records a `parent` commit header.
- -  `?<br>#` rebase-one: the next not-yet-replayed commit on `?br`, after which [POST] records a `foster` header.
- -  `#<hash>` cherry-pick: the one named commit, after which [POST] records a `picked:` trailer.
+ -  `?<br>` one commit: absorb the next not-yet-replayed commit on `?br` (bare branch = one — a flip from the old squash).
+ -  `?<br>!` whole branch: replay `fork..br.tip` in one wt-merge — the bang means "the entire branch", not "one".
+ -  `#<hash>` named commit: absorb the one named commit, after which [POST] records a `picked` header (next to `foster`).
 
 ##  CLI use
 
-The common PATCH CLI forms cover squash, rebase-one, merge, cherry-pick, remote fetch, path scope, and delegated structural rewrites.
+PATCH chooses scope; the named op is PATCH-scope plus [POST]-provenance — rebase-one = `?br` + `post #!`, merge = `?br!` + `post '#msg'`, squash = `?br!` + `post '#msg!'`, cherry = `#sha` + `post #!`.
 
- -  `be patch ?..` squashes the parent's stack into the wt, while `be patch ?./fix` squashes a child branch.
- -  `be patch ?feat/fix#` rebases one commit from `feat/fix` onto cur.
- -  `be patch '?trunk#sync from trunk'` merges trunk with an explicit message — query and message ride in one URI token.
- -  `be patch '#abc1234'` cherry-picks one commit, while `be patch ssh://origin?main` fetches then squashes.
+ -  `be patch ?feat` absorbs the next commit of `feat`; pair with `be post #!` for a rebase-step, loop it for a full rebase.
+ -  `be patch ?feat!` absorbs the whole branch; `be post '#msg'` then merges (refer), `be post '#msg!'` squashes (forget).
+ -  `be patch ?..!` replays the parent's whole stack into the wt, while `be patch ?./fix` absorbs one commit of a child branch.
+ -  `be patch '#abc1234'` absorbs one named commit (cherry-pick with `be post #!`); `be patch ssh://origin?main!` fetches then absorbs the whole branch.
  -  `be patch file.c?feat` applies one file's version from `?feat`, recording no foster row.
  -  `be patch spot:#'Old'->'New'.c` delegates an in-place structural rewrite to spot.
  -  Multiple PATCHes compose: each PATCH appends a `patch` row the next POST consumes.
 
 ##  Ancestor-skip walk
 
-Squash and merge replay only the commits cur doesn't already have; rebase-one finds the next un-absorbed commit by walking the source's first-parent chain.
+A whole-branch `?br!` replays only the commits cur doesn't already have; a one-commit `?br` finds the next un-absorbed commit by walking the source's first-parent chain.
 
- -  Squash and merge replay only commits not already reachable from cur via parent ∪ foster.
- -  `picked` trailers are dedup-only and do not participate in reachability.
- -  Rebase-one walks `?br`'s first-parent chain and stops at the first sha already reachable from cur.
+ -  Whole-branch `?br!` replays only commits not already reachable from cur via parent ∪ foster.
+ -  `picked` headers are dedup-only and do not participate in reachability.
+ -  One-commit `?br` walks `?br`'s first-parent chain and stops at the first sha already reachable from cur.
 
 ##  Merge base: full stack vs single commit
 
-The shapes split by merge base, which lets one verb be git's merge, rebase, and cherry-pick: squash and merge weave the full `fork..tip` stack against auto-LCA(cur, theirs), while cherry-pick and rebase-one weave one commit against its parent.
+The scope splits by merge base, which lets one verb be git's merge, rebase, and cherry-pick: whole-branch `?br!` weaves the full `fork..tip` stack against auto-LCA(cur, theirs), while a named commit or one-commit `?br` weaves one commit against its parent.
 
- -  Squash and merge use auto-LCA(cur, theirs) and replay the full not-yet-reachable stack — git's `merge` / `pull --squash`.
- -  Cherry-pick and rebase-one use the base parent(theirs), weaving that one commit's diff — git's `cherry-pick`/`rebase`.
- -  All four are merge-then-[POST]; only the base and the recorded provenance differ, so one verb covers four git commands.
+ -  Whole-branch `?br!` uses auto-LCA(cur, theirs) and replays the full not-yet-reachable stack — git's `merge` / `pull --squash`.
+ -  A named commit or one-commit `?br` uses the base parent(theirs), weaving that one commit's diff — git's `cherry-pick`/`rebase`.
+ -  All shapes are merge-then-[POST]; only the base differs at PATCH and the provenance is recorded at POST, so one verb covers four git commands.
 
 ##  Weave merge
 
@@ -74,7 +73,7 @@ Every PATCH prints a ULOG-style report — one line per applied commit and touch
 Two PATCH-side formats are still unsettled, both about how downstream tools read PATCH's output.
 
  -  The token-level 4-char conflict delimiters need a stable wire format for bro, graf-resolve, and a `git mergetool` adapter.
- -  A "partial picked" trailer naming `<sha>:<path>` for path-scoped forensics is a possible future extension.
+ -  A "partial picked" header naming `<sha>:<path>` for path-scoped forensics is a possible future extension.
 
 [POST]: POST.mkd "POST verb"
 [GET]: GET.mkd "GET verb"

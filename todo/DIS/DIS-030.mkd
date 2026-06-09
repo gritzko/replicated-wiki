@@ -1,0 +1,30 @@
+#   DIS-030: PATCH shape — `!` = whole-branch scope, bare `?br` = one commit, drop `#`-as-message/mode
+
+[blog/uris.mkd] is now the authoritative design for the patch/post shape language, and PATCH must catch up. In the blog, PATCH selects only the **scope** of what is absorbed — the merge/squash/rebase/cherry distinction (message + refer-back) moves entirely to [POST] (see [[DIS-031]]). Today `PATCHShape` (`sniff/PATCH.c:1314-1323`) keys on `?`/`#` presence-and-emptiness and bakes the *operation* (SQUASH/MERGE/REBASE1/CHERRY) into the `.be/wtlog` row, which POST then reads. The target is the bang modifier: bare `?br` absorbs ONE commit (the next un-absorbed on `br`), `?br!` absorbs the WHOLE branch, `#sha` absorbs one named commit; PATCH no longer reads a `#<msg>` at all. This **inverts today's default** (bare `?br` = squash → must become one-commit) and replaces the invisible empty-`#` rebase-one marker (the [[DIS ticket tracking]] / `DISPATCH.c:145-148` footgun) with a visible `!`. See [PATCH], [URI], [CLAUDE].
+
+##  Issues
+PATCH currently encodes the whole operation in the URI shape; the blog wants it to encode scope only.
+
+ -  Current `PATCHShape` (`sniff/PATCH.c:1314-1323`): `?br`→SQUASH, `#sha`→CHERRY, `?br#msg`→MERGE, `?br#`(empty)→REBASE1. Target: `?br`→one-next, `?br!`→whole-branch, `#sha`→one-named; no `#`-msg branch.
+ -  Breaking default flip: bare `?br` changes from squash (full stack) to one-commit. Every test/script using bare `?br` for squash must move to `?br!`.
+ -  `!` is not lexed anywhere (`URILexer`, the shape classifier). Add it as a ref-suffix; verify branch names cannot contain `!` so `?feature!` never reads as a branch literally named `feature!`.
+ -  The `.be/wtlog` row must now record **scope** (named-one / next-one / whole-branch) *and* a "was a named sha" flag, so POST can choose `picked` (named) vs `parent`/`foster` (branch-sourced) — provenance is no longer decided here. See the row→header contract in [[DIS-031]].
+ -  Path-scoped PATCH (`be patch file.c?feat`) and `//host` fetch-first compose unchanged; only the `?`/`#`→op mapping changes.
+
+##  Blockers
+Tightly coupled with [[DIS-031]] (POST consumes the row and decides provenance/message). Land together, or behind a transitional flag, so neither half ships a half-parsed shape. Spec rewrite is [[DIS-032]] (must describe shipped behavior, not aspiration).
+
+##  Planned
+Make PATCH a scope-only classifier driven by `!`, recording scope + named-flag for POST.
+
+ -  Repro first ([CLAUDE] §17): rewrite the `test/patch/*` table for the new shapes — `?feat` = one commit (foster-eligible), `?feat!` = whole branch, `#sha` = named (picked-eligible); assert bare `?feat` no longer squashes. These FAIL pre-change.
+ -  Lex `!` as a query-ref suffix; replace `PATCHShape`'s op-classes with scope-classes; delete the `?br#msg` MERGE and `?br#` REBASE1 branches.
+ -  Extend the wtlog patch row to carry scope + named-sha flag; keep `&theirs`/path-scope behavior.
+ -  Migrate every caller/test that used bare `?br` for squash to `?br!`; grep `test/` and `beagle/test/*.sh`.
+ -  Update `sniff/INDEX.md`; cross-link [[DIS-031]]/[[DIS-032]].
+
+[blog/uris.mkd]: ../../blog/uris.mkd "Beagle: git objects and URIs (authoritative)"
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[POST]: ../../wiki/POST.mkd "POST verb"
+[URI]: ../../wiki/URI.mkd "URI grammar"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

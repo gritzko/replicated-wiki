@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Invariants</title>
-<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
 </head>
 <body>
 <h1>Invariants: the load-bearing rules every verb upholds</h1>
@@ -17,8 +24,9 @@ The write path has exactly one commit-maker and one ref-writer, a linear first-p
 </p>
 <ul>
 <li>POST is the only commit-maker, PUT the only ref-writer: <a href="POST.html">POST</a> advances cur; <a href="PUT.html">PUT</a> writes a <code>refs</code> row but never a commit.</li>
-<li>First-parent linear, multi-parent at POST: first parent is cur's prior tip; <code>parent</code>/<code>foster</code>/<code>picked</code> come from patch rows.</li>
+<li>First-parent linear, multi-parent at POST: first parent is cur's prior tip; the post fragment's <code>!</code> picks <code>parent</code>/<code>foster</code>, named-sha rows → <code>picked</code>.</li>
 <li>POST is fast-forward only, PUT unconstrained: POST refuses non-FF advance or push; PUT force-writes any ref on either side.</li>
+<li>Commit messages may not end in <code>!</code>: a trailing <code>!</code> is reserved for POST's forget modifier, so the parse stays unambiguous.</li>
 </ul>
 <h2>Branch and worktree invariants</h2>
 <p>
@@ -46,7 +54,7 @@ A few cross-cutting contracts are still unsettled; the per-verb pages carry thei
 </p>
 <ul>
 <li>Conflict-marker wire format: PATCH's token-level 4-char delimiters need a stable format for <a href="Bro.html">Bro</a> and a <code>git mergetool</code> adapter.</li>
-<li>Provenance trailers: the <code>picked:</code> cherry-pick key and a possible path-scoped <code>&lt;sha&gt;:&lt;path&gt;</code> trailer are both still TBD.</li>
+<li>Provenance headers: <code>picked &lt;sha&gt;</code> is settled (a commit header next to <code>foster</code>, dedup-only); a path-scoped <code>&lt;sha&gt;:&lt;path&gt;</code> extension is still TBD.</li>
 <li>Real squash and repack: today GC is &quot;drop a branch&quot;; consolidating a branch's <code>refs</code> into one commit is still TODO.</li>
 <li>Bulk fetch <code>?*</code> orders parents-before-children over the delta DAG; the bare <code>be head</code> summary output format is still TBD.</li>
 </ul>

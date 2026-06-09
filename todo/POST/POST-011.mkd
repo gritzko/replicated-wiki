@@ -1,0 +1,25 @@
+#   POST-011: a noop `be patch` still records a patch row → poisons the next `be post` (`POSTNOMSG`); no way to clear staged patch rows
+
+A `be patch` that absorbs **zero changes** (noop — the source commit's changes are already present, or its objects aren't fully readable) still appends a `patch` row to `.be/wtlog`. The rows accumulate, and the next `be post` then fails: `sniff: post: cannot auto-resolve commit msg from 2 patch row(s); supply #msg` / `POSTNOMSG` (and any later `be post` to a remote dies the same way). There is **no `be patch --abort` / unstage** to clear them — the only recovery is hand-editing `.be/wtlog` to delete the rows + `rm .refs.idx`. Hit after two noop `be patch #<sha>` / `?<sha>!` attempts (against a sha whose changes were already on the trunk / incompletely fetched) left two dead rows that blocked an unrelated `be post ssh://localhost/src/dogs`. A noop patch should stage no provenance, and a poisoned wtlog must be recoverable without surgery. See [POST], [PATCH], [CLAUDE].
+
+##  Issues
+A patch that does nothing still leaves a staged row, and rows can't be cleared.
+
+ -  noop `be patch` (`applied=0 added=0 take-theirs=0`) still records a `patch` row — e.g. `patch #<sha>`, `patch ?<sha>!` — observed at `.be/wtlog` tail after two noop attempts.
+ -  Two such rows ⇒ `be post` → `nothing to promote` + `cannot auto-resolve commit msg from 2 patch row(s)` / `POSTNOMSG` (the mixed-shape ambiguity guard, `sniff/POST.c` `POSTPatchDefaults`), blocking even an unrelated post.
+ -  No `be` command unstages/aborts staged patch rows; recovery = hand-edit `.be/wtlog` (drop the lines) then `rm .refs.idx` (else stale-idx, [[DIS-033]]).
+ -  Repro: `be patch #<sha>` where `<sha>` is already reachable from cur (noop) leaves a `patch` row; a second noop patch → `be post` → `POSTNOMSG`.
+
+##  Blockers
+None. The noop-detection sits in the patch-staging path (`sniff/PATCH.c` row append); the abort/unstage is a new small verb-flag.
+
+##  Planned
+Don't stage a noop, and make staged patches clearable.
+
+ -  Repro first ([CLAUDE] §17): `be patch #<already-reachable-sha>` asserts NO `patch` row is appended and `be post` stays clean; two noop patches don't produce `POSTNOMSG`.
+ -  Skip the `patch` row when the absorption is a true noop (zero applied / zero provenance shas).
+ -  Add a clear/abort for staged patch rows (`be patch --abort`, or `be delete` of the staged patch set) so a poisoned wtlog recovers without hand-editing.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

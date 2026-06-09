@@ -1,0 +1,32 @@
+#   PUT-001: `be put <sub>/<path>` does not delegate to a mounted submodule — "does not exist — skipped" / `PUTNONE`
+
+`be put` cannot stage a file that lives inside a mounted submodule. `be put abc/ROCKMERGE.h abc/test/POLloop.c abc/test/ROCKMERGE.c` — paths that plainly exist in the mounted `abc` sub (the shell tab-completes them; `be` shows them under `status:abc` as `unk`) — fails:
+````
+    sniff: put: abc/ROCKMERGE.h does not exist — skipped
+    sniff: put: no eligible paths
+    Error: PUTNONE
+````
+`be put` resolves paths only against the **parent** project's tree and never relays a `<sub>/<path>` into the submodule's own staging. Other verbs recurse into mounted subs via the SUBS relay (POST/GET/DELETE — `BEActSubsRelay`), but PUT does not, so submodule files can only be staged by `cd`-ing into the sub. Surfaced staging the abc-pin's untracked `ROCKMERGE.h`/`test/POLloop.c`/`test/ROCKMERGE.c`. See [PUT], [Submodules], [SUBS], [CLAUDE].
+
+##  Issues
+PUT is parent-tree only; it has no submodule delegation.
+
+ -  `be put abc/<path>` → `does not exist — skipped` for every `<sub>/<path>`, then `no eligible paths` / `PUTNONE` — even though the file exists in the mounted sub (`status:abc` lists it).
+ -  PUT is the odd verb out: POST/GET/DELETE relay into mounted subs (the SUBS recursion); PUT doesn't, so `<sub>/<path>` paths are unstageable from the parent.
+ -  Workaround is manual: `cd abc && be put <path>` — breaks the one-command staging the other verbs offer.
+ -  Repro: with a mounted `abc` sub holding an untracked file, `be put abc/<file>` → `PUTNONE`.
+
+##  Blockers
+Relates to the [SUBS] recursion (the relay POST/GET/DELETE already use); independent of [[DIS-034 (`be put <dir>` trailing-slash)]] but both are PUT path-classification gaps.
+
+##  Planned
+Wire PUT into the submodule relay so `<sub>/<path>` delegates to the sub's put.
+
+ -  Repro first ([CLAUDE] §17): `be put <sub>/<path>` (mounted sub, untracked-or-modified file) stages it IN the sub — assert the sub's staging row appears; fails today `PUTNONE`.
+ -  Route a `<sub>/<path>` argument through `BEActSubsRelay` (or the equivalent PUT sub-recursion) to the submodule's `be put`, like POST/GET/DELETE; honor `--nosub`.
+ -  Regression test under `test/put` (a mounted-sub fixture); update `sniff/INDEX.md`.
+
+[PUT]: ../../wiki/PUT.mkd "PUT verb"
+[Submodules]: ../../wiki/Submodules.mkd "submodule recursion"
+[SUBS]: ../SUBS/README.mkd "submodule recursion tickets"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

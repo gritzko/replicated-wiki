@@ -1,0 +1,24 @@
+#   DIS-034: `be put <dir>` regressed — a directory without a trailing slash is "does not exist"/`PUTNONE`
+
+`be put <dir>` no longer stages a directory's files unless the path carries a **trailing slash**. Without the slash the dir is reported "does not exist — skipped" (and, if it is the only argument, the whole put fails `PUTNONE`/`NONE`); `be put <dir>/` recurses correctly. This used to work without the slash. Hit landing the DIS-030 changeset: `be put test/patch/32-bare-next-one` → `PUTNONE`, while `be put test/post/32-msg-bang-ban/` staged. The misleading "does not exist" for a dir that plainly exists compounds it. See [PUT], [CLAUDE].
+
+##  Issues
+A directory argument is only recognized with a trailing slash.
+
+ -  `be put test/patch/32-bare-next-one` (untracked dir, no slash) → `PUTNONE`; `be put test/post/32-msg-bang-ban/` (same kind, trailing slash) → staged. Tested with `build/bin/be` at the GET-005 tip.
+ -  `be put test/branches` (a TRACKED dir with a modified `run.sh`, no slash) → `PUTNONE` too — so it's not untracked-specific; it's the missing slash.
+ -  The diagnostic is wrong: a dir that exists is reported "does not exist — skipped" — the path classifier is treating a slashless dir as a non-path bareword.
+ -  A single file argument works either way; only the dir case needs the slash.
+
+##  Blockers
+None. Localized to `be put` path classification (likely `DOGNormalizeArg` / the bareword-vs-path decision treating a slashless dir as not-a-path).
+
+##  Planned
+Recognize a slashless existing directory as a directory; fix the message.
+
+ -  Repro first ([CLAUDE] §17): a test asserting `be put <dir>` (no trailing slash) stages the dir's files, same as `<dir>/`.
+ -  Trace where the put arg is classified; a path that `stat`s as a directory must recurse whether or not it ends in `/`.
+ -  Replace the "does not exist" message for an existing-but-unmatched path with an accurate one.
+
+[PUT]: ../../wiki/PUT.mkd "PUT verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

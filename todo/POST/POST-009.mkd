@@ -1,0 +1,25 @@
+#   POST-009: `be post be://host?/proj` push — recv-side wt-advance recreates the peer's project shard → `BEPRJDUP` + `be get ?` exit 153
+
+Pushing with the `?/<project>` query form to a beagle peer half-works: objects transfer and the peer trunk ref FF-advances, but the receive side then tries to advance the peer worktree and **recreates the project shard in the peer's own HOME**, hitting `BEPRJDUP` ("project shard already exists at .be/<name>") and a `be get ?` `exit 153`, leaving the peer wt "at old tip … run `be get ?` manually". Split out of [[POST-008]] (the scheme-gate fix); this is a distinct recv/HOME-resolution defect. Surfaced both via `be put be://localhost?/beagle` (landing DIS-030+031 from a clone) and the POST-008 worker's `?/proj` probe. The `<path>` form (`be post file://<abs>`) does NOT hit this — only the `?/<proj>` selector. See [POST], [GET], [CLAUDE].
+
+##  Issues
+The recv wt-advance mis-resolves the project/HOME for the `?/proj` selector.
+
+ -  `keeper: recv: wt-advance via 'be get ?' returned 153 (wt at <HOME> left at old tip)`; the trunk ref advanced but the wt did not.
+ -  `BEPRJDUP` on a `.be/<name>` shard the recv side tries to (re)create in the peer's HOME — it should resolve the EXISTING shard, not create one.
+ -  Asymmetric with the `<path>` push form, which advances the wt cleanly (POST-008 test 32).
+ -  Repro: `be post be://localhost?/beagle` (or `be put be://localhost?/beagle`) from a clone → objects + ref advance, but `BEPRJDUP` + exit 153; peer wt stale.
+
+##  Blockers
+Builds on [[POST-008]] (scheme gate) and relates to GET-004 be:-path/HOME resolution; the recv side must resolve the peer's existing shard for the `?/proj` form.
+
+##  Planned
+Make the recv wt-advance resolve the existing peer shard instead of recreating it.
+
+ -  Repro first ([CLAUDE] §17): hermetic peer (under `$HOME/tmp`, never `~/.be`); `be post be://<peer>?/proj` advances the peer trunk AND wt, exit 0 — fails today (`BEPRJDUP`/153).
+ -  Trace the recv `be get ?` HOME/project resolution; reuse the existing shard rather than `BEPRJDUP`.
+ -  Regression test under `test/post`; update `keeper/INDEX.md`.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[GET]: ../../wiki/GET.mkd "GET verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

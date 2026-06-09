@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>README</title>
-<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
 </head>
 <body>
 <h1>Active ticket board</h1>
@@ -13,12 +20,13 @@ Index of Beagle's open work: one topic per dir, each holding numbered <a href=".
 </p>
 <h2>Active topics</h2>
 <ul>
-<li><a href="URI/README.html">URI</a> — one keeper rule for branch/commit naming; URI-001 St.1-3 landed (branch-first, length-agnostic, scope-only canonical), St.4-5 pending.</li>
-<li>DIS — cross-cutting spec/impl discrepancies; DIS-025/002 fixed, DIS-001/024 (store layout) open; DIS-026/027/028 landed (<code>fbfea176</code>/<code>262d8922</code>/<code>465703db</code>: push cur→git-remote branch, relay peer push errors, <code>?main</code> resolves peer's refs/heads/main).</li>
+<li><a href="URI/README.html">URI</a> — one keeper rule for branch/commit naming; URI-001 St.1-3 landed (branch-first, length-agnostic, scope-only canonical), St.4-5 pending; URI-002 open (unify bang-factor handling — per-component bang bitflag byte + one <code>dog/</code> debanger, replacing the ad-hoc verb-bang→<code>--force</code> shim).</li>
+<li>DIS — cross-cutting spec/impl discrepancies; DIS-025/002 fixed, DIS-001/024 (store layout), DIS-029 (MARK bare-indent divs), DIS-030+031 landed (<code>bbefb693</code>: bang-model patch/post — <code>!</code>=whole-branch/forget, <code>post!</code>=--force, ban msgs ending in <code>!</code>), DIS-032 (specs to bang model, edited on disk); DIS-033 (stale <code>.refs.idx</code> → silent-empty <code>be log:</code>), DIS-034 (<code>be put &lt;dir&gt;</code> needs trailing slash → PUTNONE), DIS-035 (<code>be patch &lt;scheme&gt;://host?br</code> remote fetch-merge WIREFAIL, bang-model regression) open; DIS-026/027/028 landed (<code>fbfea176</code>/<code>262d8922</code>/<code>465703db</code>: push cur→git-remote branch, relay peer push errors, <code>?main</code> resolves peer's refs/heads/main).</li>
 <li>MEM — memory-safety audit, 36 findings; 12 landed 2026-06-07 (suite green), js 007/032/033 blocked on JSC, mediums/lows pending; digest in <code>MEM/MEM.mkd</code>.</li>
 <li>SUBS — submodule recursion; SUBS-001..012 landed, SUBS-013/015 open; digest in <code>SUBS/SUBS.mkd</code>.</li>
-<li>POST — commit-path gaps; POST-002/003/004 planned. POST-005 (selective-recursion BEDOGEXIT) resolved-by-SUBS-001/006; guard test/post/30 pending land.</li>
-<li>GET — checkout gaps; GET-001 done, GET-002 (detached secondary wt) planned.</li>
+<li><a href="POST/README.html">POST</a> — commit-path gaps; POST-003 landed (<code>50b8c468</code>: recursive POST enumerates freshly-added subs, <code>test/post/15</code>), POST-004 landed (<code>50b8c468</code>: PATCH detached-sub recursion, <code>test/post/17</code>), POST-005 landed (dogs merge: untracked mtime-alias not swept, <code>test/post/28</code>), POST-002 landed (<code>2b6026af</code>: <code>#</code>-led msg body → fragment verbatim in <code>DOGNormalizeArg</code>, grammar untouched/RFC 3986, <code>test/post/34</code>); POST-010 landed (<code>03355e9b</code>: swallow benign EPIPE on a no-op <code>file://</code> re-push, peer-side <code>RECVEmitResponse</code> n==0, <code>test/post/35</code>), POST-011 part A landed (<code>a6129afc</code>: noop <code>be patch</code> stages no patch row, <code>be-patch-noop</code>; part B = clearing staged rows → <a href="GET/README.html">GET</a>-008 <code>be get!</code>), POST-012 landed (<code>5686c2b3</code>: suppress no-op &quot;nothing to promote&quot; line in <code>-q</code>/<code>--tlv</code> sub recursion, <code>test/post/36</code>); open: POST-006 (<code>POSTCFLCT</code> false-fires on comment markers — resolution: detect WEAVE shape else <code>be post!</code>), POST-007 (<code>be post</code> mangles <code>be://</code>→<code>be:/</code>, rejects multi-line msgs), POST-013 (sub on synthetic <code>?.beagle/</code> branch won't push to a git remote without explicit <code>?main</code> — should default to remote's main/master); POST-008 landed (<code>ebde9097</code>: host-less push routable-target gate), POST-009 landed (<code>563d7a16</code>: strip <code>?/proj</code> selector before push branch), POST-001 landed (<code>eabf0c6e</code>/<code>8254ee85</code>: <code>--nosub</code> honored + scheme-gated recursion).</li>
+<li><a href="PUT/README.html">PUT</a> — staging gaps; PUT-001 landed (<code>d628fd67</code>: <code>be put &lt;sub&gt;/&lt;path&gt;</code> relays into a mounted sub via <code>BEActSubsPut</code>/<code>BERelaySub</code>, wtlog-only, <code>test/put/12</code>). No open tickets; DIS-034 (<code>be put &lt;dir&gt;</code> trailing-slash) tracked under DIS.</li>
+<li><a href="GET/README.html">GET</a> — checkout gaps; GET-001 landed (<code>3251cb48</code>: weave-merge BASS BNOROOM), GET-002 landed (<code>0f7d06b2</code>: bare-authority URI completion from history), GET-003 landed (<code>a70e34cd</code>: <code>be://host?/proj</code> empty-path clone past WIRECLFL), GET-005 landed (<code>b5771abc</code>: <code>SNOROOM</code> large-pack wire ingest), GET-006 landed (<code>64e42597</code>: <code>be get</code> ancestor-wtlog escape; re-target c-&gt;repo at cwd, test/get/40), GET-007 landed (<code>5124b2ee</code>: <code>be://</code> re-fetch shard bloat — <code>wire_locate_sha</code> latest-copy so the watermark stops re-shipping duplicate tails; <code>WIREREFETCH</code>/<code>WIREE2EREFETCH</code>; deeper reachability rewrite → GET-009); GET-008 landed (<code>23ad85b6</code>: verified — <code>be get! '?'</code> already clears a poisoned wtlog via its appended <code>get</code>-row boundary, append-only, no truncation; test/get/41); open: GET-004 (verify <code>be://</code> path addressing — <code>user@</code>⇒home, <code>*.be</code>=store, else <code>&lt;path&gt;/.be</code> dir-or-file), GET-009 (efficient <code>be://</code> sync umbrella: reachability upload-pack + cross-file serving + redundant-pack GC; St.1 landed via GET-007).</li>
 <li><a href="HEAD/README.html">HEAD</a> — dry-run preview gaps; HEAD-001 done, HEAD-002 landed (<code>90f4a362</code>: self-hosted trunk resolves via local <code>?</code> tip + coherent GRAFNONE error, test head/23).</li>
 <li>BLAME — blame perf on inflate-bound walks; BLAME-004 fixed, BLAME-001/002/003 planned.</li>
 </ul>

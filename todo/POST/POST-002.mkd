@@ -1,23 +1,27 @@
 #   POST-002: `be post '#msg'` misparses a dotted multi-line message as a path
 
-`be post` should treat a `#fragment` argument as the commit message, never a path — but the path-form detector misclassifies the arg as a path-form URI when the message is BOTH multi-line AND contains a dot, so the commit is misrouted (or fails) and only the legacy `-m` flag works. The goal is for any `#`-fragment message to commit verbatim regardless of dots or newlines. See [POST], [URI].
+`be post` should treat a `#`-led argument as the commit message, never a path — but a multi-line message that also contains a dot is misrouted to path-form and refused ("path-form URI … not allowed"), so only the legacy `-m` flag works. The defect is in the **pre-parse argument interpretation** (`DOGNormalizeArg`, `dog/DOG.c:207`), NOT in the URI grammar: a `#`-led arg is classified `starts_uri` and fed to the RFC-strict URILexer, which cannot hold a newline in a fragment, so the message's tail spills into `u->path`. The URI grammar is already RFC 3986-compliant and MUST stay so — widening `URIFragment` to `( any* )` is the WRONG fix (rejected: it discards the RFC character-class structure, admitting NUL/control bytes). The goal: any `#`-led message commits verbatim, regardless of dots or newlines, with the grammar untouched. See [POST], [URI].
 
 ##  Issues
-The URILexer carves a spurious `path` slice out of a dotted multi-line fragment, which the path-form check then trusts.
+The `#`-led message is funnelled into the URILexer-as-path instead of into the fragment slot verbatim.
 
- -  Not a pre-parse heuristic: `be_post_is_path_form` (`BE.cli.c:1466`) returns YES on a non-empty `u->path` — a PARSE output (the raw-byte `.`/`/` scan only runs when path is empty). `BEActPathFormCheck`'s pure-fragment skip (`:1487`) is correct but never reached because the parse already wrote `path`.
- -  Root cause is the grammar: `Fragment = ( pchar | "/" | "?" )*` (`abc/URI.c.rl`) EXCLUDES `\n` (not a `pchar`), so a multi-line message's fragment match STOPS at the first newline and the leftover line (which has a `.`) is parsed as a path → `u->path` non-empty. The message body is free-form and may hold newlines, so the fragment is too narrow — it does not "let `\n` through", it cuts the message at it.
- -  Single-line dotted messages and dot-free multi-line messages parse correctly; the bug needs both a newline and a `.` in the body.
- -  The standard `Co-Authored-By: <name> <a@b.c>` trailer (dots in the version and the email) triggers it on essentially every real commit — every post this session had to fall back to the legacy `-m <msg>` flag, which bypasses fragment URI-parsing.
+ -  `DOGNormalizeArg` (`dog/DOG.c:207`) sets `starts_uri = YES` for any arg whose first byte is `#` (`:238`) and immediately `return DOGParseURI(u, arg)` (`:264-267`) — sending the whole message through the URILexer.
+ -  The lexer's fragment is RFC 3986 `fragment = *( pchar / "/" / "?" )` (`abc/URI.c.rl:251`) and correctly STOPS at the first `\n` (a newline is not a `pchar`). The un-`#`'d tail (which contains a `.`) then ends up in `u->path` — i.e. "the message was seen as a path because the part after the newline had no `#` in front of it."
+ -  `be_post_is_path_form` (`beagle/BE.cli.c:1855`) returns YES on a non-empty `u->path` (`:1857`) BEFORE its raw-byte `.`/`/` scan (`:1864`, which skips a leading `?` but not `#`); so `BEActPathFormCheck`'s pure-fragment skip (`:1878`, needs `path` empty) never fires and POST refuses (`:1880-1886`).
+ -  The correct free-text handling already exists one branch lower (`dog/DOG.c:270-277`): a whitespace token that does NOT start with a sigil is dropped straight into the fragment slot verbatim (no URILexer). A `#`-led message never reaches it because `starts_uri` is tested first — the bug is this routing order/logic, not the grammar.
+ -  Single-line dotted messages and dot-free multi-line messages parse fine; the bug needs BOTH a newline and a `.`. The standard `Co-Authored-By: <name> <a@b.c>` trailer triggers it on essentially every real commit, forcing the legacy `-m` flag.
 
 ##  Blockers
-None.
+None. The URI grammar must remain RFC 3986-compliant (do NOT widen `URIFragment`); the fix is confined to the pre-parse classifier.
 
 ##  Planned
-Let the `#`-fragment (message) absorb newlines to end-of-input, so a multi-line message is wholly the fragment and never leaks into `path`.
+Route a `#`-led arg's message into the fragment verbatim in the pre-parse classifier; leave the grammar and the lexer untouched.
 
- -  Fix the URI lexer (`abc/URI.c.rl`, regenerate the ragel): a `#` fragment is opaque free-form to EOF — extend `Fragment` to accept `\n` (and the rest); OR route a `#`-led arg entirely to the fragment in `DOGNormalizeArg` without re-lexing the tail as a path. (Once `path` is empty for a `#msg`, `BEActPathFormCheck`'s :1487 skip handles it — keep that as belt-and-suspenders.)
- -  Repro (rule 17): `be post` with a multi-line message containing a dot (e.g. the `Co-Authored-By: X <a@b.c>` trailer) commits the body verbatim, not misrouted to path-form; `-m` still works.
+ -  In `DOGNormalizeArg` (`dog/DOG.c`), special-case an arg whose first byte is `#`: assign the bytes AFTER the `#` to `u->fragment` verbatim (advance past the `#` with a typed slice op — NO pointer arithmetic, per [CLAUDE] §10), leave `path`/`query`/`authority`/`scheme` empty, and do NOT call the URILexer. This mirrors the existing `has_ws → fragment` bypass and uniformly handles `#fix`, `#a\n\nCo-Authored-By: …`, and a message containing `be://` (no `//`-collapse — overlaps [POST-007]). Once `path` is empty, `BEActPathFormCheck`'s pure-fragment skip handles the rest (keep it as belt-and-suspenders).
+ -  Keep the URILexer fragment rule (`abc/URI.c.rl:251`) exactly as-is — RFC 3986 compliant. A raw newline in a URI fragment is NOT valid RFC; the message is opaque payload handled OUTSIDE the grammar, the same way Beagle handles free-text search.
+ -  Repro-first ([CLAUDE] §17): a `DOGNormalizeArg`-level unit case asserting `#a\n\nCo-Authored-By: X <a@b.c>` yields `fragment` = the whole post-`#` body and EMPTY `path`; plus the end-to-end `test/post/34-msg-multiline-dot` asserting `be post '#<multiline dotted>'` commits the body verbatim and is NOT refused, with `-m` still working. Both fail before the fix.
+ -  NOTE: the first attempt widened `URIFragment` to `( any* )` and regenerated the ragel — REJECTED for breaking RFC compliance. A new worker must revert any grammar/`URI.rl.c` change and implement the classifier fix above.
 
-[POST]: ../wiki/POST.mkd "POST verb"
-[URI]: ../wiki/URI.mkd "URI structure"
+[POST]: ../../wiki/POST.mkd "POST verb"
+[URI]: ../../wiki/URI.mkd "URI structure"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

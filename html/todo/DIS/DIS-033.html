@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-033</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>DIS-033: stale/unbuilt <code>.refs.idx</code> makes <code>be log:</code> silently return empty (and <code>be head</code> <code>GRAFFAIL</code>)</h1>
+<p>
+A freshly-cloned or freshly-touched worktree can have a stale or not-yet-built <code>&lt;store&gt;/.refs.idx</code>; while it is stale the log/head projectors resolve no <code>--at</code> tip and <code>be log:</code> returns an EMPTY listing (just the banner, exit 0) — looking like &quot;no history&quot; — while <code>be head file://…</code> returns <code>GRAFFAIL &quot;--at sha not set&quot;</code>. It self-heals: the next <code>be</code> invocation rebuilds <code>.refs.idx</code> (mtime bumps) and the identical <code>be log:</code> then lists normally. Hit repeatedly this session in the <code>$HOME/todo/DIS-030</code> clone and earlier loop clones. Per <a href="">[be undo commit procedure</a>] a stale <code>.refs.idx</code> is a known cause of <code>GRAFFAIL --at not set</code>; the bug is the *<strong>silent-empty</strong>* (and the unbuilt-index gap), not the eventual self-heal. See <a href="../../wiki/HEAD.html">HEAD</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+A stale refs index yields no <code>--at</code>, and the projectors disagree on how they fail.
+</p>
+<ul>
+<li><code>be log:</code> with a stale/absent <code>.refs.idx</code> → empty banner, exit 0 (indistinguishable from a genuinely empty history — misleading).</li>
+<li><code>be head file://…</code> on the same state → <code>GRAFFAIL</code> / <code>--at sha not set</code> (loud) — the two read paths fail differently for one cause.</li>
+<li>Self-heals: a later <code>be</code> call rebuilds <code>.refs.idx</code>, so the same command works seconds later — a transient, confusing failure, not data loss.</li>
+<li>Related: a detached clone (<code>get be://host?#&lt;sha&gt;</code>) has <code>cur</code> but no <code>?/proj</code> trunk ref, so <code>be log:?/beagle</code> → <code>REFSNONE</code> even when healthy — a separate &quot;no trunk ref after a pinned clone&quot; gap worth noting.</li>
+<li>Repro: <code>be get be://localhost?/beagle</code>; run anything touching the store; <code>be log:</code> → empty; run <code>be log:</code> again → lists.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Needs the projector's <code>.refs.idx</code> read path to detect staleness.
+</p>
+<h2>Planned</h2>
+<p>
+Rebuild a stale index before resolving <code>cur</code>, or fail loud — never silent-empty.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a test that makes <code>.refs.idx</code> stale (touch <code>refs</code> newer, or <code>rm .refs.idx</code>) then asserts <code>be log:</code> rebuilds and lists, never returns an empty exit-0.</li>
+<li>On read, detect a stale/absent <code>.refs.idx</code> (mtime vs <code>refs</code>, or a generation counter) and rebuild before resolving the tip; otherwise emit a loud <code>REFSSTALE</code>-class error.</li>
+<li>Unify the <code>log:</code> and <code>head</code> failure modes for the no-<code>--at</code> case.</li>
+</ul>
+</body>
+</html>

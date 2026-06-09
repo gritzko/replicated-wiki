@@ -4,10 +4,17 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Verbs</title>
-<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
 </head>
 <body>
-<h1>Verbs: a small orthogonal vocabulary, not git's sprawl</h1>
+<h1>Verbs: orthogonal basis, not sprawl</h1>
 <p>
 Beagle's command language is a small, fixed set of HTTP verbs — GET, HEAD, POST, PUT, DELETE, PATCH — chosen to combat git's command and flag sprawl. Nobody remembers all of git, so these verbs are kept orthogonal: each has one clear function and a single direction of data flow, and none can be supplemented by creative use of another. You pick the verb for the move you want, then each URI slot adds its own effect.
 </p>
@@ -27,7 +34,7 @@ Pick the verb, then each populated URI part adds its own effect; the same four s
 <li><code>?branch</code>: HEAD/GET scope or switch; POST FF-advances; PUT names the ref; PATCH sources from it; DELETE drops it.</li>
 <li><code>./path</code>: scopes the diff (HEAD), restores a file (GET), stages (PUT), unlinks (DELETE), or scopes absorption (PATCH).</li>
 <li><code>//remote</code>: cached by default; a transport scheme (<code>ssh:</code>) opens the wire to fetch (GET/HEAD/PATCH) or push (POST/PUT).</li>
-<li><code>#frag</code>: a sha pin or a commit-message body; for PATCH the <code>#</code> shape alone picks merge vs rebase-one vs cherry-pick.</li>
+<li><code>#frag</code>: a sha pin or a commit-message body; PATCH takes no <code>#message</code>, and the <code>!</code> bang on <code>?br</code> selects whole-branch vs one commit.</li>
 <li>An empty <code>?branch</code> defaults to cur; cross-branch commits don't exist — switch cur first, then commit there.</li>
 </ul>
 <h2>Bareword defaults</h2>
@@ -48,7 +55,8 @@ The everyday git commands map onto verb + URI combinations, no extra flags.
 <li><code>git clone URL</code> → <code>be get ssh://URL</code>; <code>git fetch</code> → <code>be head ssh://origin?*</code>; <code>git checkout feat</code> → <code>be get ?feat</code>.</li>
 <li><code>git checkout -b feat</code> → <code>be put ?./feat &amp;&amp; be get ?./feat</code> (mkdir, then cd).</li>
 <li><code>git add f &amp;&amp; commit -m</code> → <code>be put ./f &amp;&amp; be post '#msg'</code>; <code>git commit -am</code> → <code>be put . &amp;&amp; be post 'msg'</code>.</li>
-<li><code>git merge trunk</code> → <code>be patch '?trunk#sync' &amp;&amp; be post</code>; <code>git cherry-pick &lt;sha&gt;</code> → <code>be patch '#&lt;sha&gt;' &amp;&amp; be post</code>.</li>
+<li><code>git merge trunk</code> → <code>be patch ?trunk! &amp;&amp; be post '#sync'</code>; <code>git cherry-pick &lt;sha&gt;</code> → <code>be patch '#&lt;sha&gt;' &amp;&amp; be post #!</code>.</li>
+<li><code>git rebase feat</code> → loop <code>be patch ?feat &amp;&amp; make test &amp;&amp; be post #!</code>; <code>git merge --squash feat</code> → <code>be patch ?feat! &amp;&amp; be post '#msg!'</code>.</li>
 <li><code>git push</code> → <code>be put ssh://origin</code>; <code>git branch -d feat</code> → <code>be delete ?feat</code>; <code>git status</code> → bare <code>be</code>.</li>
 <li><code>git stash</code> → use a sub-branch (eager branching); <code>git log -n 20 feat</code> → <code>be log:?feat#20</code>.</li>
 </ul>

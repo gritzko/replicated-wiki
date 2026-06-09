@@ -4,34 +4,44 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>POST-002</title>
-<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
 </head>
 <body>
 <h1>POST-002: <code>be post '#msg'</code> misparses a dotted multi-line message as a path</h1>
 <p>
-<code>be post</code> should treat a <code>#fragment</code> argument as the commit message, never a path — but the path-form detector misclassifies the arg as a path-form URI when the message is BOTH multi-line AND contains a dot, so the commit is misrouted (or fails) and only the legacy <code>-m</code> flag works. The goal is for any <code>#</code>-fragment message to commit verbatim regardless of dots or newlines. See <a href="../wiki/POST.html">POST</a>, <a href="../wiki/URI.html">URI</a>.
+<code>be post</code> should treat a <code>#</code>-led argument as the commit message, never a path — but a multi-line message that also contains a dot is misrouted to path-form and refused (&quot;path-form URI … not allowed&quot;), so only the legacy <code>-m</code> flag works. The defect is in the *<strong>pre-parse argument interpretation</strong>* (<code>DOGNormalizeArg</code>, <code>dog/DOG.c:207</code>), NOT in the URI grammar: a <code>#</code>-led arg is classified <code>starts_uri</code> and fed to the RFC-strict URILexer, which cannot hold a newline in a fragment, so the message's tail spills into <code>u-&gt;path</code>. The URI grammar is already RFC 3986-compliant and MUST stay so — widening <code>URIFragment</code> to <code>( any* )</code> is the WRONG fix (rejected: it discards the RFC character-class structure, admitting NUL/control bytes). The goal: any <code>#</code>-led message commits verbatim, regardless of dots or newlines, with the grammar untouched. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/URI.html">URI</a>.
 </p>
 <h2>Issues</h2>
 <p>
-The URILexer carves a spurious <code>path</code> slice out of a dotted multi-line fragment, which the path-form check then trusts.
+The <code>#</code>-led message is funnelled into the URILexer-as-path instead of into the fragment slot verbatim.
 </p>
 <ul>
-<li>Not a pre-parse heuristic: <code>be_post_is_path_form</code> (<code>BE.cli.c:1466</code>) returns YES on a non-empty <code>u-&gt;path</code> — a PARSE output (the raw-byte <code>.</code>/<code>/</code> scan only runs when path is empty). <code>BEActPathFormCheck</code>'s pure-fragment skip (<code>:1487</code>) is correct but never reached because the parse already wrote <code>path</code>.</li>
-<li>Root cause is the grammar: <code>Fragment = ( pchar | &quot;/&quot; | &quot;?&quot; )*</code> (<code>abc/URI.c.rl</code>) EXCLUDES <code>\n</code> (not a <code>pchar</code>), so a multi-line message's fragment match STOPS at the first newline and the leftover line (which has a <code>.</code>) is parsed as a path → <code>u-&gt;path</code> non-empty. The message body is free-form and may hold newlines, so the fragment is too narrow — it does not &quot;let <code>\n</code> through&quot;, it cuts the message at it.</li>
-<li>Single-line dotted messages and dot-free multi-line messages parse correctly; the bug needs both a newline and a <code>.</code> in the body.</li>
-<li>The standard <code>Co-Authored-By: &lt;name&gt; &lt;a@b.c&gt;</code> trailer (dots in the version and the email) triggers it on essentially every real commit — every post this session had to fall back to the legacy <code>-m &lt;msg&gt;</code> flag, which bypasses fragment URI-parsing.</li>
+<li><code>DOGNormalizeArg</code> (<code>dog/DOG.c:207</code>) sets <code>starts_uri = YES</code> for any arg whose first byte is <code>#</code> (<code>:238</code>) and immediately <code>return DOGParseURI(u, arg)</code> (<code>:264-267</code>) — sending the whole message through the URILexer.</li>
+<li>The lexer's fragment is RFC 3986 <code>fragment = *( pchar / &quot;/&quot; / &quot;?&quot; )</code> (<code>abc/URI.c.rl:251</code>) and correctly STOPS at the first <code>\n</code> (a newline is not a <code>pchar</code>). The un-<code>#</code>'d tail (which contains a <code>.</code>) then ends up in <code>u-&gt;path</code> — i.e. &quot;the message was seen as a path because the part after the newline had no <code>#</code> in front of it.&quot;</li>
+<li><code>be_post_is_path_form</code> (<code>beagle/BE.cli.c:1855</code>) returns YES on a non-empty <code>u-&gt;path</code> (<code>:1857</code>) BEFORE its raw-byte <code>.</code>/<code>/</code> scan (<code>:1864</code>, which skips a leading <code>?</code> but not <code>#</code>); so <code>BEActPathFormCheck</code>'s pure-fragment skip (<code>:1878</code>, needs <code>path</code> empty) never fires and POST refuses (<code>:1880-1886</code>).</li>
+<li>The correct free-text handling already exists one branch lower (<code>dog/DOG.c:270-277</code>): a whitespace token that does NOT start with a sigil is dropped straight into the fragment slot verbatim (no URILexer). A <code>#</code>-led message never reaches it because <code>starts_uri</code> is tested first — the bug is this routing order/logic, not the grammar.</li>
+<li>Single-line dotted messages and dot-free multi-line messages parse fine; the bug needs BOTH a newline and a <code>.</code>. The standard <code>Co-Authored-By: &lt;name&gt; &lt;a@b.c&gt;</code> trailer triggers it on essentially every real commit, forcing the legacy <code>-m</code> flag.</li>
 </ul>
 <h2>Blockers</h2>
 <p>
-None.
+None. The URI grammar must remain RFC 3986-compliant (do NOT widen <code>URIFragment</code>); the fix is confined to the pre-parse classifier.
 </p>
 <h2>Planned</h2>
 <p>
-Let the <code>#</code>-fragment (message) absorb newlines to end-of-input, so a multi-line message is wholly the fragment and never leaks into <code>path</code>.
+Route a <code>#</code>-led arg's message into the fragment verbatim in the pre-parse classifier; leave the grammar and the lexer untouched.
 </p>
 <ul>
-<li>Fix the URI lexer (<code>abc/URI.c.rl</code>, regenerate the ragel): a <code>#</code> fragment is opaque free-form to EOF — extend <code>Fragment</code> to accept <code>\n</code> (and the rest); OR route a <code>#</code>-led arg entirely to the fragment in <code>DOGNormalizeArg</code> without re-lexing the tail as a path. (Once <code>path</code> is empty for a <code>#msg</code>, <code>BEActPathFormCheck</code>'s :1487 skip handles it — keep that as belt-and-suspenders.)</li>
-<li>Repro (rule 17): <code>be post</code> with a multi-line message containing a dot (e.g. the <code>Co-Authored-By: X &lt;a@b.c&gt;</code> trailer) commits the body verbatim, not misrouted to path-form; <code>-m</code> still works.</li>
+<li>In <code>DOGNormalizeArg</code> (<code>dog/DOG.c</code>), special-case an arg whose first byte is <code>#</code>: assign the bytes AFTER the <code>#</code> to <code>u-&gt;fragment</code> verbatim (advance past the <code>#</code> with a typed slice op — NO pointer arithmetic, per <a href="../../CLAUDE.md">CLAUDE</a> §10), leave <code>path</code>/<code>query</code>/<code>authority</code>/<code>scheme</code> empty, and do NOT call the URILexer. This mirrors the existing <code>has_ws → fragment</code> bypass and uniformly handles <code>#fix</code>, <code>#a\n\nCo-Authored-By: …</code>, and a message containing <code>be://</code> (no <code>//</code>-collapse — overlaps <a href="">POST-007</a>). Once <code>path</code> is empty, <code>BEActPathFormCheck</code>'s pure-fragment skip handles the rest (keep it as belt-and-suspenders).</li>
+<li>Keep the URILexer fragment rule (<code>abc/URI.c.rl:251</code>) exactly as-is — RFC 3986 compliant. A raw newline in a URI fragment is NOT valid RFC; the message is opaque payload handled OUTSIDE the grammar, the same way Beagle handles free-text search.</li>
+<li>Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a <code>DOGNormalizeArg</code>-level unit case asserting <code>#a\n\nCo-Authored-By: X &lt;a@b.c&gt;</code> yields <code>fragment</code> = the whole post-<code>#</code> body and EMPTY <code>path</code>; plus the end-to-end <code>test/post/34-msg-multiline-dot</code> asserting <code>be post '#&lt;multiline dotted&gt;'</code> commits the body verbatim and is NOT refused, with <code>-m</code> still working. Both fail before the fix.</li>
+<li>NOTE: the first attempt widened <code>URIFragment</code> to <code>( any* )</code> and regenerated the ragel — REJECTED for breaking RFC compliance. A new worker must revert any grammar/<code>URI.rl.c</code> change and implement the classifier fix above.</li>
 </ul>
 </body>
 </html>

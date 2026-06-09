@@ -4,7 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Issues</title>
-<link rel="stylesheet" href="/assets/css/style.css">
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
 </head>
 <body>
 <h1>Issues: the parallel agent fix-and-land loop</h1>
@@ -20,12 +27,12 @@ Every discrepancy is a numbered ticket e.g. <code>todo/TOPIC/TOPIC-001.mkd</code
 <li>Decide the fix first (the Planned section, or a design pass for open-ended ones), then fork — never on a vague idea.</li>
 <li>A discrepancy found mid-fix becomes its OWN ticket, never a silent patch (this session spawned POST-001/002, GET-002).</li>
 </ul>
-<h2>One agent per ticket, in an isolated clone</h2>
+<h2>One agent per ticket, in an isolated tree (worktree or clone)</h2>
 <p>
-Each agent clones the source into its own scratch tree WITH BEAGLE, builds a debug tree there, and never touches another agent's files.
+Each agent gets its own tree WITH BEAGLE — either a store-backed worktree (cheap, shares the local <code>.be</code>) or a full independent clone — builds a debug tree there, and never touches another agent's files.
 </p>
 <ul>
-<li><code>mkdir $HOME/todo/&lt;TICKET&gt;</code>, <code>be get --nosub ssh://&lt;src&gt;</code>, debug build per <code>CLAUDE.md</code>, work only in that clone.</li>
+<li><code>mkdir $HOME/todo/&lt;TICKET&gt;</code>, then either (a) a *<strong>store-backed worktree</strong>* — <code>cd $HOME/todo/&lt;TICKET&gt;</code> and <code>be get file:///home/gritzko/.be?/beagle</code> (shares the global store, no full object copy), or (b) a *<strong>full clone</strong>* — <code>be get be://localhost?/beagle</code> (its own store + worktree). Debug build per <code>CLAUDE.md</code>; work only in that tree.</li>
 <li>Drive <code>be</code> with the known-good binary on <code>PATH</code>, not the clone's freshly-built one, for the clone/commit/post steps.</li>
 <li>Independent tickets run as concurrent background agents; disjoint files mean no collision while implementing.</li>
 </ul>

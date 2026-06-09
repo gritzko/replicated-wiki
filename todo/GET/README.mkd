@@ -1,0 +1,12 @@
+#   GET tickets: checkout / fetch / view / search
+
+`be get` fetches, checks out, and indexes a version/branch/project (with `be head` as its dry-run). Tickets below close gaps in `be://` store resolution and wire-fetch sizing/dedup. Each entry is one active ticket with its live state; an entry drops off once the whole ticket lands (landed commits stay on the board's GET line). The fix-and-land method is [Issues].
+
+##  Active tickets
+
+ -  [GET-004] — full `be://` path→store resolution: `user@` selects the peer home, an empty path = `<home>/.be`, a `*.be` path is the store itself, any other path gets `/.be` appended (dir-or-file). Two of the four cases are unverified; builds on the landed empty-path base case.
+ -  [GET-009] — efficient beagle↔beagle (`be://`) sync umbrella: replace `WIRE.c`'s byte-offset watermark with object-level reachability serving (`closure(wants) − closure(haves)`), cross-`file_id` serving, and a redundant-pack GC/compaction for already-bloated shards. St.1 ([[GET-007]] latest-copy) landed; St.2-4 open.
+
+[GET-004]: GET-004.mkd "be:// path → store resolution (home / .be / *.be / wt)"
+[GET-009]: GET-009.mkd "efficient be:// sync: reachability upload-pack + GC"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

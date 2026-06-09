@@ -1,0 +1,25 @@
+#   DIS-033: stale/unbuilt `.refs.idx` makes `be log:` silently return empty (and `be head` `GRAFFAIL`)
+
+A freshly-cloned or freshly-touched worktree can have a stale or not-yet-built `<store>/.refs.idx`; while it is stale the log/head projectors resolve no `--at` tip and `be log:` returns an EMPTY listing (just the banner, exit 0) — looking like "no history" — while `be head file://…` returns `GRAFFAIL "--at sha not set"`. It self-heals: the next `be` invocation rebuilds `.refs.idx` (mtime bumps) and the identical `be log:` then lists normally. Hit repeatedly this session in the `$HOME/todo/DIS-030` clone and earlier loop clones. Per [[be undo commit procedure]] a stale `.refs.idx` is a known cause of `GRAFFAIL --at not set`; the bug is the **silent-empty** (and the unbuilt-index gap), not the eventual self-heal. See [HEAD], [CLAUDE].
+
+##  Issues
+A stale refs index yields no `--at`, and the projectors disagree on how they fail.
+
+ -  `be log:` with a stale/absent `.refs.idx` → empty banner, exit 0 (indistinguishable from a genuinely empty history — misleading).
+ -  `be head file://…` on the same state → `GRAFFAIL` / `--at sha not set` (loud) — the two read paths fail differently for one cause.
+ -  Self-heals: a later `be` call rebuilds `.refs.idx`, so the same command works seconds later — a transient, confusing failure, not data loss.
+ -  Related: a detached clone (`get be://host?#<sha>`) has `cur` but no `?/proj` trunk ref, so `be log:?/beagle` → `REFSNONE` even when healthy — a separate "no trunk ref after a pinned clone" gap worth noting.
+ -  Repro: `be get be://localhost?/beagle`; run anything touching the store; `be log:` → empty; run `be log:` again → lists.
+
+##  Blockers
+None. Needs the projector's `.refs.idx` read path to detect staleness.
+
+##  Planned
+Rebuild a stale index before resolving `cur`, or fail loud — never silent-empty.
+
+ -  Repro first ([CLAUDE] §17): a test that makes `.refs.idx` stale (touch `refs` newer, or `rm .refs.idx`) then asserts `be log:` rebuilds and lists, never returns an empty exit-0.
+ -  On read, detect a stale/absent `.refs.idx` (mtime vs `refs`, or a generation counter) and rebuild before resolving the tip; otherwise emit a loud `REFSSTALE`-class error.
+ -  Unify the `log:` and `head` failure modes for the no-`--at` case.
+
+[HEAD]: ../../wiki/HEAD.mkd "HEAD verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

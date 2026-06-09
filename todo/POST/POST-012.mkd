@@ -1,0 +1,24 @@
+#   POST-012: `be post` prints "nothing to promote … already contains cur" noise on a no-op submodule recursion
+
+On a no-op `be post`, every submodule whose synthetic sub-branch already holds its current commit emits `sniff: post: nothing to promote (?/<subproj>/.beagle already contains cur)`. This is redundant clutter: the final `sniff: 0 change(s)` already conveys the no-op, and the per-sub line makes a clean post look like a problem — sitting right under the (now-fixed) `POSTNOMSG`, it read like an error. `be post` should stay quiet on no-ops and report a sub only when it actually promotes something (per [Verbs]/the verb report-channels rule: post reports real changes, TLV-only). Suppress the line. See [POST], [Submodules], [CLAUDE].
+
+##  Issues
+A clean post is noisy, one line per in-sync sub.
+
+ -  `be post <remote>` with a clean worktree + an in-sync `abc`/`libabc` sub prints `nothing to promote (?/libabc/.beagle already contains cur)` then `0 change(s)`.
+ -  The `0 change(s)` summary already covers the no-op; the per-sub line adds nothing and obscures real output.
+ -  It reads as a failure (it surfaced asking "what does this mean?" — looked like an error, was a clean no-op).
+ -  Repro: `be post ssh://localhost/src/dogs` (or any remote) with nothing staged and the sub already at its pin → the noise line.
+
+##  Blockers
+None. Localized to the submodule-recursion post reporting in `sniff` (the `?/<sub>/.beagle already contains cur` branch).
+
+##  Planned
+Only report a sub that promotes a change; drop the no-op line.
+
+ -  Repro first ([CLAUDE] §17): a no-op `be post` with an in-sync sub asserts the "nothing to promote … already contains cur" line is NOT printed and `0 change(s)` still is.
+ -  Suppress the per-sub "nothing to promote" message when the sub already contains cur; keep it (or a real report) only when the sub actually promotes ≥1 change.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[Submodules]: ../../wiki/Submodules.mkd "submodule recursion"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

@@ -1,0 +1,32 @@
+#   GET-003: `be get be://localhost?/beagle` (project-selector clone, empty path) dies WIRECLFL
+
+The keeper wire protocol selects the project with a `?/project` **query** selector — `WIREServePath` (`keeper/WIRECLI.c:143-151`) appends it to the served path, and both the local-exec and ssh keeper branches rely on it (`:204-209`, `:242-249`, "convey an explicit `?/proj` so the server serves THAT shard"). But `wcli_spawn` rejects an **empty path** with `WIRECLFL` at `:165` (and again at `:237`, after stripping the leading `/`) — *before* the scheme is even classified (`is_be`/`is_keeper` at `:170-172`) and before the query selector is used. So `be get be://localhost?/beagle` — the natural keeper clone form (project in the query, default store, no repo path) — dies `WIRECLFL`. This blocked the [Issues] fix-and-land loop (couldn't clone beagle over `be://`). It is not get-specific: `be head be://localhost?/beagle` and `be patch` fetch fail the same way (shared wire client). See [GET], [URI], [blog/uris.mkd], [CLAUDE].
+
+##  Issues
+The empty-path guard is scheme-blind and fires before the keeper branch's query-selector path.
+
+ -  `keeper/WIRECLI.c:164-165`: `a_dup(path, u.path); if (u8csEmpty(path)) return WIRECLFL;` runs for every scheme, before `is_be`/`is_keeper` classification; a pathless `be://host?/proj` never reaches `WIREServePath`.
+ -  Second guard `:237` (after the leading-`/` strip in the ssh branch) repeats the rejection.
+ -  Keeper *is designed* to serve `?/<project>` with no repo path; an **empty path denotes the peer's default `$HOME/.be` store**, the `?/<project>` selecting the shard within it. The guard makes that unexpressible.
+ -  Repro (read-only, isolates the wire client): `be head be://localhost?/beagle` → `WIRECLFL` / `BEDOGEXIT`. Same for `be get`/`be patch` fetch.
+ -  Contrast: the git branch (`ssh:`/`https:`) genuinely needs a path (`git-upload-pack <path>`), so empty-path → `WIRECLFL` is correct *there* — the fix must stay scheme-specific.
+ -  Confirm the `WIRECLFL` origin with `ABC_TRACE` first ([trace-before-theorizing]) — the empty-path guard is the prime suspect, but rule out a URI-parse miss on `be://host?/proj` (authority + query, no path) at `URIutf8Drain` (`:159`).
+
+##  Blockers
+None. Localized to `wcli_spawn` in `keeper/WIRECLI.c`; the `WIREServePath` selector machinery already exists.
+
+##  Planned
+Allow an empty path in the keeper branch when the query carries a `?/project` selector; keep the git branch strict.
+
+ -  Repro first ([CLAUDE] §17): a hermetic localhost keeper peer; assert `be head be://localhost?/beagle` resolves project `beagle` (exit 0) and `be get be://localhost?/beagle` clones a worktree — both FAIL `WIRECLFL` pre-fix.
+ -  Client: move the empty-path rejection *after* scheme classification — for `is_keeper||is_be` with a non-empty `?/<proj>` query, skip the `:165`/`:237` guards and serve `WIREServePath("", u.query)` → `?/proj`.
+ -  Server: keeper upload-pack, given a `?/`-only (empty) path, must resolve to the peer's default `$HOME/.be` store + the named project (verify whether the existing local-exec/row-0 default already does this, else add it).
+ -  Keep `ssh:`/`https:`/`git:` (git-transport) empty-path → `WIRECLFL`; verify `file://` local clone and pathful `be://host/path` are unaffected.
+ -  Regression test under `test/get` (and a `head` case); update `keeper/INDEX.md` if behavior notes change.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[URI]: ../../wiki/URI.mkd "URI grammar"
+[blog/uris.mkd]: ../../blog/uris.mkd "Beagle: git objects and URIs"
+[Issues]: ../../skill/Issues.mkd "the fix-and-land loop"
+[trace-before-theorizing]: ../../wiki/Invariants.mkd "trace, don't guess"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

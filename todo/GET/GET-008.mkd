@@ -1,0 +1,27 @@
+#   GET-008: `be get!` (≡ `be get --force`) resets the world — its `get` row voids prior staged records (append-only, NO truncation)
+
+`be get!` is just `be get --force` (the bang injects `--force`, nothing more) and is the clean-slate reset. It does NOT need to truncate `.be/wtlog`: the wtlog is **append-only**, and a `get` row IS a boundary — it is "a hard reset of the world" that resets both the pd boundary (`SNIFFAtLastPostTs`, `sniff/AT.c:631-634`) and the patch boundary (`at_patch_boundary_start`, `sniff/AT.c:544-547`, DIS-010). So once a fresh `get` row is appended, every prior staged `put`/`patch` record falls **below** the boundary and is void — POST/PATCH already ignore everything before the most recent `get`/commit-all-`post`. Clearing a poisoned wtlog (origin: [[POST-011]] Part B — accumulated staged `patch` rows → `be post` `POSTNOMSG`) is therefore just running `be get!`, which appends that boundary. The only real question is whether a **no-op** `be get!` (target already == cur) still appends the `get` row; if it short-circuits without one, the reset doesn't happen. See [GET], [POST], [[POST-011]], [CLAUDE].
+
+##  Issues
+The reset is already a property of the append-only wtlog + `get`-boundary; the only gap is a no-op get not recording the boundary.
+
+ -  **`get!` ≡ `get --force`.** `dog/CLI.c:61-81` sheds a trailing `!` from the verb and injects `--force`; `"get"` is in both verb tables, so `get!` already parses and forces today. There is NO separate `--reset` — do not invent one.
+ -  **A `get` row already voids prior records.** `at_patch_boundary_start` ("patch boundary = most recent `get` OR commit-all `post` row") and `SNIFFAtLastPostTs` ("a `get` … resets the pd boundary") mean staged `put`/`patch` rows before the latest `get` are ignored. So NO `ULOGTruncate` / row-deletion is needed or wanted — truncating an append-only log is the wrong model.
+ -  **The actual gap:** does a no-op `be get!` (force re-checkout to the current tip, nothing to write) still append the `get` row at `sniff/GET.c:1402` (`SNIFFAtAppendAt`), or does it short-circuit earlier? If a no-op get appends no boundary, then `be get!` cannot clear a poisoned wtlog — the fix is to ensure the forced get records its boundary row, NOT to truncate.
+ -  REJECTED (do not merge): the first GET-008 worker added a separate `--reset` flag + `SNIFFAtVoidStaged`/`ULOGTruncate` to delete staged rows. That contradicts the append-only model (and the maintainer): a `get` row already invalidates prior records. Discard that approach.
+
+##  Blockers
+None conceptually. Confirm the no-op-get boundary behavior empirically before any code; if no fix is needed (a no-op `get!` already appends the row), GET-008 closes as a documentation/verification of the reset workflow.
+
+##  Planned
+Verify the reset workflow; make `be get!` append its `get` boundary even on a no-op; no truncation.
+
+ -  Repro first ([CLAUDE] §17): stage `put`/`patch` rows in `.be/wtlog`, run `be get!` (force re-checkout to cur), assert (a) a fresh `get` row is appended, (b) `be post` is a clean no-op (not `POSTNOMSG`/`PUTNONE`) because the staged rows are now below the boundary, (c) `be log:` still lists (no idx damage — and there is none, since nothing was deleted). If a no-op `be get!` already appends the boundary, this passes with NO code change → close as verified.
+ -  If a no-op force get short-circuits without appending: make the forced get record its `get` boundary row (the minimal append-only fix); do NOT delete or truncate any rows.
+ -  Document `be get!` as the poisoned-wtlog recovery in [PATCH]/[POST] (replaces the hand-edit `.be/wtlog` workaround [[POST-011]] cited).
+ -  Regression test under `test/get`.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[POST]: ../../wiki/POST.mkd "POST verb"
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

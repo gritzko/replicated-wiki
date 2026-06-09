@@ -1,0 +1,23 @@
+#   POST-007: `be post` mangles `be://`→`be:/` in commit messages and rejects multi-line / `#`-led messages
+
+Two message-handling glitches in `be post`, both hit landing this session's commits. (1) A commit message containing `be://` is STORED as `be:/` — the doubled slash collapses (visible in commit `a70e34cd`'s subject). A commit message is free text and must round-trip verbatim. (2) Passing a `#`-led or multi-line message — e.g. a body with a `Co-Authored-By` trailer — is refused as "path-form URI … not allowed", so only a single-line bareword/quoted message works; trailers and multi-line bodies are unusable. See [POST], [URI], [CLAUDE].
+
+##  Issues
+The message slot is being run through URI/path classification instead of treated as opaque text.
+
+ -  `be://` → `be:/`: message text passes through a `//`-collapsing path normalization; any `scheme://` (or `//`) in a subject is corrupted.
+ -  A `#…\n…`-shaped message arg is classified as a path-form URI and refused (`be post $'#a\n\nCo-Authored-By: …'` → "path-form URI not allowed"), blocking trailers and multi-line bodies — even though [Issues] notes "messages may be multi-line once the parser allows".
+ -  Repro: `be post '#fix the be:// scheme'` → stored `be:/`; `be post $'#a\n\nb'` → "path-form URI not allowed".
+
+##  Blockers
+Relates to `DOGNormalizeArg` / the fragment-vs-path argv classification.
+
+##  Planned
+Treat the message/fragment slot as opaque text; allow multi-line.
+
+ -  Repro first ([CLAUDE] §17): assert a message containing `be://` round-trips byte-identical, and a multi-line message (blank line + trailer) commits.
+ -  Do not `//`-collapse or path-normalize the fragment/message; route a `#`-led multi-line arg to the message, not the path classifier.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[URI]: ../../wiki/URI.mkd "URI grammar"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

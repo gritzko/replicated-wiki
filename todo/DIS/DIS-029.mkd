@@ -1,0 +1,47 @@
+#   DIS-029: MARK renders bare-indent divs as raw `<p>` text and merges across the depth boundary
+
+The [StrictMark] block model is `(INDENT|QUOTE)* LIST? LEAF?` and "absent a leaf, a paragraph is implied" ([StrictMark] §Block markup); a bare 4-space indent "opens a generic container (a div)" (§Block markup), and "block-stack depth changes drive nesting". The `MARK` HTML renderer honors none of this for plain indented text. In `mark_blocks` (`mark/MARK.c:281`) the paragraph branch (`:393-404`) computes `depth = MKDTIndentDepth(linef)` (`:360`) and the marker end `mend` (`:362`) but then ignores both: it never emits a `<div>` wrapper, and it feeds the FULL line `linec` — leading spaces included — to `mark_inline`, so the indent reaches HTML as literal gutter spaces inside a paragraph. Worse, `in_para` persists across a depth drop, so an indented line and the following non-indented line collapse into ONE `<p>`, erasing the structural boundary the depth change is supposed to enforce. `depth`/`mend` are consumed only for ULIST/QUOTE markers (`:364-391`), never for the INDENT (div) container. See [[DIS-001]] (the other open StrictMark/store-layout gap), [GET].
+
+##  Issues
+The renderer treats indentation as cosmetic whitespace, not as the div container the grammar defines.
+
+ -  Repro (`build/bin/mark` on a 3-line `.mkd`):
+````
+    #   Header
+        Indented
+    Non indented
+````
+ -  Current output — no `<div>`, and the two body lines share one `<p>`:
+````
+    <h1>Header</h1>
+    <p>
+        Indented
+    Non indented
+    </p>
+````
+ -  Spec-correct output — indent = div, depth drop closes it:
+````
+    <h1>Header</h1>
+    <div><p>Indented</p></div>
+    <p>Non indented</p>
+````
+ -  Root cause 1 (no container): `mark/MARK.c:393-404` never opens/closes a `<div>` per `depth`; `MKDTIndentDepth` is read (`:360`) then dropped on the floor for the paragraph case.
+ -  Root cause 2 (leaked indent): `mark_inline(c, linec)` (`:403`) passes the whole line incl. the 4-space prefix; it should start at `mend` / strip `depth*4` like the heading branch strips its prefix (`:336-340`).
+ -  Root cause 3 (cross-depth merge): `in_para` (`:286`, `:396-398`) is not closed when `depth` changes, so a depth-1 line and a depth-0 line fold into one paragraph; a depth change must close the open leaf, same as a blank line does (`:312-317`).
+ -  The block lexer `MKDTLexer` already carves the indent off as an `R` structural prefix (`dog/tok/MKDT.c:316-328`); only the `MARK` renderer discards that meaning, so the fix is renderer-local.
+
+##  Blockers
+None. Disjoint from the wire/store DIS tickets; the change is confined to `mark/MARK.c` block rendering.
+
+##  Planned
+Make `MARK` render a bare 4-space indent as a `<div>` nesting level and treat a depth change as a leaf boundary; keep list/quote handling unchanged.
+
+ -  Repro first ([CLAUDE] §17): add a table case to `mark/test/MARK.c` asserting the 3-line input above yields `<h1>` + `<div><p>Indented</p></div>` + `<p>Non indented</p>` — FAILS pre-fix on all three counts. Add nested-depth (`        ` → `<div><div>…`) and depth-restore cases.
+ -  Track an open-div depth in `mark_blocks` alongside `in_para`/`in_list`/`in_quote`: when `depth` rises, emit N `<div>`; when it falls (incl. to 0), close the open leaf and the surplus `<div>`s before rendering the line. Mirror the close on blank lines and at EOF (`:407-410`).
+ -  Strip the indent before inline: feed `mark_inline` the slice from `mend` (or `linec` advanced by `depth*4`), not the raw `linec`, so gutter spaces never reach HTML.
+ -  Reconcile the [StrictMark] §Headers "header may span lines" wording with §Block markup depth rules so the div reading is unambiguous (a deeper line opens a div; header-spanning is same-depth) — case-by-case per [[strictmark-wiki-reorg]].
+ -  Verify no regression on the existing wiki pages (`make` the wiki, diff rendered HTML); run the full `mark` suite; update `mark/INDEX.md` if behavior notes change.
+
+[StrictMark]: ../../wiki/StrictMark.mkd "rational Markdown"
+[GET]: ../../wiki/GET.mkd "GET verb"
+[CLAUDE]: ../../../CLAUDE.md "coding guidelines"

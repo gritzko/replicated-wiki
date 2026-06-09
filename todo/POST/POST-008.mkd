@@ -1,0 +1,32 @@
+#   POST-008: `be post` to a `be://` (keeper) remote is unwired — rejected "needs a remote URI (ssh://…)"; no be:// push test
+
+There is no working `be post` push to a beagle store — local OR remote. `be post be://localhost/beagle` → `keeper: post needs a remote URI (ssh://host/path[?branch])` / `KEEPFAIL`; `be post file:///beagle` → the **same** `KEEPFAIL` "needs a remote URI" (a `file://` URL carries no host, so it fails the host-required gate); `be post ssh://localhost/beagle` falls through to the git wire → `fatal: 'beagle' does not appear to be a git repository` / `WIRECLFL`. So POST rejects `be:` and `file:` outright and the only remote it accepts is a *git* one — even though `be:` is the beagle-remote scheme that GET/HEAD/PATCH already fetch over (after [[GET-003]]/[[GET-005]]). The help text itself ("(ssh://host/path[?branch])") shows the push path only ever contemplated `ssh:`. And no test exercises a `be://` push, which is how it stayed broken. Surfaced trying to land DIS-030+031 from a clone. See [POST], [GET], [URI], [CLAUDE].
+
+##  Issues
+The post-push path recognizes only git transports; the keeper/`be:` scheme is asymmetric (fetch works, push doesn't).
+
+ -  `keep_post_is_git_wire` (`keeper/KEEP.exe.c:738-758`) accepts only `DOGIsGitTransport` (`ssh`/`https`/`http`/`git`) + a local git layout; `be:` (keeper) is not a recognized post target, so the keeper push path is never selected.
+ -  `keeper_post` (`keeper/KEEP.exe.c:775-782`) then emits "post needs a remote URI (ssh://…)" / `KEEPFAIL` — and the `be://localhost/beagle` URI reaches it with an empty host, so the dog-layer rewrite (`BEActResolveRemote`) or be:-scheme handling is also dropping the authority for the path form.
+ -  Asymmetry: `WIRECLI` fetch already handles `be:` (`is_be`, `keeper/WIRECLI.c:180`,`:258`); only POST/push is unwired.
+ -  Test gap (the "don't we have tests?" answer): the post-push tests use `ssh:`/`file:` (`test/post/18-triangle`, `test/post/22-recv-advances-wt`); none pushes over `be://`, so this path was never covered.
+ -  `be post file:///beagle` → the SAME `KEEPFAIL` "needs a remote URI" — `keeper_post`'s `u8csEmpty(g->host)` gate (`:778`) rejects `file://` (no authority/host), so pushing to a LOCAL store is unreachable too, not just `be://`. The host-required gate excludes both `be:` and `file:`.
+ -  Repro: `be post be://localhost/beagle` → `KEEPFAIL`; `be post file:///beagle` → `KEEPFAIL`; `be post ssh://localhost/beagle` → `WIRECLFL`. (`be put be://localhost?/beagle` half-works — objects transfer but the trunk ref does not advance; see the related push misfire.)
+
+##  Blockers
+Relates to [[GET-003]]/GET-004 be:-path resolution; the keeper push (`WIREPush`) must accept the `be:` scheme symmetrically with fetch.
+
+##  Planned
+Wire `be post` push over `be:`/`keeper:` and cover it with a test.
+
+ -  Repro first ([CLAUDE] §17): a hermetic test asserting `be post be://<peer>?/proj` (and the `<path>` form) pushes cur to a beagle peer and the peer's trunk ff-advances — fails today (`KEEPFAIL`).
+ -  Accept `be:`/`keeper:` in `keep_post_is_git_wire` / `keeper_post` and route to the keeper push (`WIREPush`) the same way fetch routes via `is_be`.
+ -  Ensure `BEActResolveRemote` / scheme handling preserves the `be://` authority for the post path form.
+ -  Fix the help text to mention `be://`; regression test under `test/post`; update `keeper/INDEX.md`.
+
+##  Resolution (fixed, awaiting gate)
+The reproducible bug was narrower than first written: host-bearing `be://localhost/<path>` already routes to the keeper push and works (`test/post/22`). The defect is the **host-required gate** — `keeper_post`'s `if (!g || u8csEmpty(g->host))` rejected any host-LESS routable target: `file:///path`, and a `be://` whose host the dog-layer rewrite stripped (the clone case in the original repro). Fix: `keeper/KEEP.exe.c:778-801` now accepts when host / authority / path / `?/<proj>` selector / a `DOGIsTransport` scheme is present (mirrors `keeper_get`); help text fixed in `beagle/BE.cli.c:77-80`. New `test/post/32-push-file-local-store` (local-exec `file://`, no ssh) proves a `be post file://<abs>` push FF-advances the peer trunk + wt; repro-first verified (reverting the gate → exact `KEEPFAIL`). Full debug ctest 321/321. Two sub-bugs split out: [[POST-009]] (recv wt-advance `BEPRJDUP`/exit-153 on the `?/proj` form) and [[POST-010]] (no-op `file://` re-push stray `FILEFAIL`). Not committed.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[GET]: ../../wiki/GET.mkd "GET verb"
+[URI]: ../../wiki/URI.mkd "URI grammar"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

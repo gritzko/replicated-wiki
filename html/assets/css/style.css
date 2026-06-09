@@ -88,6 +88,13 @@ img[src*="#center"] { display: block; margin: 1rem auto; clear: both }
 img[src*="w40"]  { width: 40% }
 img[src*="w100"] { width: 100% }
 
+h1 + div p{
+  color: #338;
+  display: flex;
+  justify-content: right;
+  background: transparent;
+}
+
 /*  On narrow screens, stop floating: a 40% float is unreadable on a phone. */
 @media (max-width: 32rem) {
     img[src*="#left"], img[src*="#right"] {

@@ -1,0 +1,27 @@
+#   URI-002: unify bang-factor handling — a per-component bang bitflag byte + one dog/ debanger
+
+The `!` (bang) modifier — force/whole-scope in the DIS-030/031 bang model (`post!` = `--force`, `patch!` = whole-branch, `get!` = force-reset per [[GET-008]], `#msg!` = forget/foster) — is parsed ad-hoc today and there is no uniform representation of "a bang was present, and on which component." Unify it per the maintainer's architecture: (1) a **bang bitflag byte**, one bit per component — bang-on-**verb**, **path**, **query**, **fragment**; (2) one **`dog/` debanger** that, for each component slice, removes a `!` by shifting the slice one byte and sets the bit. **Transport rule: URIs are always forwarded as the full URI text (`u8cs`) — never reserialized from the `uri` struct — so the `!` rides along transparently; every parser must DEBANG locally on parse. `be` is the ONLY URI normalizer/canonicalizer: it resolves paths/branches but MUST preserve bangs in its rewritten output.** See [URI], [URI-spec], [[GET-008]], [Issues], [CLAUDE].
+
+##  Issues
+Bang detection is scattered and verb-specific; there is no component-level bang representation.
+
+ -  `dog/CLI.c:61-81` (`CLIParse`) strips only the trailing VERB `!` and injects `--force`, so `get!`/`post!`/`patch!` are indistinguishable from `--force` downstream and a bang on any other component is read ad-hoc.
+ -  A `!` legitimately attaches to non-verb components and is **already serialized as literal text** beyond parse time: a query/ref (`?<sha>!`, `?branch!`) is forwarded verbatim to sub-dogs (`be` `BEBuildArgv`), **persisted into wtlog rows** (`sniff/PATCH.c:1700`, read at `sniff/AT.c:492,517`), re-attached across transport→local (`beagle/DISPATCH.c:138-171`), and shed at the wire (`keeper/WIRECLI.c:353,1035`); a fragment `#msg!` is the live **forget** modifier (`sniff/SNIFF.exe.c:634-657`). Each reader re-detects the literal `!` independently.
+ -  Each verb/dog re-derives bang semantics, so behavior drifts (DIS-030/031 added `post!`/`patch!` piecemeal; [[GET-008]] found `get!` ≡ `get --force` via the same shim).
+
+##  Blockers
+Architecture is fixed (text is the carrier; parsers debang; `be` canonicalizes-and-preserves). Confirm: the fragment bang `#msg!` means **forget** (= `DOG_BANG_FRAG`), NOT reserved — the only ban is a message *still* ending in `!` *after* shedding the modifier (`#fix it!!` → POSTBANG). The debanger's tail-shed must preserve a present-but-empty component (`?!` → bang + empty query).
+
+##  Planned
+One bitflag byte + one debanger; forward full text; every parser debangs; `be` preserves bangs.
+
+ -  **St.1 (landed in worktree, awaiting the rest):** bit layout `DOG_BANG_VERB/PATH/QUERY/FRAG`; `u8 bang` on `uri` (path/query/fragment) and on the `cli` context (verb); `DOGDebangSlice`/`DOGDebang`/`DOGDebangFeed` (typed `u8csShed1`, no pointer arithmetic, idempotent); migrate `dog/CLI.c:61-81` verb-bang so `--force` injection is driven by `DOG_BANG_VERB`. Test `DOGTestDebang` + landed `post!`/`get!`/`patch!` e2e green.
+ -  **St.2 — forward full text, debang in every parser:** keep all forwarding as the full URI `u8cs` (`BEBuildArgv`, wtlog rows, wire) — do NOT reserialize the struct; the literal `!` rides through. Replace every ad-hoc literal-`!` reader (`sniff/PATCH.c:1332`, `sniff/AT.c`, `keeper/WIRECLI.c`, the `#msg!` forget reader) with a `DOGDebang` call so each parser extracts the bit uniformly. Net behavior unchanged; representation unified.
+ -  **St.3 — `be` preserves bangs on canonicalization:** audit `be`'s sole URI normalizer/canonicalizer (path/branch resolution) and ensure a rewritten URI re-emits the `!` for any set bit (via `DOGDebangFeed`), so a bang survives `be`'s resolve. Repro: `be patch ?feat!` whose `?feat` resolves to a sha still carries the bang to sniff.
+ -  Repro-first ([CLAUDE] §17), table-driven for the debanger (done) + a cross-process case: a bang on a forwarded/persisted/wired URI is honored by the receiving dog via its `DOGDebang`, and survives a `be` canonicalize.
+ -  Update `dog/INDEX.md`.
+
+[URI]: README.mkd "branch/commit naming tickets"
+[URI-spec]: ../../wiki/URI.mkd "URI grammar + bang model"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

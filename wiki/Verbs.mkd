@@ -1,4 +1,4 @@
-#   Verbs: a small orthogonal vocabulary, not git's sprawl
+#   Verbs: orthogonal basis, not sprawl
 
 Beagle's command language is a small, fixed set of HTTP verbs — GET, HEAD, POST, PUT, DELETE, PATCH — chosen to combat git's command and flag sprawl. Nobody remembers all of git, so these verbs are kept orthogonal: each has one clear function and a single direction of data flow, and none can be supplemented by creative use of another. You pick the verb for the move you want, then each URI slot adds its own effect.
 
@@ -16,7 +16,7 @@ Pick the verb, then each populated URI part adds its own effect; the same four s
  -  `?branch`: HEAD/GET scope or switch; POST FF-advances; PUT names the ref; PATCH sources from it; DELETE drops it.
  -  `./path`: scopes the diff (HEAD), restores a file (GET), stages (PUT), unlinks (DELETE), or scopes absorption (PATCH).
  -  `//remote`: cached by default; a transport scheme (`ssh:`) opens the wire to fetch (GET/HEAD/PATCH) or push (POST/PUT).
- -  `#frag`: a sha pin or a commit-message body; for PATCH the `#` shape alone picks merge vs rebase-one vs cherry-pick.
+ -  `#frag`: a sha pin or a commit-message body; PATCH takes no `#message`, and the `!` bang on `?br` selects whole-branch vs one commit.
  -  An empty `?branch` defaults to cur; cross-branch commits don't exist — switch cur first, then commit there.
 
 ##  Bareword defaults
@@ -35,7 +35,8 @@ The everyday git commands map onto verb + URI combinations, no extra flags.
  -  `git clone URL` → `be get ssh://URL`; `git fetch` → `be head ssh://origin?*`; `git checkout feat` → `be get ?feat`.
  -  `git checkout -b feat` → `be put ?./feat && be get ?./feat` (mkdir, then cd).
  -  `git add f && commit -m` → `be put ./f && be post '#msg'`; `git commit -am` → `be put . && be post 'msg'`.
- -  `git merge trunk` → `be patch '?trunk#sync' && be post`; `git cherry-pick <sha>` → `be patch '#<sha>' && be post`.
+ -  `git merge trunk` → `be patch ?trunk! && be post '#sync'`; `git cherry-pick <sha>` → `be patch '#<sha>' && be post #!`.
+ -  `git rebase feat` → loop `be patch ?feat && make test && be post #!`; `git merge --squash feat` → `be patch ?feat! && be post '#msg!'`.
  -  `git push` → `be put ssh://origin`; `git branch -d feat` → `be delete ?feat`; `git status` → bare `be`.
  -  `git stash` → use a sub-branch (eager branching); `git log -n 20 feat` → `be log:?feat#20`.
 
