@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
 <h1>ABC tickets: core library primitives</h1>
 <p>
 Discrepancies in <code>abc/</code> — the foundational slice/buffer/net/poll/curl layer every other module builds on. Each entry is one ticket with its live state; it drops off once the ticket closes. The fix-and-land method is <a href="../../rule/Issues.html">Issues</a>. Memory-safety findings live under <a href="../MEM/README.html">MEM</a>; this topic is for behavioural/correctness gaps.

@@ -19,10 +19,12 @@
 # MARK: the StrictMark renderer (override with `make MARK=/path/to/mark`).
 # OUT:  output tree, served as the site root by GitHub Pages.
 # HEAD: HTML snippet inlined into every page's <head> (stylesheet, favicon...).
+# BODY: HTML snippet inlined after <body> on every page (the top banner).
 # MARKFLAGS: `make strict` sets this to --strict.
 MARK ?= mark
 OUT ?= html
 HEAD ?= head.html
+BODY ?= banner.html
 MARKFLAGS ?=
 
 # Every StrictMark source, minus the output tree and git internals.
@@ -37,11 +39,12 @@ all: $(HTML) indexes assets
 
 # One page. `mark` only ever writes a sibling .html, so stage the source inside
 # the output tree, render it in place, then drop the staged copy. --head inlines
-# the shared <head> snippet, so a head.html edit re-renders every page.
-$(OUT)/%.html: %.mkd $(HEAD)
+# the shared <head> snippet and --body the top banner, so editing either
+# re-renders every page.
+$(OUT)/%.html: %.mkd $(HEAD) $(BODY)
 	@mkdir -p $(@D)
 	@cp $< $(@D)/
-	@$(MARK) $(MARKFLAGS) --head=$(HEAD) $(@D)/$(<F)
+	@$(MARK) $(MARKFLAGS) --head=$(HEAD) --body=$(BODY) $(@D)/$(<F)
 	@rm -f $(@D)/$(<F)
 
 # Directory landing pages: Home (the wiki) and every README become index.html.
@@ -54,6 +57,7 @@ indexes: $(HTML)
 assets: $(HTML)
 	@for d in $(IMGDIRS); do mkdir -p $(OUT)/$$d && cp -r $$d/. $(OUT)/$$d/; done
 	@mkdir -p $(OUT)/assets/css && cp assets/css/style.css $(OUT)/assets/css/
+	@mkdir -p $(OUT)/assets/img && cp -r assets/img/. $(OUT)/assets/img/
 	@for l in $$(find . -maxdepth 1 -type l); do t=$$(readlink $$l); n=$$(basename $$l); \
 		[ -d $(OUT)/$$t ] && rm -rf $(OUT)/$$n && cp -r $(OUT)/$$t $(OUT)/$$n || true; done
 	@[ -f CNAME ] && cp CNAME $(OUT)/ || true

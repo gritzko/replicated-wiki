@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
 <h1>CODE tickets: code-redundancy cleanup</h1>
 <p>
 A 2026-06-11 per-directory redundancy review (12 reviewers, each reading ABC.md first) found 63 redundancies — code reimplementing abc primitives, intra-dir copy-paste, and dead duplicates. They group into 15 dir-themed tickets below, each a behavior-preserving refactor cleared via the <a href="../../skill/Issues.html">Issues</a> fix-and-land loop in a store-backed worktree. Run one worktree per dir, ~6 at once; abc and load-bearing spawn paths gate the diff before landing.

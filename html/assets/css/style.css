@@ -60,6 +60,21 @@ body {
     color: #222;
 }
 
+/*  Top banner injected after <body> by `mark --body=banner.html`: logo on
+    the left, site name, the whole bar linking to the site root. */
+.banner {
+    display: flex;
+    align-items: center;
+    gap: .8rem;
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid #eee;
+    text-decoration: none;
+    color: inherit;
+}
+.banner-logo  { width: 3rem; height: 3rem; object-fit: contain; }
+.banner-title { font-size: 1.4rem; font-weight: 700; letter-spacing: .02em; }
+
 /*  The justified-text look, with hyphenation so the gaps stay tight. */
 p, li {
     text-align: justify;

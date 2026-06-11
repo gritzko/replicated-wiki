@@ -7,6 +7,10 @@
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
 <h1>Issues: the parallel agent fix-and-land loop</h1>
 <p>
 Issues are cleared by a fleet of background agents — one per ticket, each in its own isolated clone. The loop is: agree the fix, fork an agent, it repros-first and implements, then STOPS for a human to gate the commit; on approval it updates, re-tests, and fast-forward-posts. The method keeps many fixes in flight at once while every landed commit stays reviewed, tested, and ff-only.
