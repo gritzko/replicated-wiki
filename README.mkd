@@ -7,7 +7,6 @@ The reference pages live in the [wiki][w]; the posts are below.
  -  [2Jan2026 Arguments for a syncable data exchange format][a]
  -  [19Feb2026 Beagle the revision control system][1] (part [I][1], [II][2], [III][3])
  -  [24May2026 Three years with ABC (Abstractionless C)][c]
- -  [11Jun2026 Beagle: git, URIs and all the dirty words][d]
 
 [r]: https://github.com/gritzko/c-rdx "RDX data format"
 [w]: wiki/Home.mkd "Beagle wiki"
@@ -17,4 +16,3 @@ The reference pages live in the [wiki][w]; the posts are below.
 [2]: blog/partII.mkd
 [3]: blog/partIII.mkd
 [c]: blog/abc.mkd
-[d]: blog/uris.mkd

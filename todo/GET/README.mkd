@@ -8,9 +8,15 @@
 
  -  [GET-014] — head/get/patch against a divergent ticket remote silently reset local trunk `?` to the fetched commit (non-ff), dropping four landed commits; a dry-run/fetch must never move `?` non-ff. Recovered via `be put '?#<sha>'` (`be get [--force]` won't move a divergent ref). Needs a clean repro to pin the verb.
 
- -  [GET-016] — `be get` is non-atomic for the wt: the ref/wtlog advance (COMMIT POINT, `GET.c:1338`) precedes the non-crash-safe wt write, so a partial run (or any ref-advance-without-checkout) drifts the tree; the baseline↔target delta is then empty → no-op skip leaves stale bytes, and `--force`/`get!` keys off the dirty bucket not the no-op one so it can't full-reset. Plan: (1) all-or-nothing wt GET, (2) `get!` re-examines every file + full tree reset. Sibling stuck-ref symptom may split to GET-017.
+ -  [GET-016] — `be get` non-atomic for the wt + `--force` won't full-reset a drifted worktree. **Part 2 (force = full tree reset) LANDED `52ba21b5`** (`force_orphan_cb` unlinks wt-only tracked orphans; `be get --force ?<cur>` now reliably recovers a drift). **Part 1 (true atomicity) split to [GET-018]** — the literal reorder breaks the documented replay-recovery model + `test/get/09`/`10`, so it needs a stage/journal redesign.
+
+ -  [GET-017] — `be get --nosub` won't advance a store-backed *switch*-worktree's ref at all (stays pinned at its base; MEM-041/042 stuck at `5104a855` while clone-shaped MEM-044 advanced), forcing fresh-clone salvage to land. Likely a `.be`-switch-shape FF gap ([[GET-012]] area); `.refs.idx` was fresh (not the stale-idx trap). Needs a deterministic repro pinning the `.be` shape.
+
+ -  [GET-018] — make `be get`'s wt update atomic (mid-write failure → ref/wtlog/tree all unchanged). Split from GET-016 Part 1: can't just reorder the commit point (breaks `test/get/09`/`10`'s documented wtlog-grows-then-`--force`-replay model); needs stage-to-temp+atomic-swap or journal+rollback, design pass first.
 
 [GET-009]: GET-009.mkd "efficient be:// sync: reachability upload-pack + GC"
 [GET-014]: GET-014.mkd "head/get/patch silently non-ff-resets local trunk to a divergent remote commit"
 [GET-016]: GET-016.mkd "non-atomic wt GET; get --force won't full-reset a drifted worktree"
+[GET-017]: GET-017.mkd "be get --nosub won't advance a switch-worktree's ref (forces fresh-clone salvage)"
+[GET-018]: GET-018.mkd "atomic wt GET: stage/swap or journal+rollback so mid-write failure leaves nothing changed"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

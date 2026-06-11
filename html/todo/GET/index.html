@@ -19,7 +19,13 @@
 <li><a href="GET-014.html">GET-014</a> — head/get/patch against a divergent ticket remote silently reset local trunk <code>?</code> to the fetched commit (non-ff), dropping four landed commits; a dry-run/fetch must never move <code>?</code> non-ff. Recovered via <code>be put '?#&lt;sha&gt;'</code> (<code>be get [--force]</code> won't move a divergent ref). Needs a clean repro to pin the verb.</li>
 </ul>
 <ul>
-<li><a href="GET-016.html">GET-016</a> — <code>be get</code> is non-atomic for the wt: the ref/wtlog advance (COMMIT POINT, <code>GET.c:1338</code>) precedes the non-crash-safe wt write, so a partial run (or any ref-advance-without-checkout) drifts the tree; the baseline↔target delta is then empty → no-op skip leaves stale bytes, and <code>--force</code>/<code>get!</code> keys off the dirty bucket not the no-op one so it can't full-reset. Plan: (1) all-or-nothing wt GET, (2) <code>get!</code> re-examines every file + full tree reset. Sibling stuck-ref symptom may split to GET-017.</li>
+<li><a href="GET-016.html">GET-016</a> — <code>be get</code> non-atomic for the wt + <code>--force</code> won't full-reset a drifted worktree. *<strong>Part 2 (force = full tree reset) LANDED <code>52ba21b5</code></strong>* (<code>force_orphan_cb</code> unlinks wt-only tracked orphans; <code>be get --force ?&lt;cur&gt;</code> now reliably recovers a drift). *<strong>Part 1 (true atomicity) split to <a href="GET-018.html">GET-018</a></strong>* — the literal reorder breaks the documented replay-recovery model + <code>test/get/09</code>/<code>10</code>, so it needs a stage/journal redesign.</li>
+</ul>
+<ul>
+<li><a href="GET-017.html">GET-017</a> — <code>be get --nosub</code> won't advance a store-backed <strong>switch</strong>-worktree's ref at all (stays pinned at its base; MEM-041/042 stuck at <code>5104a855</code> while clone-shaped MEM-044 advanced), forcing fresh-clone salvage to land. Likely a <code>.be</code>-switch-shape FF gap (<a href="">[GET-012</a>] area); <code>.refs.idx</code> was fresh (not the stale-idx trap). Needs a deterministic repro pinning the <code>.be</code> shape.</li>
+</ul>
+<ul>
+<li><a href="GET-018.html">GET-018</a> — make <code>be get</code>'s wt update atomic (mid-write failure → ref/wtlog/tree all unchanged). Split from GET-016 Part 1: can't just reorder the commit point (breaks <code>test/get/09</code>/<code>10</code>'s documented wtlog-grows-then-<code>--force</code>-replay model); needs stage-to-temp+atomic-swap or journal+rollback, design pass first.</li>
 </ul>
 </body>
 </html>

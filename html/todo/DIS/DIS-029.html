@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>DIS-029</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>DIS-029: MARK renders bare-indent divs as raw <code>&lt;p&gt;</code> text and merges across the depth boundary</h1>
@@ -24,28 +17,22 @@ The renderer treats indentation as cosmetic whitespace, not as the div container
 </p>
 <ul>
 <li>Repro (<code>build/bin/mark</code> on a 3-line <code>.mkd</code>):</li>
-</ul>
 <pre><code>    #   Header
         Indented
     Non indented
 </code></pre>
-<ul>
 <li>Current output — no <code>&lt;div&gt;</code>, and the two body lines share one <code>&lt;p&gt;</code>:</li>
-</ul>
 <pre><code>    &lt;h1&gt;Header&lt;/h1&gt;
     &lt;p&gt;
         Indented
     Non indented
     &lt;/p&gt;
 </code></pre>
-<ul>
 <li>Spec-correct output — indent = div, depth drop closes it:</li>
-</ul>
 <pre><code>    &lt;h1&gt;Header&lt;/h1&gt;
     &lt;div&gt;&lt;p&gt;Indented&lt;/p&gt;&lt;/div&gt;
     &lt;p&gt;Non indented&lt;/p&gt;
 </code></pre>
-<ul>
 <li>Root cause 1 (no container): <code>mark/MARK.c:393-404</code> never opens/closes a <code>&lt;div&gt;</code> per <code>depth</code>; <code>MKDTIndentDepth</code> is read (<code>:360</code>) then dropped on the floor for the paragraph case.</li>
 <li>Root cause 2 (leaked indent): <code>mark_inline(c, linec)</code> (<code>:403</code>) passes the whole line incl. the 4-space prefix; it should start at <code>mend</code> / strip <code>depth*4</code> like the heading branch strips its prefix (<code>:336-340</code>).</li>
 <li>Root cause 3 (cross-depth merge): <code>in_para</code> (<code>:286</code>, <code>:396-398</code>) is not closed when <code>depth</code> changes, so a depth-1 line and a depth-0 line fold into one paragraph; a depth change must close the open leaf, same as a blank line does (<code>:312-317</code>).</li>

@@ -27,12 +27,12 @@ mode scoped to <code>&lt;subpath&gt;</code> only (see VERBS.md §&quot;Per-file 
 the genuinely-dirty own files fall outside scope and never enter the commit.
 </p>
 <h2>Repro</h2>
-<p>
- 1. <code>be get &lt;parent&gt;?master</code> (parent has a <code>vendor/sub</code> gitlink).
- 2. Append a line to <code>main.c</code> AND to <code>vendor/sub/core.c</code>.
- 3. <code>be post 'both dirty'</code>.
- 4. <code>be blob:main.c?master</code> — the appended line is *<strong>absent</strong>*; exit was 0.
-</p>
+<ol>
+<li><code>be get &lt;parent&gt;?master</code> (parent has a <code>vendor/sub</code> gitlink).</li>
+<li>Append a line to <code>main.c</code> AND to <code>vendor/sub/core.c</code>.</li>
+<li><code>be post 'both dirty'</code>.</li>
+<li><code>be blob:main.c?master</code> — the appended line is *<strong>absent</strong>*; exit was 0.</li>
+</ol>
 <h2>Manifestation B (only-parent-dirty → POSTNONE + sticky poison)</h2>
 <p>
 Edit only <code>main.c</code> (sub clean), <code>be post 'msg'</code>:
@@ -41,17 +41,21 @@ Edit only <code>main.c</code> (sub clean), <code>be post 'msg'</code>:
 <li>Exit 206 POSTNONE; parent commit dropped, <code>main.c</code> edit uncommitted.</li>
 <li>The recursion still ran <code>be put vendor/sub</code> (staging the <strong>unchanged</strong> pin</li>
 </ul>
+<div>
 <p>
-    <code>put vendor/sub#&lt;same-sha&gt;</code>), flipping POST selective → the unchanged
-    baseline resolves to no-change → POSTNONE.
+<code>put vendor/sub#&lt;same-sha&gt;</code>), flipping POST selective → the unchanged
+baseline resolves to no-change → POSTNONE.
 </p>
+</div>
 <ul>
 <li>The stale put-row *<strong>persists</strong>* in <code>.be/wtlog</code>, so a follow-up</li>
 </ul>
+<div>
 <p>
-    <code>be post --nosub 'msg'</code> ALSO returns POSTNONE — the parent stays stuck
-    dropping its edits until the user manually runs <code>be put ./main.c</code>.
+<code>be post --nosub 'msg'</code> ALSO returns POSTNONE — the parent stays stuck
+dropping its edits until the user manually runs <code>be put ./main.c</code>.
 </p>
+</div>
 <h2>Expected</h2>
 <p>
 Commit-all (git <code>commit -a</code>) semantics for the level's own tracked files MUST

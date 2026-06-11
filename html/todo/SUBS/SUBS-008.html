@@ -26,13 +26,19 @@ worktree files (<code>core.c</code>, <code>helper.c</code>) and internal metadat
 orphaned on disk.
 </p>
 <h2>Repro</h2>
+<ol>
+<li><code>be get &lt;parent&gt;?master</code> (mounts <code>vendor/sub</code>).</li>
+<li>Switch to a branch <code>norm</code> whose tree drops the <code>vendor/sub</code> gitlink and the</li>
+</ol>
+<div>
 <p>
- 1. <code>be get &lt;parent&gt;?master</code> (mounts <code>vendor/sub</code>).
- 2. Switch to a branch <code>norm</code> whose tree drops the <code>vendor/sub</code> gitlink and the
-    <code>.gitmodules</code> entry: <code>be get ?norm</code>.
- 3. stderr: <code>be: get vendor/sub: unmounted</code> + <code>sniff: pruned 1 file(s)</code>, exit 0.
- 4. But <code>vendor/sub/</code> still lists <code>core.c</code>, <code>helper.c</code>, <code>..be.idx</code>.
+<code>.gitmodules</code> entry: <code>be get ?norm</code>.
 </p>
+</div>
+<ol>
+<li>stderr: <code>be: get vendor/sub: unmounted</code> + <code>sniff: pruned 1 file(s)</code>, exit 0.</li>
+<li>But <code>vendor/sub/</code> still lists <code>core.c</code>, <code>helper.c</code>, <code>..be.idx</code>.</li>
+</ol>
 <h2>Expected</h2>
 <p>
 Removing a gitlink in the target tree should fully clean up the mount —

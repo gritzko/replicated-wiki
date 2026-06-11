@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>README</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>SUBS: submodule-recursion tickets</h1>
@@ -42,6 +35,7 @@ gitlink bumps, detached-refuse) all work.  The gaps below are the deltas.
 | <a href="SUBS-013.html">SUBS-013</a> | LOW | put | full <code>git submodule add</code> parity: stage a new <code>160000</code> gitlink + <code>.gitmodules</code> from <code>be put</code> — needs a chosen URL source + pin grammar (escalated from SUBS-009) |
 | <a href="SUBS-014.html">SUBS-014</a> | LOW | put | misleading &quot;does not exist — skipped&quot; PUTNONE fires for ANY plain untracked dir named without a trailing slash (not sub-specific); wants a &quot;did you mean <code>dir/</code>?&quot; hint |
 | <a href="SUBS-015.html">SUBS-015</a> | LOW | blob | <code>blob:&lt;path&gt;</code> WITHOUT <code>?ref</code> returns KEEPNONE even in the parent (pre-existing, not sub-related) |
+| <a href="SUBS-016.html">SUBS-016</a> | LOW (*<strong>LANDED</strong>* abc <code>8b9dfe0c</code>/parent <code>109c7467</code>) | get/fetch | sub-seed of <code>refs</code>/<code>wtlog</code> used <code>O_TRUNC</code> <code>FILECreate</code>, guarded only by <code>!already_mounted</code> — a false-negative would zero a live sub log (<a href="">[ULOG-001</a>] class). Fixed: guard the seed on <code>FILEExists</code> (revitalized as <code>ok64</code>: OK/FILENONE/error) — <code>if(e==OK) skip; if(e!=FILENONE) return e; else FILECreate</code> — so an existing log is never truncated regardless of the mount guard. Also purged the regex-migrated <code>FILENOENT</code> alias → canonical <code>FILENONE</code> (incl. 7 <code>vanished mid-walk</code> readers); left a <code>FILE_ERR_VOCAB[ENOENT]→FILENONE</code> stopgap pending <a href="">[ABC-002</a>]. Surfaced by ULOG-001 (not from the 2026-06-05 audit) |
 </p>
 <p>
 Tests added this audit: <code>test/put/08-10</code>, <code>test/delete/07-09</code>, <code>test/patch/28-29</code>,

@@ -4,24 +4,15 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>POST-013</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>POST-013: pushing a submodule on the synthetic <code>?.beagle/</code> branch to a git remote refuses instead of defaulting to the remote's default branch</h1>
 <p>
 A mounted submodule whose cur is the be-only synthetic coordinate <code>?.beagle/&lt;parent&gt;</code> (the normal state after a parent POST — the <a href="">[submodule synthetic-branch POST</a>]) cannot be pushed to a git remote without naming a branch. <code>be post ssh://localhost/src/dogs/abc</code> (from inside the sub) reports <code>0 change(s)</code> then refuses:
-</p>
 <pre><code>    keeper: post: branch ?.beagle/ is a be-only synthetic coordinate;
             not pushing to git remote ssh://localhost/src/dogs/abc
 </code></pre>
-<p>
 The user must know to add an explicit <code>?main</code>; only then does it land — <code>be post ssh://localhost/src/dogs/abc?main</code> → <code>keeper: pushed ?main → 5163fa54…</code>. A push to a *<strong>git</strong>* remote should DEFAULT to that remote's default branch (<code>main</code>/<code>master</code> / its <code>HEAD</code>) when the local branch is a be-only synthetic coordinate, rather than refusing. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
 <h2>Issues</h2>

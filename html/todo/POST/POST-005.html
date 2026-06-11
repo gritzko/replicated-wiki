@@ -30,30 +30,34 @@ Two variants, one root cause:
 <ul>
 <li>*<strong>patch-alias</strong>* (pre-existing): absorb a child branch that adds <code>feature.c</code></li>
 </ul>
+<div>
 <p>
-    (PATCH stamps it with the patch row's ts); an untracked <code>junk.txt</code> whose
-    mtime equals that ts is swept into the same commit.
+(PATCH stamps it with the patch row's ts); an untracked <code>junk.txt</code> whose
+mtime equals that ts is swept into the same commit.
 </p>
+</div>
 <ul>
 <li>*<strong>put-alias</strong>* (exposed by SUBS-001): an only-sub-dirty <code>be post</code> is now</li>
 </ul>
+<div>
 <p>
-    commit-all (SUBS-001); the recursion's <code>be put &lt;sub&gt;</code> writes a sub-bump
-    <code>put &lt;sub&gt;#&lt;40-hex&gt;</code> row.  Any untracked file actively written during the
-    post (e.g. a <code>2&gt; file-in-the-wt</code> stderr redirect) aliases that put stamp
-    and is swept — and, because the post keeps writing it after hashing, lands
-    committed-but-dirty, breaking the next branch switch.  This is what blocks
-    <code>test/patch/28</code> (SUBS-002's repro) at its setup step.
+commit-all (SUBS-001); the recursion's <code>be put &lt;sub&gt;</code> writes a sub-bump
+<code>put &lt;sub&gt;#&lt;40-hex&gt;</code> row.  Any untracked file actively written during the
+post (e.g. a <code>2&gt; file-in-the-wt</code> stderr redirect) aliases that put stamp
+and is swept — and, because the post keeps writing it after hashing, lands
+committed-but-dirty, breaking the next branch switch.  This is what blocks
+<code>test/patch/28</code> (SUBS-002's repro) at its setup step.
 </p>
+</div>
 <h2>Repro (deterministic, local — no submodule)</h2>
-<p>
- 1. trunk: commit <code>tracked.c</code>.
- 2. child branch <code>b</code>: add <code>feature.c</code>, commit; back to trunk.
- 3. <code>be patch ?./b</code> — absorbs <code>feature.c</code>, stamps it with the patch row ts.
- 4. <code>printf ... &gt; junk.txt; touch -r feature.c junk.txt</code> — alias the stamp.
- 5. <code>be post '#absorb b'</code> — commit-all (a <code>patch</code> row is in scope).
- 6. <code>be tree:?&lt;tip&gt;</code> shows BOTH <code>feature.c</code> (correct) AND <code>junk.txt</code> (BUG).
-</p>
+<ol>
+<li>trunk: commit <code>tracked.c</code>.</li>
+<li>child branch <code>b</code>: add <code>feature.c</code>, commit; back to trunk.</li>
+<li><code>be patch ?./b</code> — absorbs <code>feature.c</code>, stamps it with the patch row ts.</li>
+<li><code>printf ... &gt; junk.txt; touch -r feature.c junk.txt</code> — alias the stamp.</li>
+<li><code>be post '#absorb b'</code> — commit-all (a <code>patch</code> row is in scope).</li>
+<li><code>be tree:?&lt;tip&gt;</code> shows BOTH <code>feature.c</code> (correct) AND <code>junk.txt</code> (BUG).</li>
+</ol>
 <h2>Expected</h2>
 <p>
 Commit-all = <code>git commit -a</code>: every dirty <strong>tracked</strong> file plus files genuinely

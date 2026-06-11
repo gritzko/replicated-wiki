@@ -20,24 +20,40 @@ itself is blocked on two design decisions.
 <ul>
 <li>*<strong>URL source for <code>.gitmodules</code> <code>url =</code>.</strong>*  A mounted-but-untracked sub's</li>
 </ul>
+<div>
 <p>
-    row-0 <code>.be</code> anchor is <code>file:/…/.be//?/&lt;title&gt;#&lt;sha&gt;</code> — a *local shard
-    pointer*, not a portable upstream.  Candidates:
-      1. require the user to have written the <code>.gitmodules</code> <code>url =</code> first (the
-         current working flow; <code>be put</code> only stages the gitlink);
-      2. recover the upstream from the sub-shard's reflog (the URL it was
-         fetched from), falling back to the declared <code>.gitmodules</code>;
-      3. a new explicit arg carrying the URL.
+row-0 <code>.be</code> anchor is <code>file:/…/.be//?/&lt;title&gt;#&lt;sha&gt;</code> — a *local shard
+pointer*, not a portable upstream.  Candidates:
+  1. require the user to have written the <code>.gitmodules</code> <code>url =</code> first (the
 </p>
+<div>
+<p>
+ current working flow; <code>be put</code> only stages the gitlink);
+</p>
+</div>
+<p>
+  2. recover the upstream from the sub-shard's reflog (the URL it was
+</p>
+<div>
+<p>
+ fetched from), falling back to the declared <code>.gitmodules</code>;
+</p>
+</div>
+<p>
+  3. a new explicit arg carrying the URL.
+</p>
+</div>
 <ul>
 <li>*<strong>Pin source / grammar.</strong>*  <code>be put &lt;subpath&gt;</code> has no pin slot, and</li>
 </ul>
+<div>
 <p>
-    <code>be put &lt;subpath&gt;#&lt;sha&gt;</code> is already the move-form (<code>PUTDSTBAD</code>).  Either a
-    new grammar (e.g. a dedicated sub-add verb-shape) or &quot;pin = the sub-wt's
-    current tip read from its <code>.be</code> anchor&quot; (parity with the existing
-    gitlink-bump path).
+<code>be put &lt;subpath&gt;#&lt;sha&gt;</code> is already the move-form (<code>PUTDSTBAD</code>).  Either a
+new grammar (e.g. a dedicated sub-add verb-shape) or &quot;pin = the sub-wt's
+current tip read from its <code>.be</code> anchor&quot; (parity with the existing
+gitlink-bump path).
 </p>
+</div>
 <h2>Existing partial flow (works today)</h2>
 <p>
 User writes the <code>.gitmodules</code> section, runs <code>sniff sub-mount ./&lt;sub&gt;#&lt;pin&gt;</code>,

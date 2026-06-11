@@ -18,11 +18,11 @@ dir-form is).  This is *<strong>not</strong>* sub-specific — it fires for any 
 untracked dir.
 </p>
 <h2>Repro</h2>
-<p>
- 1. <code>mkdir newdir &amp;&amp; touch newdir/a.c</code> (untracked).
- 2. <code>be put newdir</code> → <code>does not exist — skipped</code> / PUTNONE.
- 3. <code>be put newdir/</code> (trailing slash) → stages the subtree correctly.
-</p>
+<ol>
+<li><code>mkdir newdir &amp;&amp; touch newdir/a.c</code> (untracked).</li>
+<li><code>be put newdir</code> → <code>does not exist — skipped</code> / PUTNONE.</li>
+<li><code>be put newdir/</code> (trailing slash) → stages the subtree correctly.</li>
+</ol>
 <h2>Expected</h2>
 <p>
 Either stage the dir (treat a bare untracked dir like <code>&lt;dir&gt;/</code>), or refuse with

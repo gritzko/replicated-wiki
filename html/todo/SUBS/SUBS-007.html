@@ -27,12 +27,12 @@ path, DOES relay the sub's <code>mod core.c</code>), it is simply not wired into
 per-sub report.
 </p>
 <h2>Repro</h2>
-<p>
- 1. <code>be get &lt;parent&gt;?master</code>.
- 2. <code>be head '?' &gt; clean.out</code>.
- 3. Append a line to <code>vendor/sub/core.c</code>.
- 4. <code>be head '?' &gt; dirty.out</code>; <code>diff clean.out dirty.out</code> → *<strong>empty</strong>*.
-</p>
+<ol>
+<li><code>be get &lt;parent&gt;?master</code>.</li>
+<li><code>be head '?' &gt; clean.out</code>.</li>
+<li>Append a line to <code>vendor/sub/core.c</code>.</li>
+<li><code>be head '?' &gt; dirty.out</code>; <code>diff clean.out dirty.out</code> → *<strong>empty</strong>*.</li>
+</ol>
 <h2>Secondary: head/04 is a false-positive test</h2>
 <p>
 <code>test/head/04-sub-dirty</code> PASSES, but only because it greps the combined output

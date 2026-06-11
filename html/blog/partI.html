@@ -10,9 +10,9 @@
 <hr>
 <p>
 title: &quot;SCM as a database for the code&quot;
-</p>
 <hr>
 <h1>I. SCM as a database for the code</h1>
+</p>
 <p>
 <img src="./img/tools.jpg#rightw40" alt="Developer tools">
 Software development is changing rapidly and the tool stack has yet to catch
@@ -101,11 +101,15 @@ years, and many other people in the CRDT community talked about &quot;overlay
 branches&quot; and &quot;CRDT revision control&quot; for 10-15 years. In essence it all boils
 down to two things:
 </p>
+<ol>
+<li>versioning data structures, not blobs and</li>
+<li>having formal deterministic merge algorithms (associative, commutative,</li>
+</ol>
+<div>
 <p>
- 1. versioning data structures, not blobs and
- 2. having formal deterministic merge algorithms (associative, commutative,
-    idempotent).
+idempotent).
 </p>
+</div>
 <p>
 One approach to it was to represent text as a CRDT vector of letters, and it
 was quite popular in the field. <a href="https://zed.dev/blog/sequoia-backs-zed#introducing-deltadb-operation-level-version-control">Zed's DeltaDB</a> aligns with that

@@ -7,30 +7,32 @@
 <link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
-<h1>GET-002: secondary worktree from a clone is left detached</h1>
+<h1>GET-002: <code>be get/post //host</code> (scheme+authority only) must complete path/query from history</h1>
 <p>
-<code>be get &lt;clone&gt;</code> / <code>be get file:&lt;store&gt;?&lt;branch&gt;</code> wires a secondary worktree but pins its checkout to <code>?&lt;hashlet&gt;</code> (detached at the tip sha) instead of attaching to the branch the anchor names. A follow-up <code>be post</code> then refuses with POSTDET, even though the user cloned a branch. The goal is a branch-resolved secondary wt landing attached, so commits work without a manual <code>be get ?&lt;branch&gt;</code>. See <a href="../wiki/GET.html">GET</a>, <a href="../wiki/Submodules.html">Submodules</a>. Repro: <code>BEroundtrip</code> step 5 (the wt from step 3 is detached).
+<code>be get ssh://host</code> with only a scheme and authority — no path, no query — should complete the missing parts from the last successful get/post (the persisted clone source), so a bare-host re-fetch resolves the same repo it was cloned from. Instead it fails <code>WIRECLFL</code> (it tries to fetch from the host with an empty repo path). This completion logic existed and worked; it regressed. The goal is to restore URI-completion-from-history for transport args missing path/query. See <a href="../wiki/GET.html">GET</a>, <a href="../wiki/POST.html">POST</a>, <a href="../wiki/URI.html">URI</a>.
 </p>
 <h2>Issues</h2>
 <p>
-The worktree-layout arm of <code>BEGetWorktree</code> detaches even when a branch is known.
+A bare-authority transport arg is sent to the wire as-is instead of being completed from the persisted source.
 </p>
 <ul>
-<li><code>BEGetWorktree</code> (<code>beagle/BE.cli.c</code>) rewrites the downstream URI to <code>?&lt;hashlet&gt;</code> (detached) for the worktree-layout source.</li>
-<li>The row-0 anchor already carries <code>?/&lt;title&gt;/&lt;branch&gt;#&lt;hash&gt;</code> (DIS-001), so the branch is known — only the checkout detaches.</li>
-<li>The store-direct arm (added with the synthetic-branch work) already attaches via <code>?&lt;query&gt;</code>; the worktree arm lags.</li>
+<li>Repro: <code>be get ssh://spot</code> → <code>WIRECLFL</code> / <code>BEDOGEXIT</code>; <code>be get ssh://spot/src/dogs</code> (full path) fetches fine. The clone source (<code>ssh://spot/src/dogs</code>) is recorded — the bare form should reuse its path/query.</li>
+<li>The completion source is the persisted clone source: the project's line-1 <code>get</code> row / row-0 anchor (the original clone URI), and/or the most recent get/post that carried a host path — the wtlog holds it.</li>
+<li>Regression: this URI-completion step was present and working; the recent source/anchor/title refactoring (the <a href="">DIS</a>-001 row-0 / <code>REFSSourceScheme</code> area) likely dropped it. Use git history to locate the removed logic rather than reinventing it.</li>
 </ul>
 <h2>Blockers</h2>
 <p>
-None. Keep <code>be get ?&lt;sha&gt;</code> and gitlink-pin mounts detached on purpose; this is only the branch-resolved clone/sibling case.
+None.
 </p>
 <h2>Planned</h2>
 <p>
-Attach the branch-resolved secondary wt instead of detaching.
+Restore completion of a transport URI's missing path/query from the persisted source.
 </p>
 <ul>
-<li>When the anchor resolves a branch, rewrite the checkout URI to that branch (<code>?/&lt;title&gt;/&lt;branch&gt;</code>), not <code>?&lt;hashlet&gt;</code>.</li>
-<li>Guard the worktree.sh detached-on-sha cases; keep <code>BEroundtrip</code> as the regression.</li>
+<li>Repro (rule 17): in a clone whose source is <code>ssh://host/path</code>, <code>be get ssh://host</code> (no path) completes to the full source and fetches; likewise <code>be post //host</code>.</li>
+<li>AUTHORITY GIVEN (<code>ssh://localhost</code>) — already works: <code>keeper_remote_uri</code> completes the empty path from the matching recorded source (the host-or-path gate). A host that does NOT match the recorded one (<code>ssh://spot</code>) is left alone (a deliberate different remote; use a path).</li>
+<li>SCHEME ONLY (<code>ssh:</code>, the remaining gap) — find the RECENTMOST get/post row that used that transport scheme and reuse its full URI (authority + path + query). E.g. with a recent <code>ssh://localhost/src/dogs</code> get/post, <code>be get ssh:</code> resolves to it.</li>
+<li>Add a <code>test/get/</code> case asserting <code>ssh:</code> (scheme alone) recovers the recentmost same-transport URI (the <code>ssh://host</code> form is covered by <code>test/get/35</code>).</li>
 </ul>
 </body>
 </html>

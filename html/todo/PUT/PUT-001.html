@@ -4,25 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>PUT-001</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>PUT-001: <code>be put &lt;sub&gt;/&lt;path&gt;</code> does not delegate to a mounted submodule — &quot;does not exist — skipped&quot; / <code>PUTNONE</code></h1>
 <p>
 <code>be put</code> cannot stage a file that lives inside a mounted submodule. <code>be put abc/ROCKMERGE.h abc/test/POLloop.c abc/test/ROCKMERGE.c</code> — paths that plainly exist in the mounted <code>abc</code> sub (the shell tab-completes them; <code>be</code> shows them under <code>status:abc</code> as <code>unk</code>) — fails:
-</p>
 <pre><code>    sniff: put: abc/ROCKMERGE.h does not exist — skipped
     sniff: put: no eligible paths
     Error: PUTNONE
 </code></pre>
-<p>
 <code>be put</code> resolves paths only against the *<strong>parent</strong>* project's tree and never relays a <code>&lt;sub&gt;/&lt;path&gt;</code> into the submodule's own staging. Other verbs recurse into mounted subs via the SUBS relay (POST/GET/DELETE — <code>BEActSubsRelay</code>), but PUT does not, so submodule files can only be staged by <code>cd</code>-ing into the sub. Surfaced staging the abc-pin's untracked <code>ROCKMERGE.h</code>/<code>test/POLloop.c</code>/<code>test/ROCKMERGE.c</code>. See <a href="../../wiki/PUT.html">PUT</a>, <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../SUBS/README.html">SUBS</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
 </p>
 <h2>Issues</h2>

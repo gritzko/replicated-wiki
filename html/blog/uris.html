@@ -36,13 +36,13 @@ so many apps and libs. Can we apply that to git?
 <p>
 The URI layout we all remember by heart:
 </p>
-<p>
-<code>scheme:</code> -- the access protocol / addressing scheme,
-<code>//authority</code> -- most often the network host,
-<code>/path</code> -- path in the remote filesystem,
-<code>?query</code> -- other stuff (like arguments),
-<code>#fragment</code> -- location <strong>within</strong> the document.
-</p>
+<ol>
+<li><code>scheme:</code> -- the access protocol / addressing scheme,</li>
+<li><code>//authority</code> -- most often the network host,</li>
+<li><code>/path</code> -- path in the remote filesystem,</li>
+<li><code>?query</code> -- other stuff (like arguments),</li>
+<li><code>#fragment</code> -- location <strong>within</strong> the document.</li>
+</ol>
 <p>
 Can we retrofit that to a versioned store? Well, if all the
 versioning info goes into the query, the rest is obvious.
@@ -103,11 +103,11 @@ applies to the pandemonium of merge/rebase/squash/cherrypick.
 <p>
 Let's see what all git merge variants do:
 </p>
-<p>
-they apply changes from a diverging commit or branch,
-they reuse (rebase) or add new (merge, squash) message,
-they refer to the original (merge) or not (rebase, squash).
-</p>
+<ol>
+<li>they apply changes from a diverging commit or branch,</li>
+<li>they reuse (rebase) or add new (merge, squash) message,</li>
+<li>they refer to the original (merge) or not (rebase, squash).</li>
+</ol>
 <p>
 Consequently, we have 8 options: commit/branch, reuse/retitle,
 and refer/forget. In fact, only some of these 8 have git terms
@@ -144,10 +144,10 @@ The way to express it in Beagle CLI:
 <p>
 Here we use the bang modifier to:
 </p>
-<p>
-'?branch!' apply the entire branch (default: one commit),
-'#message!' dont link the original commit (the parent ref).
-</p>
+<ol>
+<li>'?branch!' apply the entire branch (default: one commit),</li>
+<li>'#message!' dont link the original commit (the parent ref).</li>
+</ol>
 <p>
 Note: when we supply no message, the original one gets reused.
 We may keep message/author but drop the original commit: <code>#!</code>.

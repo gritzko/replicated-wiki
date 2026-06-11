@@ -16,17 +16,21 @@ sanctioned fallback shipped and the full add escalated to <a href="">SUBS-013</a
 <ul>
 <li>*<strong>URL source unrecoverable</strong>* — a mounted-but-untracked sub's row-0 <code>.be</code></li>
 </ul>
+<div>
 <p>
-    anchor is <code>file:/…/.be//?/&lt;title&gt;#&lt;sha&gt;</code> (a <strong>local shard pointer</strong>, not the
-    portable upstream <code>.gitmodules</code> needs); auto-writing it would break a fresh
-    clone elsewhere.
+anchor is <code>file:/…/.be//?/&lt;title&gt;#&lt;sha&gt;</code> (a <strong>local shard pointer</strong>, not the
+portable upstream <code>.gitmodules</code> needs); auto-writing it would break a fresh
+clone elsewhere.
 </p>
+</div>
 <ul>
 <li>*<strong>Pin grammar taken</strong>* — <code>be put &lt;sub&gt;#&lt;sha&gt;</code> is the move-form, so a pin slot</li>
 </ul>
+<div>
 <p>
-    is a CLI fork.
+is a CLI fork.
 </p>
+</div>
 <p>
 *<strong>Landed:</strong>* <code>sniff/PUT.c</code> <code>PUTStage</code> now detects a sub-add candidate (a dir that
 is not a mount and is either declared in <code>.gitmodules</code> via <code>SNIFFSubsParseFind</code>
@@ -50,12 +54,18 @@ skipped<code> / </code>no eligible paths` (PUTNONE/206); the parent sees the dir
 unknown and skips it.  There is no <code>git submodule add</code> parity.
 </p>
 <h2>Repro</h2>
+<ol>
+<li><code>be get &lt;parent&gt;?master</code>.</li>
+<li>Mount a fresh sub at <code>vendor/sub2</code> (no <code>.gitmodules</code> entry, no <code>160000</code></li>
+</ol>
+<div>
 <p>
- 1. <code>be get &lt;parent&gt;?master</code>.
- 2. Mount a fresh sub at <code>vendor/sub2</code> (no <code>.gitmodules</code> entry, no <code>160000</code>
-    entry in the parent tree).
- 3. <code>be put vendor/sub2</code> → PUTNONE; nothing staged.
+entry in the parent tree).
 </p>
+</div>
+<ol>
+<li><code>be put vendor/sub2</code> → PUTNONE; nothing staged.</li>
+</ol>
 <h2>Expected</h2>
 <p>
 A defined flow to introduce a new submodule: stage a new <code>160000</code> gitlink for

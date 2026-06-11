@@ -32,53 +32,69 @@ parent shard, which holds a <code>160000</code> gitlink, not the sub's objects).
 <ul>
 <li>*<strong><code>diff:</code></strong>* — a dirty <strong>parent</strong> file shows (<code>+// DIRTYPARENT</code> on <code>main.c</code>),</li>
 </ul>
+<div>
 <p>
-    but a dirty <strong>sub</strong> file (<code>vendor/sub/core.c</code>) never appears.  <code>be diff:</code>
-    does not aggregate sub working-tree changes.
+but a dirty <strong>sub</strong> file (<code>vendor/sub/core.c</code>) never appears.  <code>be diff:</code>
+does not aggregate sub working-tree changes.
 </p>
+</div>
 <ul>
 <li>*<strong><code>tree:vendor/sub?master</code></strong>* → <code>PROJFAIL</code> (does not list the gitlink entry</li>
 </ul>
+<div>
 <p>
-    nor descend into the sub tree).
+nor descend into the sub tree).
 </p>
+</div>
 <ul>
 <li>*<strong><code>blob:vendor/sub/core.c?master</code></strong>* → <code>KEEPNONE</code> (the path is a gitlink in</li>
 </ul>
+<div>
 <p>
-    the parent shard; blob resolution does not hop into the sub shard).
+the parent shard; blob resolution does not hop into the sub shard).
 </p>
+</div>
 <ul>
 <li>*<strong>`refs:?</strong><strong>`</strong>* — lists no sub refs (the sub shard's <code>?/&lt;sub&gt;/.&lt;parent&gt;/…</code></li>
 </ul>
+<div>
 <p>
-    branches are invisible).
+branches are invisible).
 </p>
+</div>
 <ul>
 <li>*<strong><code>log:</code> / <code>blame:</code></strong>* — operate on the parent history only; no per-sub or</li>
 </ul>
+<div>
 <p>
-    sub-path-aware view.
+sub-path-aware view.
 </p>
+</div>
 <h2>Expected</h2>
 <ul>
 <li><code>diff:</code> should aggregate each mounted sub's working-tree diff, path-</li>
 </ul>
+<div>
 <p>
-    prefixed (one merged hunk stream), like the verb reports already do.
+prefixed (one merged hunk stream), like the verb reports already do.
 </p>
+</div>
 <ul>
 <li><code>tree:&lt;gitlinkpath&gt;</code> should either show the <code>160000</code> gitlink line or</li>
 </ul>
+<div>
 <p>
-    descend into the sub tree when the path points inside a mount.
+descend into the sub tree when the path points inside a mount.
 </p>
+</div>
 <ul>
 <li><code>blob:&lt;subpath&gt;?&lt;ref&gt;</code> and <code>log:</code>/<code>blame:</code> on a sub path should resolve in</li>
 </ul>
+<div>
 <p>
-    the sub shard.
+the sub shard.
 </p>
+</div>
 <ul>
 <li><code>refs:?**</code> (recursive) should optionally include sub shard refs.</li>
 </ul>

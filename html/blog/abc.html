@@ -52,28 +52,74 @@ I did not want to play Jenga with imaginary bricks.
 <p>
 So the set of architectural choices was:
 </p>
+<ol>
+<li>All primitive types have specified bit width and layout; that</li>
+</ol>
+<div>
 <p>
- 0. All primitive types have specified bit width and layout; that
-    gives serialization for free (<code>u32</code>, <code>i64</code>, <code>sha256</code>, etc).
- 1. <a href="https://github.com/gritzko/libabc/blob/main/Sx.h">Slices</a> as arrays of two typed pointers, e.g. a byte slice 
-    is <code>typedef u8* u8s[2];</code> and a slice is non-owning.
- 2. Memory-owning <a href="https://github.com/gritzko/libabc/blob/main/Bx.h">buffers</a> as arrays of four pointers, effectively
-    ring buffer logic or ptr/len/cap constructs is built in.
- 3. <a href="https://github.com/gritzko/libabc/blob/main/HEAPx.h">Generics</a> through C templates, a known technique, enough
-    for STL-level containers: <code>HEAPu64Pop()</code>, <code>HEAPu8csPop()</code>, etc
- 4. <strong>Solid</strong> containers only, pointer chasing and malloc be damned.
-    Vectors, heaps, open addressed hash maps, <a href="https://github.com/gritzko/libabc/blob/main/HIT.md">LSM</a> sorted sets,
-    these are fundamentally arrays.
- 5. Naming conventions to enforce module structure, e.g.
-    <code>void SHA1Sum(sha1* hash, u8csc from)</code> declared in <code>SHA1.h</code>,
-    implemented in <code>SHA1.c</code>, tested in <code>test/SHA1.c</code>, etc.
- 6. <a href="https://github.com/gritzko/libabc/blob/main/HTTP.lex">Ragel</a> parsers for all text formats, TLV for binary, straight
-    mmap for solid containers.
- 7. Last but not least, the primitives must effortlessly recombine.
-    <code>u8csb</code> is a buffer-of-const-byte-slices. <code>sha256bMap()</code> mmaps
-    a buffer of hashes, which might be treated as a vector, a heap, 
-    or a <a href="https://github.com/gritzko/libabc/blob/main/HASHx.h">hash set</a>, e.g. with <code>HASHsha256Put()</code>/<code>HASHsha256Get()</code>.
+gives serialization for free (<code>u32</code>, <code>i64</code>, <code>sha256</code>, etc).
 </p>
+</div>
+<ol>
+<li><a href="https://github.com/gritzko/libabc/blob/main/Sx.h">Slices</a> as arrays of two typed pointers, e.g. a byte slice </li>
+</ol>
+<div>
+<p>
+is <code>typedef u8* u8s[2];</code> and a slice is non-owning.
+</p>
+</div>
+<ol>
+<li>Memory-owning <a href="https://github.com/gritzko/libabc/blob/main/Bx.h">buffers</a> as arrays of four pointers, effectively</li>
+</ol>
+<div>
+<p>
+ring buffer logic or ptr/len/cap constructs is built in.
+</p>
+</div>
+<ol>
+<li><a href="https://github.com/gritzko/libabc/blob/main/HEAPx.h">Generics</a> through C templates, a known technique, enough</li>
+</ol>
+<div>
+<p>
+for STL-level containers: <code>HEAPu64Pop()</code>, <code>HEAPu8csPop()</code>, etc
+</p>
+</div>
+<ol>
+<li><strong>Solid</strong> containers only, pointer chasing and malloc be damned.</li>
+</ol>
+<div>
+<p>
+Vectors, heaps, open addressed hash maps, <a href="https://github.com/gritzko/libabc/blob/main/HIT.md">LSM</a> sorted sets,
+these are fundamentally arrays.
+</p>
+</div>
+<ol>
+<li>Naming conventions to enforce module structure, e.g.</li>
+</ol>
+<div>
+<p>
+<code>void SHA1Sum(sha1* hash, u8csc from)</code> declared in <code>SHA1.h</code>,
+implemented in <code>SHA1.c</code>, tested in <code>test/SHA1.c</code>, etc.
+</p>
+</div>
+<ol>
+<li><a href="https://github.com/gritzko/libabc/blob/main/HTTP.lex">Ragel</a> parsers for all text formats, TLV for binary, straight</li>
+</ol>
+<div>
+<p>
+mmap for solid containers.
+</p>
+</div>
+<ol>
+<li>Last but not least, the primitives must effortlessly recombine.</li>
+</ol>
+<div>
+<p>
+<code>u8csb</code> is a buffer-of-const-byte-slices. <code>sha256bMap()</code> mmaps
+a buffer of hashes, which might be treated as a vector, a heap, 
+or a <a href="https://github.com/gritzko/libabc/blob/main/HASHx.h">hash set</a>, e.g. with <code>HASHsha256Put()</code>/<code>HASHsha256Get()</code>.
+</p>
+</div>
 <p>
 Slices and generics are a bit unexpected in C, the rest is just
 another C style with a funky notation, no biggie. The obvious issue
@@ -93,17 +139,29 @@ small and focused modules with slice-based APIs and increasingly
 rare malloc use. The cases for malloc go down for the following
 reasons:
 </p>
+<ol>
+<li>anything multiple-page sized can be mmapped directly,</li>
+<li>smaller things can live on stack,</li>
+<li>containers are solid (#1),</li>
+<li>ABC buffers can work as arenas for variable-length content,</li>
+</ol>
+<div>
 <p>
- 1. anything multiple-page sized can be mmapped directly,
- 2. smaller things can live on stack,
- 3. containers are solid (#1),
- 4. ABC buffers can work as arenas for variable-length content,
-    so you deal with <code>u8cs</code> (two-pointer slice) and the bytes
-    live in the arena,
- 5. there is a lot of mmapped file use (in-RAM bit layout
-    matches on-disk layout, forget SPARCs and Alphas already),
- 6. the remaining cases are either <code>malloc</code> or something else.
+so you deal with <code>u8cs</code> (two-pointer slice) and the bytes
+live in the arena,
 </p>
+</div>
+<ol>
+<li>there is a lot of mmapped file use (in-RAM bit layout</li>
+</ol>
+<div>
+<p>
+matches on-disk layout, forget SPARCs and Alphas already),
+</p>
+</div>
+<ol>
+<li>the remaining cases are either <code>malloc</code> or something else.</li>
+</ol>
 <p>
 Out of remaining burning questions one may mention package and
 dependendency management. Obviously, for C that is RPM, APT, apk,

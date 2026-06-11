@@ -27,27 +27,29 @@ err)` — see &quot;Related&quot; below.)
 <p>
 Trunk: <code>eb1945fb</code> (base) → … → <code>50722656</code> (SUBS-008, edits <code>beagle/SUBS.c</code>) →
 <code>50724d9a</code> (SUBS-009, target).  cur is a branch at <code>eb1945fb</code>.
- 1. <code>be put ?ours#eb1945fb</code>; <code>be get ?ours</code> (cur = <code>eb1945fb</code>).
- 2. <code>be patch ?50724d9a</code>.
- 3. Result: exit 0; <code>beagle/SUBS.c</code> reported <code>mod</code>, on-disk == cur's bytes;
-    *<strong>008's <code>FILErmrf</code> is gone</strong>*.  Only <code>50724d9a</code>'s own last-commit delta
-    (SUBS-009) was absorbed; SUBS-002/006/007/008/010 (in <code>eb1945fb..50722656</code>)
-    were dropped.
 </p>
+<ol>
+<li><code>be put ?ours#eb1945fb</code>; <code>be get ?ours</code> (cur = <code>eb1945fb</code>).</li>
+<li><code>be patch ?50724d9a</code>.</li>
+<li>Result: exit 0; <code>beagle/SUBS.c</code> reported <code>mod</code>, on-disk == cur's bytes;</li>
+</ol>
+<div>
+<p>
+*<strong>008's <code>FILErmrf</code> is gone</strong>*.  Only <code>50724d9a</code>'s own last-commit delta
+(SUBS-009) was absorbed; SUBS-002/006/007/008/010 (in <code>eb1945fb..50722656</code>)
+were dropped.
+</p>
+</div>
 <h2>Root cause (confirmed by instrumenting <code>fork_sha</code>)</h2>
 <p>
 <code>sniff/PATCH.c</code> ~L1533-1543:
-</p>
 <pre><code>resolve_parent_tip(&amp;parent_tip, reporoot, target_query);   // → target's parent branch
 GRAFLca(&amp;fork_sha, &amp;parent_tip, &amp;thr_sha);                  // → 50722656 (target's PARENT)
 if (sha1empty(&amp;fork_sha)) GRAFLca(&amp;fork_sha, &amp;our_sha, &amp;thr_sha);  // fallback only if EMPTY
 </code></pre>
-<p>
 Instrumented output for the repro:
-</p>
 <pre><code>DBGFORK our=eb1945fb  thr=50724d9a  fork=50722656
 </code></pre>
-<p>
 The fork is <code>50722656</code> (target's parent), *<strong>not</strong>* the true base <code>eb1945fb</code>
 (cur).  The per-file 3-way classifier <code>patch_walk</code> (sniff/PATCH.c:591) then
 sees, for <code>SUBS.c</code>, <code>fork-blob == theirs-blob</code> (both <code>949938ea</code>, the post-008
@@ -66,25 +68,31 @@ the fork, the &quot;excluded&quot; commits are genuinely absent from cur and are
 <ul>
 <li><code>graf merge base ours theirs</code> (blob-only <code>GRAFMerge3Bytes</code>) merges the same</li>
 </ul>
+<div>
 <p>
-    three blobs *<strong>correctly</strong>* (645 lines, both sides) — the WEAVE merge core is
-    sound.
+three blobs *<strong>correctly</strong>* (645 lines, both sides) — the WEAVE merge core is
+sound.
 </p>
+</div>
 <ul>
 <li><code>be diff:SUBS.c?eb1945fb#50724d9a</code> shows 008's add correctly; `graf get</li>
 </ul>
+<div>
 <p>
-    SUBS.c?50724d9a<code> (blob) and </code>graf get beagle/?50724d9a` (tree-entry sha
-    <code>949938ea</code>) are both correct.  Weave construction, blob and tree
-    reconstruction are all fine.
+SUBS.c?50724d9a<code> (blob) and </code>graf get beagle/?50724d9a` (tree-entry sha
+<code>949938ea</code>) are both correct.  Weave construction, blob and tree
+reconstruction are all fine.
 </p>
+</div>
 <ul>
 <li>The defect is purely the *<strong>fork/merge-base selection</strong>*, which depends on the</li>
 </ul>
+<div>
 <p>
-    branch topology (where the target sits relative to cur) — not on the file
-    bytes.  Two blobs cannot reproduce it.
+branch topology (where the target sits relative to cur) — not on the file
+bytes.  Two blobs cannot reproduce it.
 </p>
+</div>
 <h2>Expected</h2>
 <p>
 The 3-way merge base for absorbing <code>theirs</code> into cur must be a common ancestor
@@ -166,85 +174,119 @@ treats <code>/&lt;project&gt;//&lt;sha&gt;</code> as first-class detached.
 </p>
 <p>
 *<strong>Staged implementation.</strong>*
- 1. *<strong>Empty-branch contract (foundational, fixes DIS-025). — LANDED.</strong>*
-    Commits <code>b4c6397f</code> (test hermeticity, see below) + <code>a31c7fbd</code> (the fix) on
-    <code>beagle</code> trunk.  Two changes:
+</p>
+<ol>
+<li>*<strong>Empty-branch contract (foundational, fixes DIS-025). — LANDED.</strong>*</li>
+</ol>
+<div>
+<p>
+Commits <code>b4c6397f</code> (test hermeticity, see below) + <code>a31c7fbd</code> (the fix) on
+<code>beagle</code> trunk.  Two changes:
 </p>
 <ul>
 <li><code>dog/DOG.h</code> <code>DOGCanonQueryParse</code>: <code>branch_start &gt;= branch_end</code> → <code>&gt; </code> so</li>
 </ul>
+<div>
 <p>
-        the empty middle segment <code>/&lt;project&gt;//&lt;pin&gt;</code> parses as (project, EMPTY
-        branch, pin) instead of being rejected as malformed; only a single-slash
-        <code>/proj/sha</code> (no branch slot) is malformed now.
+the empty middle segment <code>/&lt;project&gt;//&lt;pin&gt;</code> parses as (project, EMPTY
+branch, pin) instead of being rejected as malformed; only a single-slash
+<code>/proj/sha</code> (no branch slot) is malformed now.
 </p>
+</div>
 <ul>
 <li><code>sniff/PATCH.c</code> canonic-peel (~L1405): a parse with an empty branch +</li>
 </ul>
+<div>
 <p>
-        pin (detached) reduces <code>target_query</code> to the *<strong>bare pin</strong>* (not the empty
-        branch).  <code>resolve_target</code> then sha-looks-up the full 40-hex, and because
-        <code>resolve_parent_tip</code> bails on a 40-hex first chunk (L978) the squash base
-        falls to the existing <code>LCA(cur, theirs)</code> fallback — absorbing all of
-        <code>(cur..sha]</code>.
-    Note vs the earlier draft: **no <code>REFSQueryKind</code> and no fork-ancestor guard
-    were needed** — the peel emits a full 40-hex, so the existing <code>resolve_parent_tip</code>
-    40-hex bail already yields the correct base.  Verified: repro
-    <code>test/patch/30-cur-behind-target</code> RED (a.c kept at v0, C1 dropped) → GREEN;
-    all 21 <code>be-patch-*</code> green; full debug suite 232/232.
- 2. *<strong><code>KEEPResolveURI</code> + <code>REFSResolveURI</code> + <code>REFSQueryKind</code></strong>* with a hermetic
-    table test (path arm, ref arm, auth arm; empty-branch detached among the
-    cases).  Wire PATCH's target resolution through it (replaces the canonic-peel
-    + <code>DOGRefSplitPin</code> cherry detector at <code>sniff/PATCH.c</code> ~L1405/L1435).
- 3. *<strong>Caller migration.</strong>*  Route GET / POST / <code>be</code> dispatch through
-    <code>KEEPResolveURI</code>; retire <code>DOGRefSplitPin</code> and the scattered re-derivation.
+pin (detached) reduces <code>target_query</code> to the *<strong>bare pin</strong>* (not the empty
+branch).  <code>resolve_target</code> then sha-looks-up the full 40-hex, and because
+<code>resolve_parent_tip</code> bails on a 40-hex first chunk (L978) the squash base
+falls to the existing <code>LCA(cur, theirs)</code> fallback — absorbing all of
+<code>(cur..sha]</code>.
 </p>
+</div>
+<p>
+Note vs the earlier draft: **no <code>REFSQueryKind</code> and no fork-ancestor guard
+were needed** — the peel emits a full 40-hex, so the existing <code>resolve_parent_tip</code>
+40-hex bail already yields the correct base.  Verified: repro
+<code>test/patch/30-cur-behind-target</code> RED (a.c kept at v0, C1 dropped) → GREEN;
+all 21 <code>be-patch-*</code> green; full debug suite 232/232.
+</p>
+</div>
+<ol>
+<li>*<strong><code>KEEPResolveURI</code> + <code>REFSResolveURI</code> + <code>REFSQueryKind</code></strong>* with a hermetic</li>
+</ol>
+<div>
+<p>
+table test (path arm, ref arm, auth arm; empty-branch detached among the
+cases).  Wire PATCH's target resolution through it (replaces the canonic-peel
++ <code>DOGRefSplitPin</code> cherry detector at <code>sniff/PATCH.c</code> ~L1405/L1435).
+</p>
+</div>
+<ol>
+<li>*<strong>Caller migration.</strong>*  Route GET / POST / <code>be</code> dispatch through</li>
+</ol>
+<div>
+<p>
+<code>KEEPResolveURI</code>; retire <code>DOGRefSplitPin</code> and the scattered re-derivation.
+</p>
+</div>
 <h3>Stage 2 starting points (for a cold session)</h3>
 <ul>
 <li>*<strong>New code home:</strong>* <code>keeper/RESOLVE.c</code> (body — already depends on <code>KEEP</code> for</li>
 </ul>
+<div>
 <p>
-    pack lookups) declared in <code>keeper/REFS.h</code>; pure-syntactic <code>REFSQueryKind</code>
-    can sit in <code>keeper/REFS.h</code> inline (no KEEP dep).  <code>KEEPResolveRef</code>/
-    <code>KEEPResolveHex</code> (<code>keeper/RESOLVE.c:228/286</code>) become wrappers over the new
-    funnel (take <code>.sha</code>).
+pack lookups) declared in <code>keeper/REFS.h</code>; pure-syntactic <code>REFSQueryKind</code>
+can sit in <code>keeper/REFS.h</code> inline (no KEEP dep).  <code>KEEPResolveRef</code>/
+<code>KEEPResolveHex</code> (<code>keeper/RESOLVE.c:228/286</code>) become wrappers over the new
+funnel (take <code>.sha</code>).
 </p>
+</div>
 <ul>
 <li>*<strong>Context source:</strong>* <code>struct home</code> (<code>dog/HOME.h:44-90</code>) already holds</li>
 </ul>
+<div>
 <p>
-    <code>project</code>, <code>cur_branch</code>, <code>cur_sha</code> — no wtlog re-read needed.  <code>home_walk_up</code>
-    (<code>dog/HOME.c:723</code>) gives the wt root; cwd→root delta is the one new helper
-    the path arm needs (HOMEFind sets <code>h-&gt;root</code> but not the relative prefix).
+<code>project</code>, <code>cur_branch</code>, <code>cur_sha</code> — no wtlog re-read needed.  <code>home_walk_up</code>
+(<code>dog/HOME.c:723</code>) gives the wt root; cwd→root delta is the one new helper
+the path arm needs (HOMEFind sets <code>h-&gt;root</code> but not the relative prefix).
 </p>
+</div>
 <ul>
 <li>*<strong>Building blocks to reuse (don't reimplement):</strong>* <code>DOGCanonQueryParse</code></li>
 </ul>
+<div>
 <p>
-    (now empty-branch-correct) + <code>DOGRefSplitPin</code> (<code>dog/DOG.c:389</code>) for the
-    canonical split; <code>DPATHBranchResolveRel</code> (used in <code>sniff/PATCH.c:863</code>
-    <code>absolutise_query</code>) for <code>?./x</code>/<code>?..</code>; <code>REFSResolve</code> (<code>keeper/REFS.h:135</code>)
-    for the <code>//auth</code> alias grep; <code>KEEPResolveRef</code>'s hashlet/tag/branch arms
-    (<code>keeper/RESOLVE.c</code>) for the ref pin.  <code>uri</code> struct + <code>URILexer</code> in
-    <code>abc/URI.h</code>.
+(now empty-branch-correct) + <code>DOGRefSplitPin</code> (<code>dog/DOG.c:389</code>) for the
+canonical split; <code>DPATHBranchResolveRel</code> (used in <code>sniff/PATCH.c:863</code>
+<code>absolutise_query</code>) for <code>?./x</code>/<code>?..</code>; <code>REFSResolve</code> (<code>keeper/REFS.h:135</code>)
+for the <code>//auth</code> alias grep; <code>KEEPResolveRef</code>'s hashlet/tag/branch arms
+(<code>keeper/RESOLVE.c</code>) for the ref pin.  <code>uri</code> struct + <code>URILexer</code> in
+<code>abc/URI.h</code>.
 </p>
+</div>
 <ul>
 <li>*<strong>Test pattern:</strong>* table-driven, hermetic via <code>dog/test/TESTBE.h</code></li>
 </ul>
+<div>
 <p>
-    <code>TESTBEmkdtemp</code> (now strips a stray <code>/tmp/.be</code>).  Cases: input URI string →
-    expected canonical <code>/&lt;project&gt;/&lt;branch-or-empty&gt;/&lt;40-hex&gt;</code> (path arm,
-    ref-relative, tag, hashlet, empty-branch detached, <code>//auth</code>).
+<code>TESTBEmkdtemp</code> (now strips a stray <code>/tmp/.be</code>).  Cases: input URI string →
+expected canonical <code>/&lt;project&gt;/&lt;branch-or-empty&gt;/&lt;40-hex&gt;</code> (path arm,
+ref-relative, tag, hashlet, empty-branch detached, <code>//auth</code>).
 </p>
+</div>
 <ul>
 <li>*<strong>Caller list for Stage 3:</strong>* <code>sniff/PATCH.c</code> (canonic-peel + cherry</li>
 </ul>
+<div>
 <p>
-    detector), <code>sniff/GET.c</code> (its own <code>DOGCanonQueryParse</code> call), <code>sniff/POST.c</code>,
-    <code>beagle/DISPATCH.c</code> / <code>be</code> argv path.  Keep <code>DOGNormalizeArg</code> /
-    <code>DOGPromoteBareword</code> (verb-specific bareword promotion) upstream — they must
-    NOT move into keeper.
+detector), <code>sniff/GET.c</code> (its own <code>DOGCanonQueryParse</code> call), <code>sniff/POST.c</code>,
+<code>beagle/DISPATCH.c</code> / <code>be</code> argv path.  Keep <code>DOGNormalizeArg</code> /
+<code>DOGPromoteBareword</code> (verb-specific bareword promotion) upstream — they must
+NOT move into keeper.
 </p>
+</div>
 <h2>Related (separate, not yet root-caused)</h2>
 <p>
 The original reconcile used <code>be get</code> (which bases on <code>LCA(our, theirs)</code> =

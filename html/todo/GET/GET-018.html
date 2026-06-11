@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-018</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>GET-018: make <code>be get</code>'s worktree update atomic — stage-to-temp + atomic swap (or journal+rollback) so a mid-write failure leaves ref/wtlog/tree all unchanged</h1>
+<p>
+Split from <a href="">[GET-016</a>] Part 1. <code>be get</code>'s COMMIT POINT (<code>sniff/GET.c:1338-1429</code>) advances the local branch ref + wtlog BEFORE the non-crash-safe worktree write (<code>WALKTreeLazy</code> + drains + sub loop), deliberately — the comment documents replay-via-<code>be get --force ?&lt;cur&gt;</code> as the recovery, and <code>test/get/09-refuse-no-commit</code> + <code>test/get/10-partial-recovery</code> pin that model (get/10 asserts the wtlog GROWS after a failing write and that <code>--force</code> replay is the fix). So the literal &quot;advance the ref only after the write succeeds&quot; reorder is rejected: it breaks that documented crash-safety model and both tests. True all-or-nothing atomicity needs a redesign — stage the wt mutation to a scratch area then atomically swap + advance the ref, or journal each mutation and roll back on failure. GET-016 Part 2 (the <code>--force</code> full-reset that makes the replay recovery actually work) landed separately. See <a href="../../wiki/GET.html">GET</a>, <a href="">[GET-016</a>], <a href="../../../beagle/CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Repro (target behaviour)</h2>
+<ul>
+<li>Inject a mid-<code>WALKTreeLazy</code> write failure during <code>be get</code> onto a new tip; today the ref + wtlog advance while the tree is left partial (recoverable only by a manual <code>be get --force ?&lt;cur&gt;</code>).</li>
+<li>Target: after the failed get, the branch ref, the wtlog, AND the on-disk tree are byte-identical to their pre-get state — no partial application, no manual replay needed.</li>
+</ul>
+<h2>Design fork (decide first — this is why GET-016 split it out)</h2>
+<ul>
+<li>*<strong>Reorder</strong>* (advance ref after the write): simplest, but breaks <code>test/get/10</code>'s documented &quot;wtlog grows on failure → <code>--force</code> replay recovery&quot; model; only viable if that model is deliberately abandoned and 09/10 rewritten.</li>
+<li>*<strong>Stage-to-temp + atomic swap</strong>* (preferred): materialise the new tree into a scratch dir, fsync, then a single swap/commit + ref advance; a partial failure discards the scratch and the live tree is untouched.</li>
+<li>*<strong>Journal + rollback</strong>*: record an undo entry per wt mutation; on failure replay it backwards. More invasive; handles in-place edits without a full second copy.</li>
+</ul>
+<h2>Constraints</h2>
+<p>
+Must not regress the crash-safety property <code>test/get/09</code>/<code>10</code> protect — either preserve replay-recovery as a fallback, or migrate those tests to the new no-drift model as a deliberate, reviewed step.
+</p>
+<h2>Planned</h2>
+<ul>
+<li>Design pass first: choose swap-vs-journal, write it up here, then fork.</li>
+<li>Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): a test that injects a mid-write failure and asserts ref + wtlog + tree all unchanged afterwards.</li>
+<li>Implement; reconcile <code>test/get/09</code> + <code>10</code> to the chosen model.</li>
+</ul>
+</body>
+</html>

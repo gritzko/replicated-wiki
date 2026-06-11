@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-017</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>GET-017: <code>be get --nosub</code> won't advance a store-backed switch-worktree's ref at all (stuck at its base), forcing fresh-clone salvage to land</h1>
+<p>
+Distinct from <a href="">[GET-016</a>] (there the ref advances without the tree; here the ref does not advance at all). In certain store-backed worktrees <code>be get --nosub</code> does NOT fast-forward the local branch ref: this session MEM-041's and MEM-042's worktrees stayed pinned at <code>5104a855</code> across repeated <code>be get --nosub</code>, never pulling <code>d857a9cc</code>/<code>91f215a4</code>, while a sibling worktree (MEM-044) advanced normally. The stuck ones carried a 105-byte <code>.be</code> switch file vs MEM-044's 223-byte — pointing at a <code>.be</code>-switch-shape fast-forward gap (the <a href="">[GET-012</a>] cwd-<code>.be</code> disambiguation: absent→worktree, dir→clone, file→switch). <code>.refs.idx</code> was fresh (not the stale-idx trap). Consequence: such worktrees can't update onto trunk in place, the Issues.mkd &quot;update-first&quot; step fails, and MEM-041/042/044 had to be landed by recreating fresh clones at the current tip. See <a href="../../wiki/GET.html">GET</a>, <a href="">[GET-012</a>], <a href="">[GET-016</a>], <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Repro (to pin)</h2>
+<ul>
+<li>Create a store-backed worktree at an old tip whose <code>.be</code> is the small switch-file shape; land newer commits on trunk; <code>be get --nosub</code> in the worktree.</li>
+<li>Observe <code>be log</code> tip stays at the old base and the newer commits are never pulled — repeatedly. Confirm <code>.refs.idx</code> is fresh (rules out <a href="">[DIS-033</a>]-style stale-idx). Pin the trigger to the <code>.be</code> switch shape.</li>
+</ul>
+<h2>Issues</h2>
+<ul>
+<li>Why does a switch-shaped (<code>.be</code> = file) worktree's <code>be get</code> not FF its ref, when a clone-shaped (<code>.be</code> = dir) one does? Compare the ref-advance / FF path for the two shapes; <a href="">[GET-012</a>] introduced the cwd-<code>.be</code>-shape branch.</li>
+<li>Is the ref read from the wrong place (the switch-file's pinned sha vs the store branch tip), so the FF compares tip-against-itself and no-ops?</li>
+<li>*<strong>Workaround clue (from the GET-016 Part 2 landing):</strong>* a bare <code>be get --nosub</code> advanced the in-store branch ref but did NOT re-anchor the worktree's <code>.be</code> wtlog base; an explicit <code>be get --nosub '?#&lt;tip-sha&gt;'</code> (naming the target sha) DID re-anchor the wtlog and merged the intervening commits. So the gap is in the bare/implicit-tip path's wtlog re-anchor, not the fetch — the explicit-<code>?#&lt;sha&gt;</code> form is a usable workaround and a strong bisect lead.</li>
+</ul>
+<h2>Planned</h2>
+<ul>
+<li>Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17); bisect the FF/ref-advance path by <code>.be</code> shape; fix so a switch-worktree FFs onto trunk like a clone-worktree (then the Issues loop's in-place update works and fresh-clone salvage is no longer required).</li>
+</ul>
+</body>
+</html>

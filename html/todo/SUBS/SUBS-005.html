@@ -18,15 +18,19 @@ one, via <code>be delete &lt;path&gt;</code>.  Both <code>be delete vendor/sub</
 <ul>
 <li><code>be get &lt;parent&gt;?master</code>; <code>be delete vendor/sub/core.c</code></li>
 </ul>
+<div>
 <p>
-    → <code>delete: vendor/sub/core.c has unstamped changes</code> / DELDIRTY / 157.
+→ <code>delete: vendor/sub/core.c has unstamped changes</code> / DELDIRTY / 157.
 </p>
+</div>
 <ul>
 <li><code>be delete vendor/sub</code></li>
 </ul>
+<div>
 <p>
-    → <code>delete: vendor/sub has unstamped changes</code> / DELDIRTY / 157.
+→ <code>delete: vendor/sub has unstamped changes</code> / DELDIRTY / 157.
 </p>
+</div>
 <h2>Root cause</h2>
 <p>
 DELETE's dirty check refuses when a path's mtime is out of the parent
@@ -44,18 +48,22 @@ defined, working behavior for the gitlink case:
 <ul>
 <li><code>be delete vendor/sub</code> should remove the submodule — unmount the <code>.be</code></li>
 </ul>
+<div>
 <p>
-    anchor, remove the worktree files, and stage the gitlink + <code>.gitmodules</code>
-    removal (git <code>git rm</code> of a submodule parity) — or refuse with a clear,
-    sub-aware message, not a spurious DELDIRTY.
+anchor, remove the worktree files, and stage the gitlink + <code>.gitmodules</code>
+removal (git <code>git rm</code> of a submodule parity) — or refuse with a clear,
+sub-aware message, not a spurious DELDIRTY.
 </p>
+</div>
 <ul>
 <li><code>be delete vendor/sub/core.c</code> should either recurse into the sub to delete</li>
 </ul>
+<div>
 <p>
-    that file, or skip cleanly with a sub-aware message — never DELDIRTY on a
-    byte-clean sub file.
+that file, or skip cleanly with a sub-aware message — never DELDIRTY on a
+byte-clean sub file.
 </p>
+</div>
 <h2>Fix sketch</h2>
 <p>
 Teach DELETE's dirty check to recognise gitlink paths: a <code>160000</code> tree entry's

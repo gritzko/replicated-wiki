@@ -10,12 +10,14 @@
 <hr>
 <p>
 title: &quot;Beagle SCM: HTTP/CLI interface&quot;
-</p>
 <hr>
 <h1>II. Beagle SCM: HTTP/CLI interface</h1>
-<p>
-    <a href="partI.html">**Part I. SCM as a database for the code**</a>
 </p>
+<div>
+<p>
+<a href="partI.html">**Part I. SCM as a database for the code**</a>
+</p>
+</div>
 <p>
 Despite L.Torvalds initially described git as &quot;information manager
 from hell&quot;, it was a very innovative revision control system. 
@@ -128,25 +130,35 @@ a small GitHub hosting a number of <strong>projects</strong>?
 If we want to limit ourselves to 4 basic kinds of <strong>maneuvers</strong>,
 those are:
 </p>
-<p>
- 1. moving changes from worktree to the repo,
- 2. moving changes from the repo to a worktree,
- 3. moving things in the worktree,
- 4. moving things in the repo.
-</p>
+<ol>
+<li>moving changes from worktree to the repo,</li>
+<li>moving changes from the repo to a worktree,</li>
+<li>moving things in the worktree,</li>
+<li>moving things in the repo.</li>
+</ol>
 <p>
 We assume the current worktree is linked to one fixed place in
 the repo.  Things look a bit too primitive so far. Then, we
 chalk the repo into squares:
 </p>
+<ol>
+<li>there are <strong>repos</strong> which have public identity,</li>
+</ol>
+<div>
 <p>
- 1. there are <strong>repos</strong> which have public identity,
-    their names are FQDN-like, e.g. <code>main.team.company.com</code> or
-    <code>release.product.entity.org</code>;
- 2. orthogonally, repos are divided into <strong>projects</strong>, also with public
-    identity, e.g. <code>@gritzko/librdx</code> (like a GitHub path).
-    So a full URI is like <code>http://main.replicated.live/@gritzko/librdx</code>
+their names are FQDN-like, e.g. <code>main.team.company.com</code> or
+<code>release.product.entity.org</code>;
 </p>
+</div>
+<ol>
+<li>orthogonally, repos are divided into <strong>projects</strong>, also with public</li>
+</ol>
+<div>
+<p>
+identity, e.g. <code>@gritzko/librdx</code> (like a GitHub path).
+So a full URI is like <code>http://main.replicated.live/@gritzko/librdx</code>
+</p>
+</div>
 <p>
 Here the maneuver #4 gets subdivided into submaneuvers, the most frequent
 case being changeset exchange between repos. Note that repos are
@@ -188,29 +200,47 @@ language and 4 HTTP verbs are sufficient to express the operations we want.
 GET, POST, PUT and DELETE correspond to maneuvers #2, #1, #4, #4 resp.
 Maneuver #3 is <code>cp</code>, <code>rm</code>, <code>vim</code>, etc.
 </p>
+<ol>
+<li><code>GET http://repo.team.entity.org/project?branchA</code> simple checkout</li>
+</ol>
+<div>
 <p>
- 1. <code>GET http://repo.team.entity.org/project?branchA</code> simple checkout
-    of a particular branch version (may need to clone first);
- 2. <code>GET //repo2</code> switching the repo;
- 3. <code>GET /project/dir/file.txt</code> checkout one file;
- 4. <code>POST ./file.txt</code> stage one file (it gets imported into the repo,
-    but the branch does not move yet);
- 5. <code>DELETE somefile.txt</code> delete;
- 6. <code>PUT ./file.txt?branchB</code> merge in file changes from other branch;
- 7. <code>GET ?branchB</code> switch the branch;
- 8. <code>GET ?timestamp-origin</code> checkout a version by its timestamp;
- 9. <code>GET ?4d2130</code> checkout a version by its hash;
-10. <code>GET ?branchA#has(x)</code> list all uses of symbol <code>x</code> in <code>branchA</code>;
-11. <code>POST /project?branchA</code> commit all changes to a branch;
-12. <code>PUT //repo2?branchC</code> merge a branch of another repo;
-13. <code>POST ?stash; GET ?branchA</code> stash the changes;
-14. <code>POST ?branchA</code> commit changes (import, move the branch);
-15. <code>GET ?branchA#has(int,getX)</code> from the branch, list all AST* nodes that
-    have children <code>int</code> and <code>getX</code> (likely declaration and definition
-    of <code>int getX()</code>;
-16. <code>GET //repo/project/dir#has(int,getX)</code> same but fancier;
-17. <code>PUT http://remote.repo.team.entity.org</code> big time pull;
+of a particular branch version (may need to clone first);
 </p>
+</div>
+<ol>
+<li><code>GET //repo2</code> switching the repo;</li>
+<li><code>GET /project/dir/file.txt</code> checkout one file;</li>
+<li><code>POST ./file.txt</code> stage one file (it gets imported into the repo,</li>
+</ol>
+<div>
+<p>
+but the branch does not move yet);
+</p>
+</div>
+<ol>
+<li><code>DELETE somefile.txt</code> delete;</li>
+<li><code>PUT ./file.txt?branchB</code> merge in file changes from other branch;</li>
+<li><code>GET ?branchB</code> switch the branch;</li>
+<li><code>GET ?timestamp-origin</code> checkout a version by its timestamp;</li>
+<li><code>GET ?4d2130</code> checkout a version by its hash;</li>
+<li><code>GET ?branchA#has(x)</code> list all uses of symbol <code>x</code> in <code>branchA</code>;</li>
+<li><code>POST /project?branchA</code> commit all changes to a branch;</li>
+<li><code>PUT //repo2?branchC</code> merge a branch of another repo;</li>
+<li><code>POST ?stash; GET ?branchA</code> stash the changes;</li>
+<li><code>POST ?branchA</code> commit changes (import, move the branch);</li>
+<li><code>GET ?branchA#has(int,getX)</code> from the branch, list all AST* nodes that</li>
+</ol>
+<div>
+<p>
+have children <code>int</code> and <code>getX</code> (likely declaration and definition
+of <code>int getX()</code>;
+</p>
+</div>
+<ol>
+<li><code>GET //repo/project/dir#has(int,getX)</code> same but fancier;</li>
+<li><code>PUT http://remote.repo.team.entity.org</code> big time pull;</li>
+</ol>
 <p>
 In fact, most everyday commands would break down into several
 <code>GET</code>, <code>POST</code>, <code>PUT</code>, <code>DELETE</code> calls as, for example, refreshing
@@ -254,20 +284,62 @@ Same as plumbing, porcelain commands implement three maneuvers:
 There are some shortcuts for combos, but most of work is get,
 post, put. The most straightforward linear workflow looks like:
 </p>
+<ol>
+<li><code>be get //repo/project</code>         clone/checkout a worktree</li>
+<li><code>be come ?branch</code>              fork off a branch (combo of <code>be post</code> +</li>
+</ol>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
 <p>
- 1. <code>be get //repo/project</code>         clone/checkout a worktree
- 2. <code>be come ?branch</code>              fork off a branch (combo of <code>be post</code> +
-                                  <code>be get ?branch</code>)
- 3. ...                            do some work
- 4. <code>be post</code>                      commit/stage all branch changes
- 5. <code>be put</code>                       merge in the head (or
-                                   <code>be get ?head ?branch ... be post</code>,
+  <code>be get ?branch</code>)
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<ol>
+<li>...                            do some work</li>
+<li><code>be post</code>                      commit/stage all branch changes</li>
+<li><code>be put</code>                       merge in the head (or</li>
+</ol>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+   <code>be get ?head ?branch ... be post</code>,
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
 				   a subtly more delicate way to
 				   achieve same result)
- 6. ...                            verify things work as intended
- 7. <code>be post ?head</code>                merge into the head
- 8. ...go p.3
 </p>
+<ol>
+<li>...                            verify things work as intended</li>
+<li><code>be post ?head</code>                merge into the head</li>
+<li>...go p.3</li>
+</ol>
 <p>
 Mixing branches is done by the same <code>get</code> verb but with multiple
 arguments. Use worktree as a palette where you mix and blend
@@ -314,13 +386,53 @@ see them as patch stacks). Approximate command equivalents:
 <p>
   * <code>git init dir/</code>               <code>be post dir/</code>
   * <code>git stash push</code>               there is no difference between stash
-                                   and any other commit, so <code>be post ?mystash</code>
-                                   is enough
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+   and any other commit, so <code>be post ?mystash</code>
+   is enough
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
   * <code>git add a.txt b.txt</code>          same, <code>be post a.txt b.txt</code>
   * <code>git clone http://uri</code>        <code>be get http://repo.team.entity.org</code>
   * <code>git push origin a:b</code>         <code>be post http://repo</code> repo names are FQDNs
   * <code>git pull origin b:a</code>         <code>be get http://repo ? &amp;&amp; be post</code> where <code>?</code>
-                                   is the expression for the current worktree's
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+   is the expression for the current worktree's
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
 				   repo/branch formula
   * <code>git merge xxx</code>               <code>be get ?branchA ?branchB</code>
   * <code>git status</code>                  <code>be</code>
@@ -341,10 +453,50 @@ Here are some examples of less trivial Beagle commands.
 </p>
 <p>
   * <code>be get /project /project.ai</code>  blend project and its prompt overlay
-                                   (technically, a separate project)
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+   (technically, a separate project)
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
   * <code>be get ?head ?branch</code>         blend head and branch (no repo changes)
   * <code>be put ?branch#DoThing</code>       cherry pick a symbol from a branch
-                                   (will extract a patch based on the AST* tree)
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+   (will extract a patch based on the AST* tree)
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
   * <code>be get ?branch#DoThing</code>       same, but no commit, worktree only
   * <code>be put ./file.txt?branch</code>     cherry pick a file from a branch
   * <code>be get ./file.txt?branch</code>     get a file from a branch (no commit)
@@ -353,7 +505,27 @@ Here are some examples of less trivial Beagle commands.
   * <code>be post ?newbranch</code>           fork
   * <code>be post //newrepo</code>            big time fork
   * <code>be diff ?head#SomeClass</code>      find any changes to SomeClass since <code>head</code>
-                                   (prints out patches)
+</p>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<div>
+<p>
+   (prints out patches)
+</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+<p>
   * <code>be diff ./file.txt?v1.2</code>      find all changes to file.txt since v1.2
   * <code>be diff #has(DoThing,int)</code>    diff <code>int DoThing()</code> specifically
   * <code>be get ?#todo(asan)</code>          find things to sanitize, any branch

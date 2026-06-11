@@ -18,13 +18,17 @@ not the parent's.  DELETE has no such asymmetry — a parent-only bare delete is
 a lenient exit-0 no-op, so a sub-only delete returns 0 (see SUBS-005 contrast).
 </p>
 <h2>Repro</h2>
+<ol>
+<li><code>be get &lt;parent&gt;?master</code>.</li>
+<li>Edit only <code>vendor/sub/core.c</code> (leave parent files clean).</li>
+<li><code>be put</code>.</li>
+<li>stdout lists <code>put vendor/sub/core.c</code> and the sub's wtlog gains a real</li>
+</ol>
+<div>
 <p>
- 1. <code>be get &lt;parent&gt;?master</code>.
- 2. Edit only <code>vendor/sub/core.c</code> (leave parent files clean).
- 3. <code>be put</code>.
- 4. stdout lists <code>put vendor/sub/core.c</code> and the sub's wtlog gains a real
-    <code>put core.c</code> row (sub blob IS staged) — but exit is 206/PUTNONE.
+<code>put core.c</code> row (sub blob IS staged) — but exit is 206/PUTNONE.
 </p>
+</div>
 <h2>Expected</h2>
 <p>
 Exit 0.  The sub blob was staged, so the bare put did real work; spec: &quot;A clean

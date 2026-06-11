@@ -30,13 +30,17 @@ recursion failed` (exit 157).  A clean nested sub should be a *<strong>no-op</st
 abort the whole push.
 </p>
 <h2>Repro</h2>
+<ol>
+<li>Depth-3 forest (parent → vendor/sub → vendor/sub/.../leaf), leaf clean.</li>
+<li>Make a local parent commit.</li>
+<li><code>be post ssh://localhost/&lt;rel&gt;/parent.git?master</code>.</li>
+<li>Recursion descends to the clean leaf, forwards</li>
+</ol>
+<div>
 <p>
- 1. Depth-3 forest (parent → vendor/sub → vendor/sub/.../leaf), leaf clean.
- 2. Make a local parent commit.
- 3. <code>be post ssh://localhost/&lt;rel&gt;/parent.git?master</code>.
- 4. Recursion descends to the clean leaf, forwards
-    <code>post ?/leaf/.sub/.parent/master</code>; the branch is absent → NOBRANCH → 157.
+<code>post ?/leaf/.sub/.parent/master</code>; the branch is absent → NOBRANCH → 157.
 </p>
+</div>
 <h2>Expected</h2>
 <p>
 Per spec: &quot;<code>be post</code> on a detached sub auto-creates that branch at the pin&quot;

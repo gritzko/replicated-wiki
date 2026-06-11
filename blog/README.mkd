@@ -4,7 +4,6 @@
  -  [2Jan2026 Arguments for a syncable data exchange format][a]
  -  [19Feb2026 Beagle the revision control system][1] (part [I][1], [II][2], [III][3])
  -  [24May2026 Three years with ABC (Abstractionless C)][c]
- -  [11Jun2026 Beagle: git, URIs and all the dirty words][d]
 
 [a]: ./args.mkd
 [e]: ./escher.mkd
@@ -12,4 +11,3 @@
 [1]: ./partI.mkd
 [2]: ./partII.mkd
 [3]: ./partIII.mkd
-[d]: ./uris.mkd

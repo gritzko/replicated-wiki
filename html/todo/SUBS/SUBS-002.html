@@ -32,12 +32,12 @@ PATCH chokes on the gitlink entry (<code>sniff: patch: bad ref ''</code>,
 <code>SUBS.dbg</code> recursion line ever appears; the sub never advances to the new pin.
 </p>
 <h2>Repro</h2>
-<p>
- 1. <code>be get &lt;parent&gt;?master</code> (gitlink <code>vendor/sub</code> pinned at SUB_C2).
- 2. Create a parent branch <code>adv</code> whose tree bumps the gitlink to SUB_C3.
- 3. On master: <code>be patch ?adv</code>.
- 4. Observe exit 157 / PATCHCFLCT; <code>vendor/sub/core.c</code> stays at the C2 bytes.
-</p>
+<ol>
+<li><code>be get &lt;parent&gt;?master</code> (gitlink <code>vendor/sub</code> pinned at SUB_C2).</li>
+<li>Create a parent branch <code>adv</code> whose tree bumps the gitlink to SUB_C3.</li>
+<li>On master: <code>be patch ?adv</code>.</li>
+<li>Observe exit 157 / PATCHCFLCT; <code>vendor/sub/core.c</code> stays at the C2 bytes.</li>
+</ol>
 <p>
 Scope nuance (verified by <code>test/patch/28</code> vs <code>29</code>): the failure reproduces
 when the absorbed tree *<strong>carries the gitlink as a diff entry</strong>*.  A patch that
