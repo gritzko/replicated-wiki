@@ -1,0 +1,27 @@
+#   CODE-011: bro/BRO.c: fork-drain, read-grow, goto helpers
+
+bro/BRO.c has substantial copy-paste: BROForkSpot/BROForkBe are ~85-line near-twins, the read-into-growable-Bu8 loop appears 4x, scr_goto/bro_goto have identical bodies, the goto-line clamp is pasted 3x, and bro_has_substr re-rolls u8csFindS. Factor a fork-and-drain helper, a read-grow helper, a goto emitter and a clamp, and reuse abc.
+
+##  Issues
+
+Twin fork helpers, a 4x read-grow loop, twin goto emitters, a 3x clamp, a hand substr.
+
+ -  BROForkSpot/BROForkBe (BRO.c:2496/2586) ~85 lines each, near-identical pipe+fork+exec+drain.
+ -  read-into-growable Bu8 loop pasted 4x: BRO.c:2538,2631,3220 +.
+ -  scr_goto/bro_goto (BRO.c:1346/1365) byte-identical body, differ only in the sink.
+ -  goto-line clamp pasted BRO.c:2040,2110,2189; bro_has_substr (2352) = u8csFindS (Sx.h:383).
+
+##  Blockers
+
+None; single-file BRO.c.
+
+##  Planned
+
+One fork-and-drain + one read-grow + one goto-emit + one clamp; substr via abc.
+
+ -  Repro first (§17): bro fork-spot/fork-be drive a child and render; keep behavior.
+ -  BROForkChild(bin,argv) for both; BRODrainFd(buf,fd) for the 4 loops.
+ -  One goto-emit(sink,row,col); one clamp; bro_has_substr → u8csFindS.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

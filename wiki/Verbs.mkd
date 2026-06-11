@@ -2,10 +2,10 @@
 
 Beagle's command language is a small, fixed set of HTTP verbs — GET, HEAD, POST, PUT, DELETE, PATCH — chosen to combat git's command and flag sprawl. Nobody remembers all of git, so these verbs are kept orthogonal: each has one clear function and a single direction of data flow, and none can be supplemented by creative use of another. You pick the verb for the move you want, then each URI slot adds its own effect.
 
- -  [GET] — repo → worktree: check out or restore — clone, switch branch, or reset a single file.
+ -  [GET] — repo → worktree: check out or restore — clone, switch branch, ff, or reset a single file.
+ -  [HEAD] — repo → repo: read-only peek — ahead/behind diff, and the canonical remote-cache refresh.
  -  [PATCH] — repo → worktree (mix/merge): weave another branch's commits into the wt — merge, rebase, cherry-pick, squash.
  -  [POST] — worktree → repo: the only commit-maker; advance cur, and FF-advance labels or remotes.
- -  [HEAD] — repo → repo: read-only peek — ahead/behind diff, and the canonical remote-cache refresh.
  -  [PUT] — reflog: write a ref (create, move, reset, push) and stage files for the next commit.
  -  [DELETE] — reflog: remove — tombstone a branch, delete a remote ref, or stage a file's removal.
 
@@ -30,7 +30,7 @@ A bare token with no URI markers lands in each verb's natural slot, so the commo
 
 ##  git → be cheat sheet
 
-The everyday git commands map onto verb + URI combinations, no extra flags.
+The everyday git commands map onto verb + URI combinations, no extra flags; [the dirty-words post] derives the merge/rebase/squash/cherry split.
 
  -  `git clone URL` → `be get ssh://URL`; `git fetch` → `be head ssh://origin?*`; `git checkout feat` → `be get ?feat`.
  -  `git checkout -b feat` → `be put ?./feat && be get ?./feat` (mkdir, then cd).
@@ -46,3 +46,4 @@ The everyday git commands map onto verb + URI combinations, no extra flags.
 [PUT]: PUT.mkd "PUT verb"
 [DELETE]: DELETE.mkd "DELETE verb"
 [PATCH]: PATCH.mkd "PATCH verb"
+[the dirty-words post]: ../blog/uris.mkd "Beagle: git, URIs and all the dirty words"

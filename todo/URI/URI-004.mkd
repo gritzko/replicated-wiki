@@ -1,0 +1,25 @@
+#   URI-004: drop the abc `uri` path-`segments` buffer and the Bx `uri` containers
+
+`uri` is NOT a fixed-bit-layout record (like `sha256`/`wh128`) — it is a variable parse-result whose component slices are views into the source text. So two pieces of `abc/URI.h` earn their removal: the inline `u8csbp segments` **buffer** the lexer materializes, and the **Bx-generated `uri` containers** (`urib`/`uris`/…). A buffer of parsed `uri` values is fragile (each value's slices point into a separate, separately-owned source text) and the "solid container" benefits don't apply to a non-fixed type. **Two changes, keep everything else:** (1) drop `segments`, walk `path` via **`abc/PATH`** on demand; (2) drop the Bx machinery, carry URIs as **UNPARSED text** (`u8css`/`u8csb`) and parse a single `uri` on demand where decomposition is needed. The `uri` struct itself (its `data` field + the 8 component slices, minus `segments`), the `urip`/`uricp`/`uric` pointer typedefs, and the parse/feed/relative functions all STAY. Adjust every API user accordingly. abc/core change — maintainer-reviewed. See [Issues], [CLAUDE], [URI-spec], [[URI-002]].
+
+##  Issues
+Two parts of `uri` assume a fixedness the type does not have.
+
+ -  **`segments` buffer** (`u8csbp`): the lexer populates it with the path's segments — struct bloat + a parse-time side-allocation paid even when no caller walks the path. Walk `path` on demand with `abc/PATH` instead.
+ -  **Bx `uri` containers**: `abc/URI.h` defines the `uriZ` orderer and includes `Bx.h` to generate `urib`/`uribFeed1`/`uribDataLen`/`uribData`/`urisAtP`/`uricsAtP`/… — a typed buffer/slice of PARSED `uri` values. But a stored parsed `uri` dangles unless its source text is separately kept alive, and `uri` has no fixed layout to justify a solid container. Collections of URIs should hold the **unparsed text** (`u8css`/`u8csb`) and parse one at a time.
+
+##  Blockers
+Wide but mechanical: every `urib`/`uris` user (e.g. the CLI's `c->uris`, DISPATCH, bro) moves to `u8css`/`u8csb`; every `.segments` user (the lexer's `URIonSegment*`, `URISplitPath`/`URIRelative`) moves to `abc/PATH`. The `data` field and `uricp` parse-function signatures are untouched.
+
+##  Planned
+Remove `segments` and the Bx containers; carry URIs as text; parse on demand.
+
+ -  Drop `u8csbp segments` from `struct uri` (`abc/URI.h`); stop populating it in `URILexer`/`URIutf8Drain` (the `URIonSegment*` callbacks go away). Rewrite `.segments` readers — `URISplitPath` (used by `URIRelative`) and any other — to iterate `path` via `abc/PATH`'s segment walker (no hand-rolled `/`-splitting).
+ -  Remove the `uriZ` orderer and the `#include "Bx.h"` that generates the `uri` containers from `abc/URI.h`. Migrate every `urib`/`uris` holder to `u8csb`/`u8css` of unparsed URI text; at each point that needs a URI decomposed, parse that one slice into a transient `uri`.
+ -  Repro-first ([CLAUDE] §17): extend `abc/test/URI.c` to assert an `abc/PATH` walk of `path` yields the same segments the old buffer did (incl. zero-segment / trailing-slash). Existing CLI/verb e2e cover the container migration (URI args still resolve).
+ -  Update `abc/INDEX.md`. Leave the `data` field, the 8 component slices, the `urip`/`uricp` typedefs, and the parse functions untouched.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[URI-spec]: ../../wiki/URI.mkd "URI grammar + ref shapes"
+[URI-002]: URI-002.mkd "per-component bang — kept in dog/, abc pristine (landed)"

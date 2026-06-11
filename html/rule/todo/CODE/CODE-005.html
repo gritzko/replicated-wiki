@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>CODE-005: keeper: dedup tree-descent, cap-parse, obj-hdr</h1>
+<p>
+Three more keeper duplications: proj_descend_inner/lsf_descend_inner are the same tree-path descent, recv_parse_caps/wire_parse_caps share the capability token-loop, and wpush_feed_obj_hdr is byte-identical to keep_feed_obj_hdr (the pack obj-hdr varint). Factor each into one shared keeper helper.
+</p>
+<h2>Issues</h2>
+<p>
+Tree-path descent, capability parsing, and pack obj-hdr encoding each exist twice.
+</p>
+<ul>
+<li>proj_descend_inner/lsf_descend_inner (PROJ.c:88, WALK.c:182) = same split-on-'/' tree descent.</li>
+<li>recv_parse_caps/wire_parse_caps (RECV.c:48, WIRE.c:36) share the SP/TAB token-loop scaffold.</li>
+<li>wpush_feed_obj_hdr (WIRECLI.c:1288) is byte-for-byte keep_feed_obj_hdr (KEEP.c:1486).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; keeper-internal. Shares KEEP.c/WALK.c/WIRECLI.c with CODE-004 — same worktree, serial.
+</p>
+<h2>Planned</h2>
+<p>
+Lift one shared function per pair; drop the duplicate.
+</p>
+<ul>
+<li>Repro first (§17): a path-descent test + a cap-parse test + a pack-hdr round-trip.</li>
+<li>Shared KEEPTreeDescend(commit,path); a shared cap parser; one obj-hdr encoder in KEEP.h.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>CODE-009: beagle: abc buffer ctor + one uri-resolver</h1>
+<p>
+beagle builds static Bu8/u8b buffers as {s,s,s,s+sizeof} literals with raw pointer arithmetic at six BE.cli.c + two DISPATCH.c sites, and BEActPromoteRef/BEActResolveRemote/BEActResolveRef share the same 'static scratch + loop over c-&gt;uris' shape. Use the abc buffer constructor and factor the uri-resolver loop.
+</p>
+<h2>Issues</h2>
+<p>
+Hand-rolled static buffer literals (ptr-arith) and a triplicated uri-resolve loop.
+</p>
+<ul>
+<li>Six BE.cli.c + two DISPATCH.c static Bu8 literals {st,st,st,st+sizeof} — CLAUDE.md §10 ptr-arith.</li>
+<li>BEActPromoteRef/BEActResolveRemote (DISPATCH.c:88,147) + BEActResolveRef (BE.cli.c:3287) share the uri-loop shape.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; shares BE.cli.c with CODE-008 — same beagle worktree, serial.
+</p>
+<h2>Planned</h2>
+<p>
+Replace literals with the abc buffer macro; factor one uri-resolve helper.
+</p>
+<ul>
+<li>Repro first (§17): be resolve/promote paths stay green.</li>
+<li>a_pad / abc buffer ctor for every scratch buf; drop the +sizeof literals.</li>
+<li>One BEResolveOverUris(c,fn) the three actors call.</li>
+</ul>
+</body>
+</html>

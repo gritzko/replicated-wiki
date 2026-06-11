@@ -1,0 +1,27 @@
+#   CODE-017: API-underuse + small-reimplementation cleanup (2026-06-11 research sweep)
+
+A research-only per-dir sweep (11 agents, each reading ABC.md + the INDEX/headers first) found 17 spots that reimplement or under-use existing abc/dog APIs — 0 high value, 9 medium, 8 low. No bugs; the value is ABC-style consistency (typed slices over `memcmp`/ptr-arith, wrapped `FILE.h` over raw POSIX, one helper over a duplicate). The big reimplementations already landed (sha1↔hex, dog hex/dir/enc, commit parsing), so this is the incremental tail. CODE-017 does the SOLID parent-project findings behavior-preserving in ONE worktree; the abc/ findings (URI.c, TLV.c) are DEFERRED to a separate gated abc review (core, just-touched by URI-003). Conservative: skip any marginal one-off that would only churn. See [CLAUDE], [Issues].
+
+##  Issues
+Small reimplementations + pervasive API-underuse the sweep verified.
+
+ -  reimplements-library: `subs_eq` (dog/git/SUBS.c:18) re-rolls `u8csEq` (4 uses); `keep_push_write_all` (keeper/KEEP.c:2712) re-rolls `FILEFeedAll` (same file uses it at 2179/2236; callers 2862/2950); a single-use `subs_eq` in sniff/SUBS.c.
+ -  duplication: `*_pack_uri_diff_sha` defined identically in graf/MAP.c:61 and graf/LOG.c:201 (~6 lines; BLAME.c's hashlet variant is NOT a candidate).
+ -  underuses-api (medium): `memcmp`→`u8csEq` in sniff/GET.c:277,309,1208; raw `write()`→`FILEFeed` EINTR loop in spot/LESS.c:84; manual last-dot loop→`u8csRevFind` in woof/CONN.c:221; manual `fopen/fread/malloc`→`FILEMapRO` in js (ABC.md §113-117 discouraged pattern).
+ -  underuses-api (low / do only if clean): ptr-arith slice construction → `a_head`/`a_rest` (beagle ×3, js); `memcpy` buffer-struct assign → direct assign (bro ×4); `memcmp`→`$eq` scheme check (woof); raw POSIX PID-file I/O (sniff/WATCH.c); raw `malloc` UTF-8 buf → `u8bIdle`/`u8bFeed` (js/utf8.cpp:20).
+ -  DEFERRED (abc, core — separate gated review): URI.c `memcmp`/`memcpy`→`u8csEq`/`$eq`/`u8sCopy` (×5); TLV.c:23 ptr-arith→`$at`; `memset`→`zero()` (mostly justified for complex struct init — likely WONTFIX).
+
+##  Blockers
+abc is core — the URI.c/TLV.c findings are NOT in this worker's scope; surface them separately for review (or WONTFIX the justified `memset` ones). Everything else is parent-project, one beagle commit. Value is low-to-medium across the board — keep the change behavior-preserving and resist adding churn.
+
+##  Planned
+One worker, parent-project only, behavior-preserving; skip-and-note anything marginal.
+
+ -  Repro-first ([CLAUDE] §17): these are mechanical, but keep the full suite green; add a case only where behavior could shift.
+ -  reimplements/dup: `subs_eq`→`u8csEq`; `keep_push_write_all`→`FILEFeedAll`; one shared `GRAFPackUriDiffSha` for MAP.c/LOG.c.
+ -  underuse mediums: `memcmp`→`u8csEq` (sniff), `write()`→`FILEFeed` (spot), `u8csRevFind` (woof), `FILEMapRO` (js).
+ -  underuse lows: do ONLY where the swap is clean and safe (ptr-arith→slice macros, `memcpy`→assign, raw-POSIX→wrapper); skip and list any that would just churn.
+ -  Build + `ctest`; STOP at the gate. Report done vs skipped with reasons. abc/ untouched.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

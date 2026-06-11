@@ -10,7 +10,7 @@ Beagle employs Uniform Resource Identifiers (URIs) to uniformly identify all the
 
 ##  Shape changes semantics
 
-Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for [PATCH] where the `?`/`!` shape selects the absorb scope while [POST] sets the provenance.
+Each populated URI slot adds its effect orthogonally, and the slot combination determines the operation shape, e.g. for [PATCH] where the `?`/`!` shape selects the absorb scope while [POST] sets the provenance (see [the dirty-words post]).
 
  -  `be patch ?feat` absorbs one commit, `?feat!` the whole branch, `#sha` one named commit — scope at [PATCH], provenance at [POST].
  -  A bare `//host` reads the cache while `ssh://host` opens the wire — the scheme alone flips cached vs network.
@@ -60,3 +60,4 @@ Every non-flag argv token becomes one URI via `DOGNormalizeArg`; the token's mar
 [Verbs]: Verbs.mkd "the verbs hub"
 [Projector]: Projector.mkd "read-only views"
 [Home]: Home.mkd "Beagle overview"
+[the dirty-words post]: ../blog/uris.mkd "Beagle: git, URIs and all the dirty words"

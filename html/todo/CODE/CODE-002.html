@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>CODE-002: dog: hex/dir/enc reimplementations → abc</h1>
+<p>
+Several dog hot spots reimplement abc primitives: DOGIsHashlet/DOGIsFullSha hand-roll the hex-digit loop HEXu8sValid provides, HOME's two directory scanners duplicate FILEIter, and hunk_frag_esc carries its own HEX<a href="">16</a> percent-encoder. Route them through abc/HEX and abc/FILE per CLAUDE.md §13, dropping the pointer arithmetic.
+</p>
+<h2>Issues</h2>
+<p>
+dog re-rolls hex validation, directory iteration, and percent-encoding abc already owns.
+</p>
+<ul>
+<li>DOGIsHashlet/DOGIsFullSha (DOG.c:389-411) hand-roll the hex-digit charset loop = HEXu8sValid + a length check.</li>
+<li>home_dir_shieldlike/home_single_shard (HOME.c:682-753) are near-identical opendir scanners; FILEIter is at DOG.c:508.</li>
+<li>hunk_frag_esc (HUNK.c:122) declares its own HEX<a href="">16</a> and percent-encodes with *into<a href="">0</a>++ pointer arithmetic.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; localized to dog. The two HOME scanners differ only at the subdir-count action — factor a shared count helper.
+</p>
+<h2>Planned</h2>
+<p>
+Swap each block for the abc helper; keep behavior identical, prove with a repro.
+</p>
+<ul>
+<li>Repro first (§17): table cases for hashlet/full-sha recognition and a shielded-store scan.</li>
+<li>DOGIs* → HEXu8sValid + a width/len test (6..40, 40||64).</li>
+<li>Both HOME scanners → FILEIter; factor (count, first-name) once.</li>
+<li>hunk_frag_esc → the abc HEX percent-encoder.</li>
+</ul>
+</body>
+</html>

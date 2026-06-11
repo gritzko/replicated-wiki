@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-014</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>POST-014: <code>be post be://localhost?/&lt;proj&gt;</code> lands the push but strands the peer wt (wt-advance 157) and exits SNIFFFAIL</h1>
+<p>
+A <code>be post --nosub be://localhost?/&lt;proj&gt;</code> to a local beagle peer DOES advance the peer trunk (<code>keeper: pushed (trunk) → &lt;sha&gt;</code>), yet the command also prints <code>SNIFFFAIL</code>/<code>BEDOGEXIT</code> (non-zero exit), and the peer-side auto wt-advance fails: <code>keeper: recv: wt-advance via 'be get ?' returned 157 (wt at /home/gritzko left at old tip; resolve and run 'be get ?' manually)</code>. So the data lands but the peer's working copy is stranded and the exit code says failure — a half-finished land that looks like a total failure. Note the peer wt-root is reported as <code>/home/gritzko</code> (HOME), not the real worktree <code>/home/gritzko/beagle</code> — the recv picks the wrong wt to advance. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/GET.html">GET</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="">[be-dot-be-shield-walk</a>].
+</p>
+<h2>Issues</h2>
+<p>
+The push half-succeeds and reports failure.
+</p>
+<ul>
+<li>Push advances the peer trunk (<code>pushed (trunk) → &lt;sha&gt;</code>) but the command exits non-zero (<code>SNIFFFAIL</code>/<code>BEDOGEXIT</code>) — success indistinguishable from failure.</li>
+<li>The peer-side <code>be get ?</code> wt-advance returns 157 and leaves the colocated wt at the old tip; the user must manually <code>be get ?</code>.</li>
+<li>The recv resolves the peer wt-root as <code>/home/gritzko</code> (HOME), not the actual worktree <code>/home/gritzko/beagle</code> — wrong wt advanced (the <code>.be</code> shield-walk HOME-escape, see <a href="">[be-dot-be-shield-walk</a>]).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+Ties to the wt-root resolution (HOME-escape) on the recv side.
+</p>
+<h2>Planned</h2>
+<p>
+Land cleanly: advance the right wt, report honestly.
+</p>
+<ul>
+<li>Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17): push to a local beagle peer; assert exit 0 and the peer's real wt advances to the new tip.</li>
+<li>Recv resolves the correct colocated wt root (not HOME); on a genuine advance failure report it WITHOUT masking the successful push as a hard error — distinguish &quot;pushed, wt-advance deferred&quot; from &quot;push failed&quot; in the exit code.</li>
+</ul>
+</body>
+</html>

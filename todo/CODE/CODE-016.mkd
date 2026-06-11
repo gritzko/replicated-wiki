@@ -1,0 +1,25 @@
+#   CODE-016: centralize all sha1↔hex through dog/git/SHA1.h
+
+A 2026-06-11 survey found sha1↔hex conversion done THREE overlapping ways across the tree: (1) the canonical `dog/git/SHA1.h` helpers (`SHA1u8sFeedHex`/`a_sha1hex`/`HEXsha1Put` encode, `sha1FromBin`/`sha1Drain` binary decode) used in ~17 files; (2) the `dog/WHIFF.h` `sha1hex`-struct path (`sha1hexFromSha1`/`sha1FromSha1hex`/`sha1hexFromHex`) at ~60 sites; (3) raw hand-rolled `{sha->data, sha->data+20}` + `HEXu8sDrainSome`/`HEXu8sFeedSome` at ~15 sites. SHA1.h is the canonical home for the `sha1` type but lacks a hex→sha1 decode. Add the missing decode fn(s) to SHA1.h and route idioms (2) and (3) through it. Owned by the keeper worker; runs AFTER the current CODE batch lands to avoid reconcile churn (it touches keeper/graf/sniff/beagle/spot/dog). See [CLAUDE], [Issues].
+
+##  Issues
+Three overlapping sha1↔hex idioms; the canonical SHA1.h one has no hex decoder.
+
+ -  SHA1.h carries encode (`SHA1u8sFeedHex`, `a_sha1hex`, `HEXsha1Put`) + binary decode (`sha1FromBin`, `sha1Drain`) but NO `hex→sha1`; the only generated `HEXx.h` fn is `HEXsha1Put` (encode).
+ -  `dog/WHIFF.h` `sha1hex`-struct conversions: ~60 sites — keeper(WIRECLI/RESOLVE), sniff(PATCH/POST/GET/AT/CAT), graf(GRAF.exe/MAP/DIFFREF), beagle(BE.cli).
+ -  Raw `{sha->data,+20}` + `HEXu8s(Drain|Feed)Some`: ~15 sites — keeper(WALK/SUBS/RESOLVE/REFADV/WIRECLI/KEEP.exe), graf(INDEX/LOG/MAP/GRAF.exe), spot(CAPO.exe).
+ -  The keeper redo (CODE-004/005, in flight) added `sha1FromHex` but placed it in `dog/WHIFF.h` — it belongs in SHA1.h next to `sha1FromBin`; relocate as step 1 here.
+
+##  Blockers
+Collides with the in-flight per-dir CODE worktrees (keeper/graf/sniff/beagle/spot/dog) — sequence after they land. Open design call: the `sha1hex` STRUCT (`u8 data[40]`) — keep as a value/key type where it earns it (`sha1hexeq`/`sha1hexZ` sorting/compare), or retire fully? Its CONVERSIONS unify regardless.
+
+##  Planned
+Add the decode fn to SHA1.h, then route every sha1↔hex site through SHA1.h.
+
+ -  Repro-first ([CLAUDE] §17): a table over the new `sha1FromHex` (valid 40-hex→OK+round-trip, <40→BADRANGE, non-hex→HEXBAD), co-located where dog/git tests live; keep the full suite green.
+ -  Add `ok64 sha1FromHex(sha1* out, u8csc hex)` to dog/git/SHA1.h (len≥40 → leading 40 → `HEXu8sDrainSome`, propagate its ok64); move the keeper worker's misplaced WHIFF.h copy here.
+ -  Audit the `sha1hex` struct: keep only if it earns its place as a value/key type; make its conversions thin wrappers over SHA1.h, or replace call sites with SHA1.h directly.
+ -  Sweep idiom-2 + idiom-3 sites to SHA1.h: encode via `a_sha1hex`/`SHA1u8sFeedHex`, decode via `sha1FromHex`/`sha1FromBin`/`sha1Drain`. No hand-rolled `{data,+20}`+HEX codecs left.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

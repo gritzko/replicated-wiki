@@ -1,0 +1,27 @@
+#   CODE-013: js: one UTF8↔JSString helper; abc slices
+
+js glue repeats the JSStringRef→UTF8 dance 7x, re-inlines JSOfCString, builds slices with forbidden pointer arithmetic, carries dead JABC helpers, and duplicates a getsockopt error-fetch. Factor the conversions, reuse JSOfCString, use abc slices, and drop the dead code.
+
+##  Issues
+
+Pasted UTF8/JSString conversions, ptr-arith slices, dead helpers, twin getsockopt.
+
+ -  JSStringRef→UTF8 (maxsize/alloc/get/NUL-fix) pasted 7x from utf8.cpp:19,35,66.
+ -  JSOfCString (utf8.cpp:81) re-inlined for strerror at utf8.cpp:73, io.cpp:118.
+ -  slices via ptr-arith ta[1]=ta[0]+len (io.cpp:102,140, JABC.hpp:52) — CLAUDE.md §10.
+ -  dead JABCutf8cpMakeValueRef/JABCutf8bFeedStringRef (JABC.hpp:134-135); twin getsockopt io.cpp:297,326.
+
+##  Blockers
+
+C++/JSC tooling is touchy (see MEM js 007/032/033) — keep the build green.
+
+##  Planned
+
+One conversion pair + JSOfCString reuse; abc slices; delete the dead helpers.
+
+ -  Repro first (§17): js eval round-trips a non-ASCII string; keep behavior.
+ -  JSStringToU8b()/JSOfU8c() pair; route all sites; reuse JSOfCString.
+ -  abc slice ctor for typed arrays; drop the 2 dead helpers; one getsockopt fetch.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

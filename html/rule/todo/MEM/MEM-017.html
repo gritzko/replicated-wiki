@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-017</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-017: DOGRepoFromBe <code>/.be/</code> scan reads one byte past the slice (dog/DOG.h)</h1>
+<p>
+<code>DOGRepoFromBe</code> sets <code>end = p[1] - u8csLen(be) - 1</code> (= <code>p[1]-4</code>) but probes the 5-byte <code>/.be/</code> pattern via <code>q[0..4]</code>, so on the final iteration <code>q == p[1]-4</code> and <code>q[4]</code> dereferences <code>*p[1]</code> — one byte past the end of <code>[p[0],p[1])</code>. The over-read fires whenever the path ends in <code>/.be</code> (e.g. the documented legacy <code>/abs/path/.be</code> anchor); since these slices come from non-NUL-terminated URI/ULOG fields, it is a real 1-byte OOB read under ASan or at an mmap page edge. The goal is to fix the loop bound (and the two siblings).
+</p>
+<h2>Issues</h2>
+<p>
+Loop end allows a 5th probe past the slice.
+</p>
+<ul>
+<li><code>dog/DOG.h:134-137</code> — <code>end = p[1]-4</code> but <code>/.be/</code> needs <code>q[0..4]</code>; last safe start is <code>p[1]-5</code>, so <code>q[4]</code> over-reads when input ends in <code>/.be</code>.</li>
+<li>Guarded by <code>q[0..3]=='/.be'</code>, so reachable on the legacy single-project <code>/.../.be</code> anchor; two sibling scanners share the bug.</li>
+<li>Verifiers split (refuted/real): in-bounds for NUL-terminated inputs, OOB for field-sliced (non-terminated) ones.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Correct the bound or use a slice-find helper.
+</p>
+<ul>
+<li>Repro first: <code>DOGRepoFromBe</code> on a non-NUL-terminated slice ending in <code>/.be</code>; confirm 1-byte OOB under ASan.</li>
+<li>Set <code>end = p[1] - (u8csLen(be)+2)</code> (<code>p[1]-5</code>), or replace manual <code>q[i]</code> probing with <code>u8csFindS</code> for the literal <code>/.be/</code>; apply to both siblings.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>GET-012: <code>be get file://&lt;local-store&gt;?/&lt;proj&gt;</code> makes a full clone, not a store-backed worktree</h1>
+<p>
+<code>be get file:///home/gritzko/.be?/dogs</code> produces a FULL independent clone — a <code>.be/</code> *<strong>directory</strong>* with its own per-project object stores (<code>dogs/</code>, <code>libabc/</code>) — instead of a store-backed *<strong>worktree</strong>* (a <code>.be</code> *<strong>file</strong>* anchoring into the shared <code>~/.be</code>). So every <code>be post</code> from such a tree commits into the throwaway clone store and never reaches the shared trunk, and the colocated real worktree sees nothing. This is the root cause of a whole fix-and-land batch &quot;landing&quot; into dead stores. Repro: <code>mkdir t &amp;&amp; cd t &amp;&amp; be get &quot;file:///home/gritzko/.be?/dogs&quot; &amp;&amp; file .be</code> → <code>directory</code> (expected: a regular file). See <a href="README.html">GET</a>, <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="">[storedirect-worktree</a>].
+</p>
+<h2>Issues</h2>
+<p>
+The local-store <code>file://</code> clone form builds an independent store, not a worktree.
+</p>
+<ul>
+<li><code>be get file://&lt;store&gt;?/&lt;proj&gt;</code> writes a <code>.be/</code> dir with its own object store; a store-backed worktree (<code>.be</code> file → shared <code>~/.be</code>) is expected.</li>
+<li>Consequence: <code>be post</code> from the tree advances only the clone's local trunk; <code>~/.be/&lt;store&gt;</code> and the colocated wt never see it — work is landed nowhere visible.</li>
+<li><a href="../../rule/Issues.html">Issues</a> assumes <code>be get file:///home/gritzko/.be?/&lt;proj&gt;</code> gives a store-backed worktree (&quot;shares the global store, no full object copy&quot;); it does not.</li>
+<li>A full own-store clone is the <code>be://host?/&lt;proj&gt;</code> behavior; the local <code>file://&lt;store&gt;</code> form should attach a worktree.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+Ties to the <code>BEGetWorktree</code> <code>path_is_store</code> branch and <a href="">[storedirect-worktree</a>]; coordinate with <a href="">[GET-011</a>] (in-flight sub-source).
+</p>
+<h2>Planned</h2>
+<p>
+The local-store <code>file://</code> form attaches a worktree.
+</p>
+<ul>
+<li><code>be get file://&lt;local-store&gt;?/&lt;proj&gt;</code> lays down a <code>.be</code> FILE anchoring the shared store, not a <code>.be/</code> dir clone.</li>
+<li>Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17): assert <code>.be</code> is a regular file and that a <code>be post</code> from the tree advances the shared <code>~/.be/&lt;store&gt;</code> trunk (and the colocated wt).</li>
+<li>Keep <code>be://host?/&lt;proj&gt;</code> as the full-clone (own store) path.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-008</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>CODE-008: beagle: one sub-spawn helper; fold relay dup</h1>
+<p>
+beagle's submodule plumbing is heavily pasted: four fork+chdir(&lt;wt&gt;/&lt;sub&gt;)+execvp+reap bodies (BERecurseInto, be_index_mount_dog, be_recurse_capture, bepost_spawn_sub), with bepost_spawn_sub a functional duplicate of BERelaySub. The FILEReap→BEDOG translation and the read-stdout-to-EOF loop are also pasted. Factor one spawn helper and reuse BERelaySub.
+</p>
+<h2>Issues</h2>
+<p>
+Four fork+exec+reap bodies, a dead-dup relay, and pasted reap/read loops.
+</p>
+<ul>
+<li>Four fork+chdir+execvp+reap: SUBS.c:109,200,272 + bepost_spawn_sub (BE.cli.c:2078).</li>
+<li>bepost_spawn_sub ≈ BERelaySub (SUBS.c:371) = be_recurse_capture + --tlv + HUNKu8sRelay; reinlined argv-pack.</li>
+<li>FILEReap→BEDOG* translation open-coded at BE.cli.c:114,142, SUBS.c:179.</li>
+<li>read-stdout-to-EOF loop pasted SUBS.c:338,425, BE.cli.c:2180.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None, but spawn/recurse is load-bearing — keep the suite green and gate the diff.
+</p>
+<h2>Planned</h2>
+<p>
+One BESpawnSub + one reap-translate + one read-to-EOF; route all callers.
+</p>
+<ul>
+<li>Repro first (§17): recursive get/post/put over a submodule fixture stays green.</li>
+<li>Collapse the 4 spawns to BESpawnSub(wt,sub,argv); bepost_spawn_sub → BERelaySub.</li>
+<li>FILEReapToBEDOG() + BEDrainToEOF() helpers replace the pasted blocks.</li>
+</ul>
+</body>
+</html>

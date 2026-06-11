@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-042</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-042: keeper — REFSResolve leaks the ULOG map on a long URI; KEEPGetRemote double-error rarena</h1>
+<p>
+REFSResolve (REFS.c:545) ULOGOpen's the refs log (mmaps <code>data</code>, allocates <code>idx</code>) then, when a matched REFS row's URI components together overflow the capture arena, the refs_capture call-chain early-returns without ULOGClose — a genuine, reachable leak driven by an over-long ref URI. KEEPGetRemote leaks <code>rarena</code> only on a narrower double-error path. The big known keeper recursion findings (MEM-022..025) are already tracked. From the <a href="MEM.html">MEM</a> sweep.
+</p>
+<h2>Issues</h2>
+<p>
+A held ULOG map / arena isn't released on a post-open error.
+</p>
+<ul>
+<li>REFS.c:545 REFSResolve: ULOG mmap+idx held across the refs_capture chain; an arena-too-small error (long URI) returns without ULOGClose.</li>
+<li>KEEPGetRemote: rarena leaks on a double-error path (lower severity / narrower trigger).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; keeper-internal. ULOGClose is null-safe — use the capture-result/close/check idiom.
+</p>
+<h2>Planned</h2>
+<p>
+Close the ULOG / free the arena on the capture-error path.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): resolve a REFS row with an over-long URI that overflows the capture arena; assert no map leak.</li>
+<li>Bracket the refs_capture chain so ULOGClose runs on the arena-overflow error before returning.</li>
+<li>Free rarena on the KEEPGetRemote double-error branch.</li>
+</ul>
+</body>
+</html>

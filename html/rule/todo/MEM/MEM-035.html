@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-035</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-035: io.cpp callbacks miss argc/NULL/bounds guards (js/io.cpp)</h1>
+<p>
+Two JS-reachable IO callbacks dereference unchecked inputs. <code>JABCioFileMap</code> reads <code>JSValueIsString(ctx,args[0])</code> with no <code>argc</code> guard (every sibling guards <code>argc</code> first), so <code>io.mmap()</code> with zero args is an out-of-bounds read of the JSC argument vector and passes a garbage <code>JSValueRef</code> to <code>JSValueIsString</code>. <code>JABCioNetConnect</code> calls <code>JABCioMakeFileObject(cfd,…)</code>, which returns NULL when <code>cfd&gt;=POLMaxFiles()</code> (1024), then immediately passes that NULL into <code>JSObjectSetProperty</code> without a NULL check → null deref; worse, <code>JS_FILES+cfd</code> is computed and <code>POLTrackEvents</code> called before the bound is validated, an OOB into the fixed 1024-entry array. The goal is the missing <code>argc</code> guard plus the NULL/bounds checks the file's convention already uses elsewhere.
+</p>
+<h2>Issues</h2>
+<p>
+Unchecked argc, NULL return, and out-of-range fd index.
+</p>
+<ul>
+<li><code>js/io.cpp:419</code> <code>JABCioFileMap</code> reads <code>args[0]</code> with no <code>argc</code> guard; <code>io.mmap()</code> (argc=0) → OOB read of the args vector.</li>
+<li><code>js/io.cpp:374-376</code> <code>JABCioNetConnect</code> passes <code>JABCioMakeFileObject()</code>'s possible NULL file straight to <code>JSObjectSetProperty</code> → null deref.</li>
+<li><code>js/io.cpp:367,372</code> <code>JS_FILES+cfd</code> and <code>POLTrackEvents(cfd,…)</code> run before the <code>cfd&gt;=POLMaxFiles()</code> bound → OOB into the 1024-entry array.</li>
+<li><code>js/io.cpp:38-41</code> <code>JABCioMakeFileObject</code> returns NULL on <code>fd&gt;=POLMaxFiles()</code>; callers must check.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Add the guards matching the file's convention.
+</p>
+<ul>
+<li>Repro FIRST: call <code>io.mmap()</code> with no args, and force <code>JABCioMakeFileObject</code> NULL (<code>fd&gt;=POLMaxFiles</code>); run under ASan; assert clean exception path.</li>
+<li><code>JABCioFileMap</code>: add <code>if (argc&lt;1 || !JSValueIsString(ctx,args[0]))</code> → set exception, return undefined.</li>
+<li><code>JABCioNetConnect</code>: validate <code>cfd&lt;POLMaxFiles()</code> before <code>JS_FILES+cfd</code>/<code>POLTrackEvents</code>; null-check <code>file</code>, cleanup the fd, return undefined.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,26 @@
+#   MEM-041: sniff — error-path resource leaks in PATCH blob-write and POST commit
+
+Two sniff error paths leak a resource because a bare call() sits between an acquisition and its release. write_blob (PATCH.c:229) FILECreate's an fd then `call(FILEFeedAll, fd, data)` — a write failure early-returns and leaks the open fd. POSTCommit (POST.c:2651, the core be post commit-emission) KEEPPackOpen's a keeper pack (fd + mmaps + heap) then a bare `call(post_feed_empty_tree, ...)` early-returns on KEEPPackFeed failure, leaking the whole pack. Both are reachable on a real I/O / pack error, missed by the happy-path suite. From the [MEM] sweep.
+
+##  Issues
+
+A bare call() between acquire and release leaks on its error return.
+
+ -  PATCH.c:229 write_blob: FILECreate fd, then call(FILEFeedAll) error-returns leaving the fd open.
+ -  POST.c:2651 POSTCommit: KEEPPackOpen (fd+mmaps+heap), then a bare call(post_feed_empty_tree) error-returns leaking the pack.
+
+##  Blockers
+
+None; sniff-internal. Use the close-before-return idiom already standard in this dir (capture result, release unconditionally, then check) — the same MEM-026 pattern.
+
+##  Planned
+
+Release the fd / pack on the error return before propagating.
+
+ -  Repro first ([CLAUDE] §17): force a write / pack-feed failure and assert the fd / pack is released (ASAN, fd-count stable).
+ -  write_blob: capture the FILEFeedAll result, FILEClose the fd unconditionally, then check.
+ -  POSTCommit: KEEPPackClose the pack on the post_feed_empty_tree error path.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"
+[MEM]: MEM.mkd "memory-safety audit digest"

@@ -4,9 +4,13 @@
 
 ##  Active tickets
 
- -  [GET-004] — full `be://` path→store resolution: `user@` selects the peer home, an empty path = `<home>/.be`, a `*.be` path is the store itself, any other path gets `/.be` appended (dir-or-file). Two of the four cases are unverified; builds on the landed empty-path base case.
  -  [GET-009] — efficient beagle↔beagle (`be://`) sync umbrella: replace `WIRE.c`'s byte-offset watermark with object-level reachability serving (`closure(wants) − closure(haves)`), cross-`file_id` serving, and a redundant-pack GC/compaction for already-bloated shards. St.1 ([[GET-007]] latest-copy) landed; St.2-4 open.
 
-[GET-004]: GET-004.mkd "be:// path → store resolution (home / .be / *.be / wt)"
+ -  [GET-014] — head/get/patch against a divergent ticket remote silently reset local trunk `?` to the fetched commit (non-ff), dropping four landed commits; a dry-run/fetch must never move `?` non-ff. Recovered via `be put '?#<sha>'` (`be get [--force]` won't move a divergent ref). Needs a clean repro to pin the verb.
+
+ -  [GET-016] — `be get` is non-atomic for the wt: the ref/wtlog advance (COMMIT POINT, `GET.c:1338`) precedes the non-crash-safe wt write, so a partial run (or any ref-advance-without-checkout) drifts the tree; the baseline↔target delta is then empty → no-op skip leaves stale bytes, and `--force`/`get!` keys off the dirty bucket not the no-op one so it can't full-reset. Plan: (1) all-or-nothing wt GET, (2) `get!` re-examines every file + full tree reset. Sibling stuck-ref symptom may split to GET-017.
+
 [GET-009]: GET-009.mkd "efficient be:// sync: reachability upload-pack + GC"
+[GET-014]: GET-014.mkd "head/get/patch silently non-ff-resets local trunk to a divergent remote commit"
+[GET-016]: GET-016.mkd "non-atomic wt GET; get --force won't full-reset a drifted worktree"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

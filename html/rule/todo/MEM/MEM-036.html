@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-036</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-036: WEAVE EDL fallback raw writes can overflow on BRAM NOROOM (graf/WEAVE.c)</h1>
+<p>
+<code>weave_diff_core</code>'s BRAM-failure fallback does <code>edlg[1]=edlg[0]</code> then two raw <code>*edlg[1]++</code> writes with no capacity check. The gauge convention (<code>DIFFx.h:14-22</code>) is <code>[0]</code>=write cursor, <code>[1]</code>=cap end, <code>[2]</code>=base; <code>BRAMu64s</code> shares the same gauge and advances <code>edl[0]</code> via <code>DIFFu64AddEntry</code>, leaving <code>edl[0]==edl[1]==edlbuf[3]</code> on DIFFNOROOM. The fallback then writes AT <code>edlbuf[3]</code> = heap OOB. The <code>olen&gt;0</code>/<code>nlen&gt;0</code> early-returns only ensure cap≥2 from base, not that BRAM left 2 free slots. The goal is to make the fallback use the checked DIFF path so it cannot overflow, and to fix the dropped-write logic bug.
+</p>
+<h2>Issues</h2>
+<p>
+Raw pointer-arith writes after BRAM may have consumed the buffer.
+</p>
+<ul>
+<li><code>graf/WEAVE.c:540-542</code> fallback resets <code>edlg[1]=edlg[0]</code> then <code>*edlg[1]++</code> twice with no room check; raw pointer-arith forbidden by ABC style.</li>
+<li><code>BRAMu64s</code> shares the <code>edlg</code> gauge and advances <code>edl[0]</code> (<code>DIFFu64AddEntry</code>, <code>abc/DIFFx.h:21-22</code>); on DIFFNOROOM <code>edl[0]==edl[1]==edlbuf[3]</code>, so the first <code>*edlg[1]++</code> writes at the cap end = OOB.</li>
+<li>Degenerate guards <code>graf/WEAVE.c:511,521</code> ensure only <code>edl_sz&gt;=2</code> from base; not that BRAM left room before failing.</li>
+<li>Logic bug: fallback writes via <code>slot[1]</code> but never advances <code>edl[0]</code>; <code>NEILCanon</code> (<code>graf/NEIL.c:602</code>) reads <code>n=edl[0]-edl[2]</code>, so the DEL/INS pair is silently dropped.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Use the checked DIFF path; advance the cursor.
+</p>
+<ul>
+<li>Repro FIRST: drive <code>weave_diff_core</code> down the BRAM-failure path with an <code>edlbuf</code> BRAM fills to NOROOM; assert no OOB (ASan) and that the DEL/INS fallback is emitted.</li>
+<li>Replace the two <code>*edlg[1]++</code> writes with checked <code>DIFFAddEntry</code>/<code>DIFFu64AddEntry</code> against <code>edlbuf</code> so NOROOM propagates instead of overflowing.</li>
+<li>Advance <code>edl[0]</code> (not just <code>edl[1]</code>) so <code>NEILCanon</code>'s <code>n=edl[0]-edl[2]</code> sees the entries; drop the manual <code>edlg[1]=edlg[0]</code> reset. If raw writes are kept, add <code>must(edlg[0]+2 &lt;= edlbuf[3], …)</code>.</li>
+</ul>
+</body>
+</html>

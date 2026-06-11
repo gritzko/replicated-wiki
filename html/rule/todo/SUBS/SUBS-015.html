@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-015</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>SUBS-015: <code>blob:&lt;path&gt;</code> without <code>?ref</code> returns KEEPNONE in the parent</h1>
+<p>
+*<strong>LOW (found mid-fix in <a href="SUBS-011.html">SUBS-011</a>/<a href="SUBS-012.html">SUBS-012</a>).</strong>*  <code>be blob:&lt;path&gt;</code> with *<strong>no</strong>*
+<code>?ref</code> slot returns <code>KEEPNONE</code> even on a plain parent file (not submodule-
+related).  Per VERBS.md §&quot;Open edges&quot;, <code>blob:file.c</code> (no ref) is defined as the
+git-hash-object bytes of the wt's on-disk file, and <code>blob:file.c?</code> (empty ref)
+as the tracked-blob via sniff's index — but the no-ref form resolves to nothing.
+</p>
+<h2>Repro</h2>
+<ul>
+<li><code>be blob:main.c?master</code> → bytes (works).</li>
+<li><code>be blob:main.c</code> (no <code>?ref</code>) → KEEPNONE.</li>
+</ul>
+<h2>Expected</h2>
+<p>
+<code>blob:&lt;path&gt;</code> (no ref) yields the wt on-disk bytes (git-hash-object semantics);
+<code>blob:&lt;path&gt;?</code> (empty ref) yields the tracked-blob bytes.
+</p>
+<h2>Notes</h2>
+<p>
+Surfaced while building projector sub-recursion (SUBS-011/012); the sub-shard
+routing is unaffected — this is a pre-existing parent-side gap in <code>blob:</code>
+ref-resolution.  Filed so it is not lost.
+</p>
+</body>
+</html>

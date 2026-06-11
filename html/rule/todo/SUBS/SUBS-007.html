@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-007</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>SUBS-007: <code>be head</code> omits sub working-tree dirty state (LANDED)</h1>
+<p>
+*<strong>MEDIUM — LANDED <code>3ab50efd</code> (2026-06-06).</strong>*  Fixed in <code>beagle/BE.cli.c</code>
+<code>behead_recurse_cb</code>: after relaying the sub's committed <code>be head ?</code> diff it
+now also relays the sub's bare status via <code>BERelaySub(..., {NULL,NULL})</code> (the
+same read-only path bare <code>be</code> uses, path-prefixed; a clean sub returns
+<code>*NONE</code>), so a dirtied sub file now adds a <code>mod</code>/<code>dirty</code> line.  Repro
+<code>test/head/21-sub-dirty-reported</code> added (off <code>WILL_FAIL</code>); the head/04
+false-positive was tightened to require a <code>mod</code>/<code>dirty</code> marker.
+</p>
+<p>
+*<strong>MEDIUM.</strong>*  Submodules.mkd line 20 promises <code>be head</code> recurses pre-order
+&quot;reporting ahead/behind AND dirty state per sub&quot;.  In practice <code>be head</code>'s
+per-sub section only ever lists committed ahead/behind; its output is
+*<strong>byte-identical</strong>* whether or not a sub file is dirty — no <code>dirty</code>/<code>mod</code>/<code>clean</code>
+keyword appears anywhere.  The information is reachable (bare <code>be</code>, the status
+path, DOES relay the sub's <code>mod core.c</code>), it is simply not wired into HEAD's
+per-sub report.
+</p>
+<h2>Repro</h2>
+<p>
+ 1. <code>be get &lt;parent&gt;?master</code>.
+ 2. <code>be head '?' &gt; clean.out</code>.
+ 3. Append a line to <code>vendor/sub/core.c</code>.
+ 4. <code>be head '?' &gt; dirty.out</code>; <code>diff clean.out dirty.out</code> → *<strong>empty</strong>*.
+</p>
+<h2>Secondary: head/04 is a false-positive test</h2>
+<p>
+<code>test/head/04-sub-dirty</code> PASSES, but only because it greps the combined output
+for <code>core.c</code>, which appears in HEAD's committed ahead/behind file list (`+
+core.c`) regardless of the dirty edit.  It does not actually exercise the
+dirty-state contract it documents.  The new <code>test/head/21-sub-dirty-reported</code>
+asserts the real contract (diff must change) and is <code>WILL_FAIL</code> until fixed.
+</p>
+<h2>Expected</h2>
+<p>
+A dirtied sub file changes the per-sub HEAD report (a <code>mod</code>/<code>dirty</code> line, as
+bare <code>be</code> already produces in the status path).
+</p>
+<h2>Fix sketch</h2>
+<p>
+Wire HEAD's per-sub aggregation to include the sub's working-tree status (reuse
+the bare-<code>be</code> status relay that already surfaces <code>mod core.c</code>), not only the
+committed pin-vs-trunk ahead/behind.  Then correct head/04 (or fold it into
+head/21) so it fails when dirty state is absent.
+</p>
+<h2>Tests</h2>
+<p>
+<code>test/head/21-sub-dirty-reported</code> (<code>WILL_FAIL</code> until fixed).
+</p>
+</body>
+</html>

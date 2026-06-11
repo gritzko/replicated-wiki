@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>CODE-016: centralize all sha1↔hex through dog/git/SHA1.h</h1>
+<p>
+A 2026-06-11 survey found sha1↔hex conversion done THREE overlapping ways across the tree: (1) the canonical <code>dog/git/SHA1.h</code> helpers (<code>SHA1u8sFeedHex</code>/<code>a_sha1hex</code>/<code>HEXsha1Put</code> encode, <code>sha1FromBin</code>/<code>sha1Drain</code> binary decode) used in ~17 files; (2) the <code>dog/WHIFF.h</code> <code>sha1hex</code>-struct path (<code>sha1hexFromSha1</code>/<code>sha1FromSha1hex</code>/<code>sha1hexFromHex</code>) at ~60 sites; (3) raw hand-rolled <code>{sha-&gt;data, sha-&gt;data+20}</code> + <code>HEXu8sDrainSome</code>/<code>HEXu8sFeedSome</code> at ~15 sites. SHA1.h is the canonical home for the <code>sha1</code> type but lacks a hex→sha1 decode. Add the missing decode fn(s) to SHA1.h and route idioms (2) and (3) through it. Owned by the keeper worker; runs AFTER the current CODE batch lands to avoid reconcile churn (it touches keeper/graf/sniff/beagle/spot/dog). See <a href="../../CLAUDE.md">CLAUDE</a>, <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Issues</h2>
+<p>
+Three overlapping sha1↔hex idioms; the canonical SHA1.h one has no hex decoder.
+</p>
+<ul>
+<li>SHA1.h carries encode (<code>SHA1u8sFeedHex</code>, <code>a_sha1hex</code>, <code>HEXsha1Put</code>) + binary decode (<code>sha1FromBin</code>, <code>sha1Drain</code>) but NO <code>hex→sha1</code>; the only generated <code>HEXx.h</code> fn is <code>HEXsha1Put</code> (encode).</li>
+<li><code>dog/WHIFF.h</code> <code>sha1hex</code>-struct conversions: ~60 sites — keeper(WIRECLI/RESOLVE), sniff(PATCH/POST/GET/AT/CAT), graf(GRAF.exe/MAP/DIFFREF), beagle(BE.cli).</li>
+<li>Raw <code>{sha-&gt;data,+20}</code> + <code>HEXu8s(Drain|Feed)Some</code>: ~15 sites — keeper(WALK/SUBS/RESOLVE/REFADV/WIRECLI/KEEP.exe), graf(INDEX/LOG/MAP/GRAF.exe), spot(CAPO.exe).</li>
+<li>The keeper redo (CODE-004/005, in flight) added <code>sha1FromHex</code> but placed it in <code>dog/WHIFF.h</code> — it belongs in SHA1.h next to <code>sha1FromBin</code>; relocate as step 1 here.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+Collides with the in-flight per-dir CODE worktrees (keeper/graf/sniff/beagle/spot/dog) — sequence after they land. Open design call: the <code>sha1hex</code> STRUCT (<code>u8 data[40]</code>) — keep as a value/key type where it earns it (<code>sha1hexeq</code>/<code>sha1hexZ</code> sorting/compare), or retire fully? Its CONVERSIONS unify regardless.
+</p>
+<h2>Planned</h2>
+<p>
+Add the decode fn to SHA1.h, then route every sha1↔hex site through SHA1.h.
+</p>
+<ul>
+<li>Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a table over the new <code>sha1FromHex</code> (valid 40-hex→OK+round-trip, &lt;40→BADRANGE, non-hex→HEXBAD), co-located where dog/git tests live; keep the full suite green.</li>
+<li>Add <code>ok64 sha1FromHex(sha1* out, u8csc hex)</code> to dog/git/SHA1.h (len≥40 → leading 40 → <code>HEXu8sDrainSome</code>, propagate its ok64); move the keeper worker's misplaced WHIFF.h copy here.</li>
+<li>Audit the <code>sha1hex</code> struct: keep only if it earns its place as a value/key type; make its conversions thin wrappers over SHA1.h, or replace call sites with SHA1.h directly.</li>
+<li>Sweep idiom-2 + idiom-3 sites to SHA1.h: encode via <code>a_sha1hex</code>/<code>SHA1u8sFeedHex</code>, decode via <code>sha1FromHex</code>/<code>sha1FromBin</code>/<code>sha1Drain</code>. No hand-rolled <code>{data,+20}</code>+HEX codecs left.</li>
+</ul>
+</body>
+</html>

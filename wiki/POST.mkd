@@ -41,9 +41,7 @@ The first parent is always cur's previous tip, so walking first-parents reaches 
 
 ##  Message resolution
 
-POST picks the commit message in a fixed order; the fragment's trailing `!` is the forget modifier, not part of the text, so a commit message may never end in `!`.
-
- -  The supplied `#frag` wins if present, with any trailing `!` stripped as the forget modifier (`#msg!`, `#!`).
+ -  The supplied `#frag` wins if present, with any trailing `!` stripped as the [forget modifier][d] (`#msg!`, `#!`).
  -  Else (bare POST or `#`/`#!` empty fragment), reuse the absorbed message if exactly one in-scope patch row carries a usable one.
  -  Else refuse with `POSTNOMSG`; a multi-commit absorption with no reusable message needs an explicit one.
  -  A message text that itself ends in `!` is refused, since the trailing `!` is reserved for the forget modifier.
@@ -99,3 +97,4 @@ The provenance wire format is settled: `picked <sha>` is a commit header next to
 [HEAD]: HEAD.mkd "HEAD verb"
 [GET]: GET.mkd "GET verb"
 [Worktree]: Worktree.mkd "worktree state"
+[d]: ../blog/uris.mkd "Beagle: git, URIs and all the dirty words"

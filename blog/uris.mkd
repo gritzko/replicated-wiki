@@ -1,4 +1,4 @@
-#   Beagle: git objects and URIs
+#   Beagle: git, URIs and all the dirty words 
 
     Human authored
 
@@ -31,7 +31,9 @@ The URI layout we all remember by heart:
 Can we retrofit that to a versioned store? Well, if all the
 versioning info goes into the query, the rest is obvious.
 `http://somehost/dir/file?branch#L101` for example.
-In fact, Beagle is a git-compatible SCM doing exactly that.
+In fact, [Beagle][b] is a git-compatible SCM doing exactly that.
+
+[b]: https://github.com/gritzko/beagle
 
 ##  HTTP verbs
 
@@ -49,7 +51,7 @@ was some reason for the other verbs to exist, right?
 
 While the vocabulary is a bit vague, fundamentally it grows
 out of the need to access a remote filesystem. That fits 
-naturally the git model, which is, naturally, a [content-
+naturally the git model, which is, as described, a [content-
 addressed filesystem][f]. For that reason, Beagle uses the
 HTTP verbs *exclusively*.
 

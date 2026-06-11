@@ -9,7 +9,7 @@ PATCH absorbs commits from another branch into cur's worktree and records the ab
 
 ##  Three shapes
 
-The PATCH URI form selects scope only — the bang `!` on `?br` is the whole-branch toggle — and every shape takes the usual extras (`//host` to fetch first, `./path` to scope). The operation (merge/rebase/squash/cherry) is scope-at-patch plus provenance-at-[POST]; PATCH never carries a `#message`.
+The PATCH URI form selects scope only — the bang `!` on `?br` is the whole-branch toggle — and every shape takes the usual extras (`//host` to fetch first, `./path` to scope). The operation (merge/rebase/squash/cherry) is scope-at-patch plus provenance-at-[POST] per [the dirty-words post]; PATCH never carries a `#message`.
 
  -  `?<br>` one commit: absorb the next not-yet-replayed commit on `?br` (bare branch = one — a flip from the old squash).
  -  `?<br>!` whole branch: replay `fork..br.tip` in one wt-merge — the bang means "the entire branch", not "one".
@@ -78,3 +78,4 @@ Two PATCH-side formats are still unsettled, both about how downstream tools read
 [POST]: POST.mkd "POST verb"
 [GET]: GET.mkd "GET verb"
 [Verbs]: Verbs.mkd "the verbs hub"
+[the dirty-words post]: ../blog/uris.mkd "Beagle: git, URIs and all the dirty words"

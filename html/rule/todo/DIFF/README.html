@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIFF tickets: the <code>diff:</code> view</h1>
+<p>
+<code>be diff:&lt;uri&gt;</code> renders the change between versions as a unified/token diff. Tickets here close gaps in what the view shows — submodule recursion, gitlink rendering, scoping. Each entry is one active ticket; it drops off once the whole ticket lands. The fix-and-land method is <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="DIFF-001.html">DIFF-001</a> — <code>be diff:?&lt;sha&gt;</code> shows NOTHING for a submodule-pin-bump commit: the gitlink change (old-pin→new-pin) isn't rendered and <code>diff:</code> never recurses into the sub, so a parent commit that advances a sub by real work looks empty. Render the gitlink line and recurse into the sub (like GET/POST/PATCH), <code>--nosub</code> to suppress.</li>
+</ul>
+</body>
+</html>

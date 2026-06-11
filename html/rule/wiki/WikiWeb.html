@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>WikiWeb</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>WikiWeb: one concept per page</h1>
+<p>
+WikiWeb is Beagle's wiki format: many small pages, each on one concept, cross-linked into a web. The aim is docs fast to read, write, grep, and navigate, with no dependence on a host renderer — just <a href="StrictMark.html">StrictMark</a> files in a flat directory. The method is a fixed section shape and tight budgets: every page opens with a goals-and-method summary, then each section carries a one-line header, a short summary, and a few bulletpoints. Sizes count in 64-char lines (top intro 8 lines, section into 4, bulletpoint 2).
+</p>
+<h2>Pages</h2>
+<p>
+Each page covers exactly one concept and is named for it; the file is that name plus <code>.mkd</code>. Pages live flat in one directory with no folders, so any page is reachable by name alone.
+</p>
+<ul>
+<li>One concept per page: if a page grows two distinct ideas, split it into two pages and link them.</li>
+<li>Page name matches the file: <code>GET.mkd</code>, <code>StrictMark.mkd</code> — short, capitalized, no spaces.</li>
+<li><a href="Home.html">Home</a> is the entry page; every page should be reachable from it by following links.</li>
+</ul>
+<h2>The opening section</h2>
+<p>
+The first section is the 1st-level header and its summary. That summary answers why (goals) and how (method) and may run to 8 lines — it is the page's abstract, so a reader who stops here still gets the point.
+</p>
+<ul>
+<li>1st-level header <code>#   Name: gloss</code>: the page name plus a short gloss of the concept.</li>
+<li>Summary up to 8 lines (≤512 chars): goals first (why this exists), then method (how it works).</li>
+<li>Bulletpoints are optional here; the why/how summary is expected to carry the section on its own.</li>
+</ul>
+<h2>Sections</h2>
+<p>
+Below the opener, every section is one header line, an optional summary of up to 4 lines, and any number of bulletpoints of up to 2 lines each. Each block is a single physical line relying on soft wrap; never hard-break a block.
+</p>
+<ul>
+<li>Header: one line, ≤64 chars, ATX <code>##</code> (StrictMark, 4 levels); states the section's point, not a bare noun.</li>
+<li>Summary: up to 4 lines (≤256 chars), one physical line; it sets up the bullets, or stands alone if there are none.</li>
+<li>Bulletpoint: up to 2 lines (≤128 chars), marker <code> -  </code>; one self-contained claim per bullet.</li>
+<li>A &quot;line&quot; is 64 chars: the budgets count lines, not newlines — soft wrap renders the one long line.</li>
+</ul>
+<h2>Greppable lines</h2>
+<p>
+Wiki pages must be greppable: each line reads on its own, carrying enough context to make sense when <code>rg</code> pulls it from the page. <code>rg</code> prints the filename too, so a bullet need not repeat the page name; write standalone claims and link inline.
+</p>
+<ul>
+<li>Greppable: <code>rg</code> shows the filename and the line, so a bullet needn't repeat the page name — the file supplies it.</li>
+<li>Self-contained: each bullet is a full claim with its own context, not a fragment continuing the summary or a prior bullet.</li>
+<li>Shortcut links inline: link with a bare <code>[Page]</code> (def at the foot) in the sentence, so the line carries its references.</li>
+<li>Line independence: keep each line readable on its own; avoid an <code>it</code>/<code>this</code>/<code>the above</code> that points at another line.</li>
+<li>No See-also block: a trailing link list greps as context-free noise — fold links into the prose where relevant.</li>
+</ul>
+<h2>Markup</h2>
+<p>
+WikiWeb pages are StrictMark, so its block grammar, 4-char markers, and inline precedence all apply. WikiWeb adds no new syntax — it only fixes the page and section shape and the size budgets, and forms the web from StrictMark's own links.
+</p>
+<ul>
+<li>Markup is StrictMark: ATX headers, <code> -  </code> bullets, 4-backtick code fences, and its two link cases; see <a href="StrictMark.html">StrictMark</a>.</li>
+<li>Idiom: define <code>[Page]: Page.mkd</code> at the foot, then link with bare <code>[Page]</code>; use <code>[text][id]</code> only when the text differs.</li>
+<li>No auto-linking: a bare word is never a link, so prose acronyms (HTTP, CRDT) need no escaping.</li>
+</ul>
+<h2>Page skeleton</h2>
+<p>
+A whole page is the opener and a few sections, with link definitions at the foot; each block below is one physical line, annotated with its budget.
+</p>
+<pre><code>    #   ConceptName: one-line gloss
+    One summary line covering why, then how; up to 8 lines.
+    ##  A topic
+    One summary line linking [StrictMark] inline; up to 4 lines.
+     -  A self-contained bulletpoint; up to 2 lines; one claim.
+     -  Another that names its subject and a [Page] link.
+    [StrictMark]: StrictMark.mkd &quot;the markup&quot;
+    [Page]: Page.mkd &quot;another page&quot;
+</code></pre>
+</body>
+</html>

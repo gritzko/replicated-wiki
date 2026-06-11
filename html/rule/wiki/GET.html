@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>GET: repo → worktree — clone, checkout, switch, restore</h1>
+<p>
+GET reads from the repo into the worktree: it is the clone / checkout / switch / restore verb. Depending on the URI it clones over a transport scheme, switches wt+cur to a branch, detaches on a sha, or restores a single file — always resetting the worktree to match the chosen tip.
+</p>
+<ul>
+<li>Repo-read-only: never modifies a branch's history, only resets the worktree (see <a href="Verbs.html">Verbs</a> for the slot grammar).</li>
+<li>Refuses up front: dirty overlap or a missing ref aborts the whole run (no partial reset) — mint a leaf with <a href="PUT.html">PUT</a> first.</li>
+<li>Network reads need a transport scheme: <code>be get //origin</code> reads cached refs/packs from the store; <code>ssh://</code> opens the wire.</li>
+<li>A successful run writes the new base <code>(branch, tip-sha)</code> to <code>.be/wtlog</code> reflog and clears any pending <a href="PATCH.html">PATCH</a> parents.</li>
+</ul>
+<h2>CLI use</h2>
+<p>
+The forms span branch switching, detached checkout, single-file restore, and remote fetch; the bareword picks branch vs path automatically.
+</p>
+<ul>
+<li><code>be get ?feat</code> switches wt+cur and resets files from the branch tip; refuses on dirty overlap or a missing ref.</li>
+<li><code>be get ?./fix</code> enters a child branch (<code>?../sib</code> a sibling); refuses if missing — mint the child branch with <a href="PUT.html">PUT</a> first.</li>
+<li><code>be get ?abc1234</code> is a detached checkout — <a href="POST.html">POST</a> and <a href="PATCH.html">PATCH</a> refuse until you re-attach to a branch.</li>
+<li><code>be get '#~1'</code> rewinds cur's ref by one commit and resets the wt, staying attached to cur.</li>
+<li><code>be get file.c</code> (or <code>file.c?.</code>) restores one file from cur's baseline, discarding edits and resurrecting if deleted.</li>
+<li><code>be get file.c?</code> takes the file from the trunk (empty <code>?</code> = trunk); <code>be get file.c?feat</code> from another branch's tip.</li>
+<li>The bareword <code>file.c</code> promotes to the path slot (it matches a tracked entry) — type <code>?feat</code> to force a branch switch.</li>
+<li><code>//origin?feat</code> resets from the cached store; <code>ssh://host?feat</code> fetches then checks out (logging the URL to the reflog).</li>
+<li><code>be get file:../proj?feat</code> wires an empty cwd as a sibling wt sharing <code>../proj</code>'s store, resetting to <code>feat</code>'s tip.</li>
+<li>Bare <code>be get</code> is a no-op status (≡ bare <code>be</code>).</li>
+</ul>
+<h2>Flags</h2>
+<p>
+<code>--force</code> turns GET from a careful merge into a tree reset; <code>--prune</code> additionally clears wt-only clutter. Untracked files survive unless pruned.
+</p>
+<ul>
+<li><code>--force</code> overwrites dirty tracked paths instead of merging, and bypasses the no-baseline refusal; untracked files survive.</li>
+<li><code>--prune</code> (usually with <code>--force</code>) removes every wt-only path after checkout, except <code>.gitignore</code> matches and <code>.be/</code>.</li>
+<li>The target tree's <code>.gitignore</code> is re-read post-checkout, so freshly added rules apply (mirrors <code>git clean -f</code>, not <code>-fx</code>).</li>
+</ul>
+<h2>Refusals</h2>
+<p>
+Aborts before touching the wt rather than half-applying, and adds a fast-forward rule when syncing a local branch from its remote; preview the refusals risk-free with <a href="HEAD.html">HEAD</a>, the read-only dry-run.
+</p>
+<ul>
+<li>Dirty overlap aborts up front if a locally-edited wt file would be overwritten — no partial reset.</li>
+<li>A missing ref refuses (the <code>cd nonexistent</code> mirror); mint the leaf with <a href="PUT.html">PUT</a> first.</li>
+<li>Transport sync is FF-only on the local tip: <code>be get ssh://origin?A</code> refuses if the local tip isn't an ancestor of <code>A</code>.</li>
+<li>The FF rule applies only to syncing a local branch from its remote counterpart, not to local branch switches.</li>
+</ul>
+</body>
+</html>

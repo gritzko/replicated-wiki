@@ -1,0 +1,23 @@
+#   DIS-036: an unreachable / non-beagle / non-git remote fails opaque `WIRECLFL` instead of a clear diagnosis
+
+`be post ssh://localhost?/beagle` (and `be get` to such a target) cannot tell that the remote is not a beagle (or git) repository, or is simply unreachable — it dies `WIRECLFL`/`BEDOGEXIT` with no diagnosis, so the user can't tell whether the TARGET is wrong or their WORK is. A clear "remote <X> is unreachable / not a beagle or git repository" message is needed. Repro: `be post ssh://localhost?/dogs` → `sniff: 0 change(s)` then `WIRECLFL`/`BEDOGEXIT`. See [POST], [GET], [CLAUDE], [[DIS-027]].
+
+##  Issues
+Every wire-open failure collapses to one opaque code.
+
+ -  The wire client does not distinguish: (a) unreachable peer, (b) reachable host with no beagle/git repo at the path, (c) a real protocol error — all surface as `WIRECLFL`.
+ -  `be post`/`be get` give no actionable message; "not a repo" reads identically to "your work failed".
+ -  Same opacity class as [[DIS-027]] (surface peer git push error, not bare WIRECLFL).
+
+##  Blockers
+Needs the wire handshake to classify connect-refused vs no-advertisement vs malformed-advertisement.
+
+##  Planned
+Classify the failure and emit a specific error.
+
+ -  Repro-first ([CLAUDE] §17): a hermetic non-repo (and an unreachable) target each yield a specific message, not bare `WIRECLFL`.
+ -  Map: connect refused → "unreachable"; reachable but no advert → "not a beagle/git repository"; bad advert → protocol error — distinct codes.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[GET]: ../../wiki/GET.mkd "GET verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

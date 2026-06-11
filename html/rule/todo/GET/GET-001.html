@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>GET-001: same sub project at two paths leaves a missing anchor</h1>
+<p>
+When a parent mounts the SAME sub project at two gitlink paths, the second mount's <code>&lt;wt&gt;/&lt;path&gt;/.be</code> anchor is not written, so the mount looks absent. The goal is that each gitlink path gets its own secondary-wt anchor into the one shared shard, however many paths reference the project. See <a href="../wiki/Submodules.html">Submodules</a>, <a href="../wiki/GET.html">GET</a>, <a href="../wiki/Store.html">Store</a>. Repro: <code>get/32-sub-same-project-twice</code> (deterministic; &quot;first/.be anchor missing&quot;).
+</p>
+<h2>Issues</h2>
+<p>
+Sub mount keys on the project shard, not the per-path mount, so the duplicate path is treated as already done.
+</p>
+<ul>
+<li><code>SNIFFSubMount</code> (<code>sniff/SUBS.c</code>) likely short-circuits on the shard's presence and skips re-seeding the per-path anchor.</li>
+<li>Both mounts share one shard (one pool per project), but each PATH still needs its own <code>.be</code> sentinel; the second's is missing.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None obvious; confirm where the per-path anchor write is gated out on the duplicate-shard path.
+</p>
+<h2>Planned</h2>
+<p>
+Write the per-path anchor independent of whether the shard already exists from a sibling mount.
+</p>
+<ul>
+<li>In <code>SNIFFSubMount</code>, separate &quot;shard exists&quot; (skip fetch) from &quot;anchor exists&quot; (skip seed); always ensure the per-path <code>.be</code>.</li>
+<li>Keep <code>get/32</code> as the regression.</li>
+</ul>
+</body>
+</html>

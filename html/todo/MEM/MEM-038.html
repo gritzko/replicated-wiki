@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-038</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-038: woof — POL callbacks run outside a call()/try() frame, so the HUNK BASS toks-carve is never rewound (unbounded server leak)</h1>
+<p>
+A long-running woof server leaks BASS arena on EVERY syntax-highlighted response. abc/POL.c POLLoop invokes <code>at-&gt;callback(fd,at)</code> directly (POL.c:248 timeout, :314 poll) with NO enclosing call()/try() frame — and only call/try/then snapshot+rewind ABC_BASS (PRO.h:73-83). woof's read_cb/pipe_cb/write_cb are plain <code>static short</code> functions never invoked via call(), and they reach render_hunks → HUNKu8sDrain → hunk_drain_toks, which a_cquire's a BASS region into hk-&gt;toks (HUNK.c:199-264) INTENTIONALLY without a call() wrapper so the toks outlive the drain for the renderer. With no frame to rewind it, every token-bearing hunk permanently consumes ABC_BASS until a_carve/a_lign hit NOROOM and rendering (and in-process dog Exec carves on --api) fail — a self-inflicted DoS. Tests/fuzz miss it: the fuzz harness wraps inputs in a rewinding try() and never loops the live callback path. The one HIGH-severity finding of the <a href="MEM.html">MEM</a> sweep.
+</p>
+<h2>Issues</h2>
+<p>
+POL drives woof's callbacks with no BASS-rewinding frame; the HUNK toks-carve relies on one existing.
+</p>
+<ul>
+<li>abc/POL.c:248,314 — POLLoop calls the callback directly; PRO.h:73-83 shows only call/try/then rewind ABC_BASS.</li>
+<li>woof/CONN.c read_cb/pipe_cb(865)/serve_inproc(693,793)/write_cb — bare <code>static short</code>, no sane()/call().</li>
+<li>dog/HUNK.c:199-264 hunk_drain_toks a_cquire's a BASS slice into hk-&gt;toks deliberately un-wrapped (renderer reads it after).</li>
+<li>Trigger: any HUNK_TLV_TOK frame — i.e. every log/diff/blame/blob/grep response — leaks the per-hunk arena for process lifetime.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+Crosses abc/POL.c (core), woof, and dog/HUNK.c — a design call: (A) give POL callbacks a call()/try() frame so BASS rewinds per dispatch (but the toks-carve must then outlive it via the caller's frame, not BASS); or (B) woof snapshots+rewinds ABC_BASS itself around each request. abc edit needs review.
+</p>
+<h2>Planned</h2>
+<p>
+Give the live callback path a per-request BASS rewind without freeing the toks the renderer still needs.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): drive the live callback path (pipe_cb/serve_inproc → render_hunks) over N token-bearing hunks and assert ABC_BASS data/idle head returns to baseline each request (no monotonic growth).</li>
+<li>Pick the design (A POL-frames the callback, or B woof brackets each request with an ABC_BASS snapshot/rewind); ensure hk-&gt;toks lifetime is covered by a frame that outlives the drain but not the request.</li>
+<li>Verify the in-process --api Exec carves still work after many requests.</li>
+</ul>
+</body>
+</html>

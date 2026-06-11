@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ULOG-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>ULOG-001: wtlog/refs files get truncated to 0 bytes — enumerate &amp; repro the scenarios</h1>
+<p>
+<code>wtlog</code> (ULOG append-log) and <code>refs</code> tip files in beagle stores were found *<strong>truncated to 0 bytes while their companion <code>.keeper</code> object packs survived intact</strong>* — live commit history became unreachable (<code>NOTAWT</code> in a worktree, <code>WIREFAIL</code>/<code>WIRECLFL</code> on clone, <code>GRAFFAIL</code> on resolve) even though *<strong>no objects were lost</strong><strong>. This is the same class as the once-fixed 9p <code>O_TRUNC</code> fallback wipe, but it recurred in an </strong><strong>ext4</strong>* store under an as-yet-unproven trigger. Goal: enumerate every code path that can leave a zero-length ULOG/refs, *<strong>repro each (repro-first, <a href="../../CLAUDE.md">CLAUDE</a> §17)</strong>*, and make ULOG-open / refs-write crash-safe (write-temp-then-rename + fsync, never in-place <code>O_TRUNC</code> the live log; treat a 0-byte log as &quot;rebuild&quot;, not &quot;empty&quot;). See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="">[DIS-033</a>].
+</p>
+<h2>Issues</h2>
+<p>
+The wipe is ULOG/refs-specific, not a whole-store loss, and the exact trigger is unproven.
+</p>
+<ul>
+<li>Forensics (<code>~/.be</code>, ext4 root fs): <code>~/.be/beagle/refs</code> 0 B (mtime 21:05), top <code>~/.be/wtlog</code> 0 B (21:45), and <code>~/.be/{dogs,abc,localhost}/wtlog</code> all 0 B — *<strong>yet</strong>* object packs survived (<code>localhost/0000000001.keeper</code> 32 MB, <code>abc/…keeper</code> 799 KB) and sibling refs survived (<code>localhost/refs</code> 45 B, <code>abc/refs</code> 145 B, <code>dogs/refs</code> 554 B). So only specific <code>wtlog</code>/<code>refs</code> files zeroed, never the objects.</li>
+<li>Symptom chain: zeroed store <code>refs</code> → <code>be get file://…?/beagle</code> clone fails <code>WIREFAIL</code>/<code>WIRECLFL</code> (nothing to serve) and *<strong>spawns a stray nested <code>~/.be/.be/</code> shard</strong>*; a worktree whose <code>.be</code> wtlog is zeroed reports <code>NOTAWT</code> (this is how the URI-002 worktree got busted).</li>
+<li>Context of the incident: prior session ran heavy parallel builds across 22 worktrees with root fs at ~94 % (ENOSPC pressure), many concurrent <code>be</code> processes sharing one <code>~/.be</code>; the 21:00–21:05 window coincides with a <code>be get be://localhost</code> clone creating <code>~/.be/localhost/</code> + <code>~/.be/beagle/</code> (whose refs was 0 from creation).</li>
+<li>Self-inflicted data point (this session, 06:49): re-running <code>be get file://…?/beagle</code> against the already-damaged store created *<strong>more</strong>* stray 0-byte files (<code>~/.be/.be/{wtlog,beagle/refs}</code>, <code>~/.be/refs</code>) via the elided-store/secondary-wt path — i.e. the clone path writes empty logs when the source refs are empty (supports H4).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+The 21:05 trigger can't be pinned from forensics alone — no transcript of the prior session. Must reproduce each hypothesis.
+</p>
+<h2>Planned</h2>
+<p>
+Repro every zeroing scenario, then make ULOG/refs writes atomic.
+</p>
+<ul>
+<li>*<strong>H1 — ENOSPC</strong>* (unproven): an in-place <code>O_TRUNC</code> open of wtlog/refs then a write that fails on a full fs leaves 0 bytes. Caveat: the fs was ~94 % (≈1.5 G free) — <strong>near</strong>-full, not provably <code>ENOSPC</code> at 21:05, so this is weaker than first claimed; H3/H4 align better with the 21:00–21:05 clone activity. Repro: a small quota'd/tmpfs store filled to genuine 0-free, then <code>be post</code>/<code>be get</code>, inspect wtlog/refs.</li>
+<li>*<strong>H2 — 9p <code>MAP_SHARED</code> fallback (RULED OUT for this incident)</strong><strong>: the damaged store, all worktrees, and <code>$HOME/.be</code> are on <code>/dev/vda3</code> </strong><strong>ext4</strong>* (<code>df -T</code> confirmed); the only 9p mount is <code>~/src</code> (the wiki) and no store lives there. So the once-fixed 9p <code>O_TRUNC</code>-fallback is *<strong>not</strong>* the trigger here. Keep only as a general durability check: confirm that fix covers every ULOG open site, in case a store is ever placed on a 9p mount.</li>
+<li>*<strong>H3 — concurrent-writer race</strong>*: many parallel <code>be</code> processes against one shared <code>~/.be</code>; the truncate/rewrite window of a wtlog/refs may not be covered by the <code>.lock</code>/<code>.lock.spot</code> files. Repro: N concurrent <code>be post</code>/<code>be get</code> to the same store, check for a zeroed log.</li>
+<li>*<strong>H4 — clone / secondary-wt path</strong>*: <code>be get be://localhost?/beagle</code> then a <code>file:</code> secondary writes an empty <code>refs</code> when the source is empty/elided (reproduced at 06:49 above; cf. the legacy elided-store crash). Repro: chain clone → secondary against an empty-refs project.</li>
+<li>*<strong>H5 — process killed mid-write</strong>*: <code>SIGKILL</code>/OOM after <code>O_TRUNC</code>, before the write completes. Repro: kill <code>be</code> between open and write under <code>strace</code>.</li>
+<li>*<strong>Fix direction</strong>*: ULOG/refs writes go to a temp file + <code>fsync</code> + atomic <code>rename</code>; never <code>O_TRUNC</code> the live log in place; on open, a 0-byte wtlog/refs is rebuilt from the surviving objects/sibling refs rather than trusted as empty. Add a regression that asserts a write interrupted by ENOSPC/SIGKILL leaves the prior log intact.</li>
+</ul>
+</body>
+</html>

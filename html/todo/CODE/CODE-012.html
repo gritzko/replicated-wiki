@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>CODE-012: woof/CONN.c: abc unescape/escape, slice slots</h1>
+<p>
+woof/CONN.c hand-rolls percent-decoding (= URIu8sUnesc), copies dog/HUNK.c's html-escape verbatim, and manages per-conn buffers with raw pointer arithmetic over WOOF.pool. It also duplicates the HTTP-200+HTML-prelude emit and the free-slot reset. Route through abc/URI and a shared html-escape, and carve slots with abc slices.
+</p>
+<h2>Issues</h2>
+<p>
+Percent-decode, html-escape, and slot buffers are hand-rolled; prelude/reset pasted.
+</p>
+<ul>
+<li>WOOFutf8ExtractURI (CONN.c:368) hand-rolls %XX decode via BASE16rev = abc URIu8sUnesc.</li>
+<li>html_escape_into (CONN.c:351) is a copy of dog/HUNK.c:642 hunk_html_escape.</li>
+<li>per-conn buffers via ptr-arith over WOOF.pool (CONN.c:123,182,868) — CLAUDE.md §10.</li>
+<li>HTTP-200+prelude emit pasted CONN.c:687/806; free-slot reset pasted CONN.c:142,185, WOOF.c:151.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None, but html-escape is cross-dir with dog — expose one shared helper, do not re-copy.
+</p>
+<h2>Planned</h2>
+<p>
+abc URIu8sUnesc + a shared html-escape; slice-carved slots; one prelude + one reset.
+</p>
+<ul>
+<li>Repro first (§17): woof serves a URI with %XX and HTML-special chars; output unchanged.</li>
+<li>Percent-decode → URIu8sUnesc; html-escape → a shared dog helper.</li>
+<li>Carve WOOF.pool slots with abc slices; one prelude emit; one slot-reset.</li>
+</ul>
+</body>
+</html>

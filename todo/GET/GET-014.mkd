@@ -1,0 +1,33 @@
+#   GET-014: head/get/patch against a divergent ticket remote silently resets local trunk `?` (non-ff clobber, drops landed commits)
+
+While landing the DIS-034 ticket worktree, the parent repo (`~/beagle`, trunk `4e8f5770`) ran read/merge verbs against the DIS-034 clone remote — `be head be://localhost/todo/DIS-034?…`, `be patch be://localhost/todo/DIS-034?/dogs`, and `file:///…/todo/DIS-034/.be?…` forms. One of those operations appended a `get  ?#97a0ddc9` row to the **parent** store's `refs`, moving local trunk `?` from `4e8f5770` to the divergent `97a0ddc9` (whose parent is the older `479fcc96`). That silently dropped the four already-landed commits **ABC-002 / POST-014 / SUBS-017 / DIS-035** off trunk; the worktree was then re-synced to the wrong base, masking the loss. No object data was lost (everything stayed in the pool); only the trunk ref was mispositioned. Recovered with `be put '?#4e8f5770'` (a reflog tip-set — note `be get` and `be get --force` both *refused* to move the divergent ref, only re-syncing the worktree). See [GET], [HEAD], [Issues], [CLAUDE].
+
+##  Issues
+A non-mutating-by-contract or remote-fetch verb moved the local trunk branch `?` to a divergent remote commit, without a fast-forward check and without a warning.
+
+ -  **`be head` is the GET dry-run** ([README] line 35: "HEAD is GET dry-run") and MUST be read-only. If a `be head <remote>` appended the `get` row, that alone is the core defect — a dry-run may not touch `refs`.
+ -  **A divergent fetch must not reset `?`.** Pulling a commit whose history diverged from cur (shared base `479fcc96`, neither reachable from the other) should land in a tracking ref or be **refused non-ff** (the POST-side `POSTNONE`/non-ff refusal already exists), never silently overwrite local trunk.
+ -  **The clobber is silent.** No "non-ff" / "would drop N commits" warning; trunk just moves and the worktree follows, so the operator cannot tell landed history was discarded.
+ -  Contrast: a ticket worktree that `be get`-updates onto current trunk *before* committing (its commit's parent == cur) lands as a clean ff — this bug only bites the commit-before-update case (an own-goal, but the tool must still refuse, not clobber).
+
+##  Blockers
+~~The exact triggering verb + URI shape is not yet pinned~~ **PINNED 2026-06-11.** Hermetic repro (`~/tmp`, two independent stores `parent`@T and `ticket`@C sharing base B, divergent): from a worktree backed by `parent`, the project-scoped divergent fetch clobbers `?`→C for **`be head`** and **`be patch`** (`file://<ticket>/.be?/<proj>`, rc=0), while **`be get`** is clean (`?` stays T — it already refuses the non-ff move). So the offenders are `be head` (egregious — the GET dry-run is NOT read-only) and `be patch` (resets to C instead of cherry-picking onto T / refusing); `be get` is the correct model.
+
+**Root cause CONFIRMED 2026-06-11 (tip-resolution, not a write):** a single `be head <divergent>` moves `?`→C while writing **zero** new rows to the store `refs` AND the worktree wtlog (full before/after file snapshot: nothing changes during the verb). The fetch only lands C's commit OBJECT in the pool; the next `.refs.idx` regeneration then recomputes the branch tip and picks C over T because the ancestor walk can't tell C is divergent. So there is no targetable write/read to suppress — the clobber IS the [[DIS-038]] reachability defect surfacing in tip-resolution. **Fix location:** `DAGAncestorsTunable` (`graf/DAG.c:219`) must gain the DAG-miss keeper-commit-body fallback that `graf log` already has (`graf/LOG.c:329` — "DAG miss → parse commit body for first `parent <40hex>`"), so a fetched-but-unindexed tip's ancestry resolves and a divergent C is correctly rejected as the branch tip / refused non-ff. Core reachability used by BLAME/GET/PATCH/POST — change with care + adversarial divergence tests.
+
+Mechanism: all three run `BEActKeeperGet` → `KEEPGetRemote` → `WIREFetch`, whose post-fetch `wcli_record_ref` journals the fetched divergent tip; the tip-resolver then treats that fetched-but-unindexed commit as the branch head. Per [REFS] semantics a `get` row is a *remote observation* ("peer's ref K was at V") and must NOT advance local `?` (only `post` = local move may). Fix must keep peer-tracking `get` rows from moving local `?` (resolve local `?` from `post` rows / ancestor-gated `get`), make `be head` side-effect-free on refs, and gate `be patch`'s advance behind ff. Overlaps [[DIS-038]] (fetched-but-not-DAG-indexed peer tip). Deep keeper ref-resolver change — fix deferred to focused work, not a marathon-session rush (this is the area that originally clobbered trunk).
+
+##  Planned
+Repro-first ([CLAUDE] §17), then refuse the non-ff trunk move.
+
+ -  Repro: fresh parent at trunk `T`; fresh ticket clone committing a divergent commit `C` (committed *before* updating, so `parent(C)` is an ancestor of `T`, not `T`). From the parent run, separately, `be head`, `be get`, and `be patch` against `be://localhost/todo/<TICKET>?#C` and the `file://…/.be?#C` form. Assert: `be head` leaves `refs`/`?` byte-identical (pure read); `be get`/`be patch` either land `C` in a tracking ref or fail non-ff — in NO case does local trunk `?` silently move to `C`.
+ -  Fix the offending verb(s): gate the local-`?` advance behind a fast-forward (or `--force`) check mirroring the POST non-ff refusal; keep `be head` side-effect-free on `refs`.
+ -  Document `be put '?#<sha>'` as the branch-tip reset (`be get`/`be get --force` do **not** move a divergent branch ref, only the worktree) in [GET]/[HEAD].
+ -  Regression under `test/get` (or `test/head` for the dry-run-read-only case).
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[HEAD]: ../../wiki/HEAD.mkd "HEAD verb"
+[REFS]: ../../../beagle/keeper/REFS.c "get=remote-observation vs post=local-move row semantics"
+[README]: ../../../beagle/README.md "be verb table"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"

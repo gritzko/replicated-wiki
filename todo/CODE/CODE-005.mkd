@@ -1,0 +1,25 @@
+#   CODE-005: keeper: dedup tree-descent, cap-parse, obj-hdr
+
+Three more keeper duplications: proj_descend_inner/lsf_descend_inner are the same tree-path descent, recv_parse_caps/wire_parse_caps share the capability token-loop, and wpush_feed_obj_hdr is byte-identical to keep_feed_obj_hdr (the pack obj-hdr varint). Factor each into one shared keeper helper.
+
+##  Issues
+
+Tree-path descent, capability parsing, and pack obj-hdr encoding each exist twice.
+
+ -  proj_descend_inner/lsf_descend_inner (PROJ.c:88, WALK.c:182) = same split-on-'/' tree descent.
+ -  recv_parse_caps/wire_parse_caps (RECV.c:48, WIRE.c:36) share the SP/TAB token-loop scaffold.
+ -  wpush_feed_obj_hdr (WIRECLI.c:1288) is byte-for-byte keep_feed_obj_hdr (KEEP.c:1486).
+
+##  Blockers
+
+None; keeper-internal. Shares KEEP.c/WALK.c/WIRECLI.c with CODE-004 — same worktree, serial.
+
+##  Planned
+
+Lift one shared function per pair; drop the duplicate.
+
+ -  Repro first (§17): a path-descent test + a cap-parse test + a pack-hdr round-trip.
+ -  Shared KEEPTreeDescend(commit,path); a shared cap parser; one obj-hdr encoder in KEEP.h.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIFF-001: <code>be diff:</code> must recurse into submodules and render gitlink/pin changes</h1>
+<p>
+<code>be diff:?&lt;sha&gt;</code> on a commit whose only change is a *<strong>submodule pin bump</strong>* shows NOTHING. A pin-bump commit's sole change is the sub's gitlink pointer (old-pin → new-pin), which the diff renderer does not emit, and <code>diff:</code> never recurses into the submodule to show what actually changed there — so the real work is invisible from the parent. Repro (in a worktree): <code>be diff:?29df3828</code> (the ABC-002 pin bump, abc <code>b8ed6277</code> → <code>d8656f41</code>) → empty output, even though the sub moved by a whole commit. <code>diff:</code> should render the gitlink change AND recurse into the sub to show its commit-range diff, the way <a href="../../wiki/GET.html">GET</a>/<a href="../../wiki/POST.html">POST</a>/<a href="../../wiki/PATCH.html">PATCH</a> already recurse. See <a href="../../wiki/Verbs.html">Verbs</a>, <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+A gitlink-only commit diffs to nothing, and the sub's content is never reached.
+</p>
+<ul>
+<li><code>be diff:?&lt;sha&gt;</code> on a pure pin-bump commit emits no output — the <code>&lt;sub&gt;</code> gitlink change (old pin → new pin) is not rendered as a diff line.</li>
+<li><code>diff:</code> does not recurse into the submodule, so the actual changes between the old and new pins (the sub's commit-range diff) are never shown.</li>
+<li>Consequence: a parent commit that advances a sub by real work looks empty; review/audit of a pin bump is impossible from the parent.</li>
+<li>Surfaced verifying ABC-002 (<code>29df3828</code> bumps abc <code>b8ed6277</code>→<code>d8656f41</code>; the FILEErr change lives in the sub, invisible from <code>be diff:</code>).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Localized to the <code>diff:</code> renderer + the submodule-recursion the other verbs already do.
+</p>
+<h2>Planned</h2>
+<p>
+Render the gitlink change and recurse into the sub.
+</p>
+<ul>
+<li>*<strong>Part-a LANDED <code>ef0430da</code>.</strong>* Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a test asserting <code>be diff:</code> on a pin-bump commit (a) emits a gitlink line <code>&lt;sub&gt; &lt;old-pin&gt;..&lt;new-pin&gt;</code> ✓ (<code>test/diff/08-sub-pin-bump-gitlink</code>); (b) shows the sub's content diff for that range — *<strong>still open</strong>*.</li>
+<li>*<strong>DONE (part-a):</strong>* render a submodule gitlink change as a diff entry (old-pin → new-pin) — <code>diffref_collect_visit</code> now collects <code>WALK_KIND_SUB</code> entries (<code>is_sub</code>) and emits <code>&lt;path&gt; &lt;old40&gt;..&lt;new40&gt;</code> instead of dropping them; validated vs the real ABC-002 bump (<code>be diff:?29df3828</code> → <code>abc b8ed6277..d8656f41</code>).</li>
+<li>Recurse <code>diff:</code> into the mounted submodule and emit the sub's diff between old and new pins (path-prefixed under the mount), mirroring <code>GET</code>/<code>POST</code>/<code>PATCH</code> sub recursion; honor <code>--nosub</code> to suppress.</li>
+<li>*<strong>Part-b DEFERRED (design fork, 2026-06-11).</strong>* The existing <code>BEProjectorSubs</code> fan-out re-runs the identical <code>diff:?&lt;TIP&gt;</code> in each sub, which has no <code>&lt;TIP&gt;</code> commit (emits the gitlink line then <code>KEEPNONE</code>); the content needs <code>diff:?&lt;old-pin&gt;#&lt;new-pin&gt;</code>, range data only graf (<code>DIFFREF.c</code>) computes. Two designs surfaced: *<strong>(A) graf-driven</strong>* — <code>diffref_emit_gitlink</code> recurses into the sub's keeper shard in-process, but graf has no mount discovery (that is <code>be</code>'s job), breaking graf's per-store boundary; *<strong>(B) be-driven relay</strong>* — graf signals the pins to <code>be</code>, which rewrites the child URI to <code>diff:?&lt;old&gt;#&lt;new&gt;</code> and relays via <code>BERelaySub</code> (reuses the <a href="">[DIFF-002</a>] channel fix), fitting the boundary at the cost of a new graf→be pin-range signal. Decision pending.</li>
+<li>Keep a non-sub <code>be diff:</code> unchanged.</li>
+</ul>
+</body>
+</html>

@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>README</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>URI tickets: branch/commit naming</h1>
@@ -21,7 +14,7 @@ Tickets that unify Beagle's branch-vs-commit-hash disambiguation behind one keep
 <h2>Active tickets</h2>
 <ul>
 <li><a href="URI-001.html">URI-001</a> — unify branch/commit naming; St.1 branch-first + St.2 length-agnostic full-sha + St.3 scope-only canonical form landed; St.4-5 (retire guessers, remote delegation) pending.</li>
-<li><a href="URI-002.html">URI-002</a> — unify bang-factor handling across all verbs/dogs: a per-component bang bitflag byte (verb/path/query/fragment) + one <code>dog/</code> debanger that strips a <code>!</code> (shift slice by one) and sets the bit, replacing the ad-hoc <code>dog/CLI.c</code> verb-bang→<code>--force</code> shim.</li>
+<li><a href="URI-003.html">URI-003</a> *<strong>LANDED</strong>* (abc <code>fe7f86c2</code> / parent <code>cc4cc005</code>) — <code>URIutf8FeedSafe</code>: feed→re-parse→compare all 8 fields, err out <code>URIUNSAFE</code> on any mismatch (detect-and-err-out; the parser is non-decoding so <code>URIutf8Feed</code> stays verbatim, no per-component escaping — would break the 22 verbatim ref callers); also fixed the <code>URIAbsolute</code> leading-<code>/</code> recompose (<code>ht/h/p#abc</code> stays <code>ht/h/p</code>). Follow-up: a SEPARATE percent-encoding feeder (<code>URIutf8FeedEscaped</code>) paired with a decoding parse mode, for when a safe URL must be <strong>produced</strong> not just verified.</li>
 </ul>
 </body>
 </html>

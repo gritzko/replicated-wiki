@@ -1,0 +1,29 @@
+#   DIFF-002: working-tree `be diff` routes a submodule's content diff past the pager
+
+`be diff` (no args, working-tree) on a parent whose only changes live inside a **submodule's worktree** shows NOTHING in the pager and then dumps the sub diff to the terminal on quit. The pager (bro) gets only the parent-level diff, which is empty, so it displays "nothing!"; the submodule's full content diff is written straight to the terminal on a separate channel and appears only AFTER the pager exits (on `q`). The recursion itself works — the content is computed — it is just mis-routed past the pager. Repro in `$HOME/todo/code-abc` (the abc sub has working edits to `abc/URI.c`): `be diff` → bro shows "nothing!", press `q` → ~577 lines of `abc/URI.c` diff dump to the term. Non-tty proves the content is produced, not missing: `be diff > out` puts the whole 577-line abc sub diff in `out`. Probably a variant of [DIFF-001] (same diff-submodule-recursion path), but the failure here is output-channel routing, not non-recursion. See [DIFF-001], [Submodules], [CLAUDE].
+
+##  Issues
+The recursed submodule diff bypasses the parent's pager and lands on the bare terminal.
+
+ -  `be diff` in a sub-dirty worktree: the pager (bro) receives only the parent-level diff, which is empty, so it shows "nothing!" while the real change is invisible.
+ -  The submodule's content diff is emitted directly to the terminal, not into the pager pipe — it surfaces only after the pager is quit with `q`, looking like stray post-quit output.
+ -  Non-tty proof it is mis-routed, not absent: `be diff > out 2>err` yields a ~577-line `abc/URI.c` diff in `out` — the sub recursion ran; only the tty/pager path drops it.
+ -  Likely cause: the sub `be diff` recursion (the relay) writes to the inherited terminal fd instead of the parent's pager stdin, so the parent diff and the sub diff travel two separate channels.
+ -  Secondary (track separately if distinct): `be status` reports "1165 ok" (clean) in the same worktree though the abc sub worktree is dirty — a dirty submodule worktree is not surfaced at the parent.
+
+##  Blockers
+None known. Localized to the `be diff` / `diff:` submodule-recursion + pager wiring — the same recursion [DIFF-001] part-b adds for `diff:?<sha>`; confirm whether part-b shares this channel bug.
+
+##  Planned
+Route the recursed sub diff into the same pager stream as the parent diff.
+
+ -  Repro-first ([CLAUDE] §17): a test asserting `be diff` in a sub-dirty worktree emits the sub's content diff on the SAME stdout stream as the parent (tty/pager parity with the already-correct non-tty stream), with no split between pager and terminal.
+ -  Pass the parent's diff output (pager pipe / stdout fd) down through the sub-diff relay instead of letting the child inherit the bare terminal, like the other recursing verbs.
+ -  Reconcile with [DIFF-001] part-b: if its `diff:?<sha>` recursion uses the same relay, fix once for both.
+ -  Decide the pager-empty UX: when the parent diff is empty but a sub diff exists, the pager should show the sub diff, never "nothing!".
+
+[DIFF-001]: DIFF-001.mkd "diff: recurse into submodules + render gitlink/pin changes"
+[Verbs]: ../../wiki/Verbs.mkd "the verbs hub"
+[Submodules]: ../../wiki/Submodules.mkd "submodule recursion"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

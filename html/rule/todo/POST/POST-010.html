@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-010</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>POST-010: no-op <code>file://</code> re-push prints a stray <code>FILEFAIL</code> while reporting success</h1>
+<p>
+A no-op re-push over the local-exec <code>file://</code> edge (nothing new to send) prints a stray <code>FILEFAIL</code> from <code>wpush_send_pack_interleaved</code> (<code>keeper/WIRECLI.c:1492</code>) even though the push still reports success — a benign <code>EPIPE</code>/<code>POLLHUP</code> race when the peer closes its end early on an empty/already-current pack. Local-exec only; not seen on the ssh path. Split out of <a href="">[POST-008</a>]. Cosmetic but noisy — a spurious error line on a successful no-op erodes trust in the output. See <a href="../../wiki/POST.html">POST</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+An empty/no-op pack send races the peer's early close.
+</p>
+<ul>
+<li><code>wpush_send_pack_interleaved</code> (<code>keeper/WIRECLI.c:1492</code>) reports <code>FILEFAIL</code> on <code>EPIPE</code>/<code>POLLHUP</code> when the peer has nothing to receive and closes first; the overall push still returns success.</li>
+<li>Only on the <code>file://</code> local-exec transport; the ssh path doesn't surface it.</li>
+<li>Repro: <code>be post file://&lt;abs&gt;</code> twice — the second (no-op) prints a stray <code>FILEFAIL</code> then &quot;pushed&quot;/success.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Localized to the push send loop's error handling.
+</p>
+<h2>Planned</h2>
+<p>
+Treat an early peer close on an empty/current pack as a clean no-op.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a test asserting a second (no-op) <code>file://</code> push prints no <code>FILEFAIL</code> and exits 0.</li>
+<li>In <code>wpush_send_pack_interleaved</code>, swallow <code>EPIPE</code>/<code>POLLHUP</code> when the pack is empty / the peer is already current; only report a real send failure.</li>
+</ul>
+</body>
+</html>

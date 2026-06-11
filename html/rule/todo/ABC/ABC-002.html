@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ABC-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>ABC-002: unify C errno→ok64 handling (one mapping, not <code>FILEerrno</code> vs <code>FILE_ERR_VOCAB</code>)</h1>
+<p>
+abc has *<strong>two parallel errno→ok64 mechanisms that disagree</strong><strong>. <code>FILEerrno</code> (<code>abc/FILE.h</code>, a <code>switch</code>) maps each errno to the canonical `FILE</strong><code> symbol — e.g. </code>ENOENT<code>→</code>FILENONE<code>. </code>FILEErr<code> / </code>FILE_ERR_VOCAB<code> (</code>abc/FILE.c<code>, a hand-built </code>{errno, raw-hex}<code> table) returns its own **prefix-less ron60 literals that do NOT match the </code>FILE<strong>` symbols</strong>* and omits several errnos. So <code>FILEErr(ENOENT)</code> = <code>0x39760e5dd</code> ≠ <code>FILEerrno(ENOENT)</code> = <code>FILENONE</code> (<code>0x3d254e5d85ce</code>); <code>FILEErr(EBADF)</code> = <code>0xe2ca34f</code> ≠ <code>FILEBADF</code> (<code>0x3d254e2ca34f</code>); and <code>FILE_ERR_VOCAB</code> omits <code>EEXIST</code> entirely. <code>FILEErr</code> is used by the open-failure paths (<code>FILEOpen</code>/<code>FILECreate</code> do <code>fail(FILEErr(FILENOOPEN))</code>), so a caller comparing the result against a <code>FILE*</code> symbol can silently never match. Collapse to ONE errno→ok64 mapping. abc/core change — maintainer-reviewed. See <a href="../../rule/Issues.html">Issues</a>, <a href="../../CLAUDE.md">CLAUDE</a>, <a href="">[ABC-001</a>], <a href="">[SUBS-016</a>].
+</p>
+<h2>Issues</h2>
+<p>
+Two mappings, disagreeing, one incomplete.
+</p>
+<ul>
+<li><code>FILEerrno</code> (switch) and <code>FILEErr</code>/<code>FILE_ERR_VOCAB</code> (table) return *<strong>different ok64 values for the same errno</strong>* — the table's literals are a separate, prefix-less encoding that never matched the <code>FILE*</code> constants.</li>
+<li><code>FILE_ERR_VOCAB</code> omits errnos <code>FILEerrno</code> maps (e.g. <code>EEXIST</code>→<code>FILEEXIST</code>), so <code>FILEErr</code> silently collapses them to the caller's <code>def</code>.</li>
+<li>Consequence: error codes propagated from open/create failures (via <code>FILEErr</code>) are not the canonical <code>FILE*</code> codes, so equality checks against <code>FILENONE</code>/<code>FILEBADF</code>/… can quietly fail.</li>
+<li><a href="">[SUBS-016</a>] added a *<strong>stopgap</strong>* (<code>FILE_ERR_VOCAB[ENOENT]</code> → <code>FILENONE</code>'s value) so <code>FILENONE</code> works through both paths; this ticket removes the need for that patch.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None functionally; abc/core so maintainer-reviewed. Must audit every errno→ok64 conversion site, not just <code>FILE.c</code>.
+</p>
+<h2>Planned</h2>
+<p>
+One source of truth.
+</p>
+<ul>
+<li>Make <code>FILEErr(def)</code> *<strong>delegate to <code>FILEerrno(errno)</code></strong>* (the canonical switch over the <code>FILE*</code> symbols), returning the caller's <code>def</code> only when <code>FILEerrno</code> yields the unmapped sentinel; *<strong>delete <code>FILE_ERR_VOCAB</code></strong>*.</li>
+<li>Grep abc for other ad-hoc <code>errno</code>→ok64 conversions (raw <code>FILEerrno(errno)</code>, hand-coded tables) and route them through the single <code>FILEerrno</code>.</li>
+<li>Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a table test asserting <code>FILEErr(e) == FILEerrno(e)</code> for every errno <code>FILEerrno</code> maps (incl. <code>EEXIST</code>), and that an unmapped errno returns <code>def</code>.</li>
+<li>Remove the <a href="">[SUBS-016</a>] <code>{ENOENT, …}</code> stopgap once unified.</li>
+</ul>
+</body>
+</html>

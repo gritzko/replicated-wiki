@@ -1,0 +1,27 @@
+#   CODE-002: dog: hex/dir/enc reimplementations → abc
+
+Several dog hot spots reimplement abc primitives: DOGIsHashlet/DOGIsFullSha hand-roll the hex-digit loop HEXu8sValid provides, HOME's two directory scanners duplicate FILEIter, and hunk_frag_esc carries its own HEX[16] percent-encoder. Route them through abc/HEX and abc/FILE per CLAUDE.md §13, dropping the pointer arithmetic.
+
+##  Issues
+
+dog re-rolls hex validation, directory iteration, and percent-encoding abc already owns.
+
+ -  DOGIsHashlet/DOGIsFullSha (DOG.c:389-411) hand-roll the hex-digit charset loop = HEXu8sValid + a length check.
+ -  home_dir_shieldlike/home_single_shard (HOME.c:682-753) are near-identical opendir scanners; FILEIter is at DOG.c:508.
+ -  hunk_frag_esc (HUNK.c:122) declares its own HEX[16] and percent-encodes with *into[0]++ pointer arithmetic.
+
+##  Blockers
+
+None; localized to dog. The two HOME scanners differ only at the subdir-count action — factor a shared count helper.
+
+##  Planned
+
+Swap each block for the abc helper; keep behavior identical, prove with a repro.
+
+ -  Repro first (§17): table cases for hashlet/full-sha recognition and a shielded-store scan.
+ -  DOGIs* → HEXu8sValid + a width/len test (6..40, 40||64).
+ -  Both HOME scanners → FILEIter; factor (count, first-name) once.
+ -  hunk_frag_esc → the abc HEX percent-encoder.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

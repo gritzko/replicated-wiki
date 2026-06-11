@@ -1,0 +1,27 @@
+#   URI-003: URI serialization safety — `URIutf8FeedSafe` (no cross-component injection)
+
+A `uri` is built from component slices (`scheme`/`authority`/`host`/`port`/`user`/`path`/`query`/`fragment`) and serialized back to text by `URIutf8Feed` / `URIMake` / `a_uri`. If a component carries a reserved delimiter that is not escaped, it bleeds across a boundary and the emitted text **re-parses into a different structure** — a structural injection: a branch/path/host name containing `#`, `?`, `/`, `@`, `:` can silently become a fragment, query, extra path segment, userinfo, or port. We want a guarantee that the generated URI fits the grammar and means exactly what the caller asked for. Provide `URIutf8FeedSafe(into, u)`: serialize via `URIutf8Feed`, parse the result back, and assert every parsed field is byte-identical to the input component — emit only if the round-trip is the identity, else **err out** (`URIUNSAFE`, emit nothing). The pre-existing leading-`/` round-trip defect (the original URI-003) is the first thing this catches: serialize→parse is not yet the identity even for *valid* input, so the serializer must be fixed before `FeedSafe` can pass. Found via `abc/fuzz/URI.c`. See [URI-spec], [[POST-002]], [CLAUDE].
+
+##  Issues
+Component→text serialization has no guard that the text re-parses to the same components.
+
+ -  Injection surface: `URIutf8Feed`/`URIMake`/`a_uri` concatenate component slices through `:`/`//`/`/`/`?`/`#` delimiters; an unescaped reserved char in a component re-parses into a DIFFERENT field (path `a#b` → fragment `b`; authority `h/p` → path; path `a?b` → query). Several component values come from untrusted input (branch / project / path / host names) — an injection can redirect a ref or host.
+ -  No current API verifies that `feed(u)` then `parse` yields `u`'s fields; callers trust the serializer blindly.
+ -  Concrete round-trip failure (the original URI-003, now the first `FeedSafe` reject): the `abc/fuzz/URI.c` "parse → relative → absolute should preserve URI" round-trip turns a path-noscheme ref `ht/h/p#abc` into `resolved.path = /ht/h/p` (spurious leading `/`, RFC 3986 §5.3) — serialize/relativize is not the identity even for valid input. Enters in `URIRelativePath` (`abc/URI.c:142`) / `URIRelative` (`:196`) / `URIAbsolute` (`:374`); grammar/lexer untouched. Pre-existing, independent of [[POST-002]] (which only widened fuzz reach).
+ -  Feasibility (is it doable?): YES. The check is one extra parse + a per-field `u8csEq` over the 8 components; parse decodes percent-escapes and feed must encode them, so the comparison is decoded-vs-decoded (semantic field content), which is exactly the safety property. The forcing function: `URIutf8Feed` must percent-escape each component's reserved set per RFC 3986 — then the round-trip is the identity and `FeedSafe` passes; where a component is genuinely unrepresentable, `FeedSafe` errs out rather than emit an ambiguous URI.
+
+##  Blockers
+abc is core — surface the diff for review; never land an abc edit autonomously. The leading-`/` defect must be fixed first, else `FeedSafe` rejects valid inputs. Design call: does `URIutf8Feed` itself escape per-component (so a safe URL is always producible), with `FeedSafe` as the verifier/fuzz-invariant — or is `FeedSafe` detect-and-err-out only? Prefer the former (correct escaping) with `FeedSafe` as the guarantee at trust boundaries; either way an unrepresentable component errs out, never emits.
+
+##  Planned
+Make the serializer injection-safe, verified by a round-trip `FeedSafe` and a fuzz invariant.
+
+ -  Property/repro first ([CLAUDE] §17): a property test that, for random component tuples (incl. reserved chars in each field), runs feed→parse and asserts EITHER field-identity OR an explicit `URIUNSAFE` err-out — never a silent structural change. Subsumes the old `ht/h/p#abc` round-trip row (assert no leading `/`); confirm it fails today.
+ -  Fix the serializer/relativizer so valid components round-trip: start with the noscheme leading-`/` bug (§5.2.3 merge / §5.3 recompose); ensure `URIutf8Feed` percent-escapes each component's reserved set per RFC 3986. Keep the grammar (`abc/URI.c.rl`) unchanged.
+ -  Add `ok64 URIutf8FeedSafe(u8s into, uricp u)` to abc/URI: feed via `URIutf8Feed`, parse the emitted text back into a scratch `uri`, compare all 8 fields with `u8csEq`; on any mismatch return `URIUNSAFE` and emit nothing. Route URI construction from untrusted components through it (be/keeper/sniff ref+host builders).
+ -  Fuzz the invariant on `abc/fuzz/URI.c` (multi-core, `$HOME/Corpus/URI`); feed every minimized failure back into the property test ([CLAUDE] §3).
+
+[URI-spec]: ../../wiki/URI.mkd "URI grammar + ref shapes"
+[POST-002]: ../POST/POST-002.mkd "fragment widening that surfaced the round-trip defect"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

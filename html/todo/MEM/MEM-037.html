@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-037</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-037: abc/FILE.c — FILEMapFD/FILEBookFD leak the opened fd on internal error (root cause)</h1>
+<p>
+The lowest-level mapping primitives leak the file descriptor their wrappers hand them whenever the map/book itself fails. FILEMapRO/FILEMapRW/FILEMapCreate(At) and FILEBook/FILEBookRO/FILEBookAt/FILEBookCreate all <code>call(FILEOpen)</code> to get an fd, then pass it to FILEMapFD (FILE.c:671) / FILEBookFD (FILE.c:781), whose internal error branches <code>return</code> WITHOUT <code>close()</code>-ing that fd. Every per-dir 'leaks the fd on map failure' finding in the 2026-06-11 sweep traces back here, so this is the highest-leverage fix. abc is core — surface the diff for review. From the <a href="MEM.html">MEM</a> error-path sweep.
+</p>
+<h2>Issues</h2>
+<p>
+The map/book primitive owns the fd on its error branches but never closes it.
+</p>
+<ul>
+<li>FILE.c:671 FILEMapFD: wrappers open the fd then hand it in; mmap-failure / size-stat-failure branches return, fd leaked.</li>
+<li>FILE.c:781 FILEBookFD: same shape — FILEBook* open the fd, FILEBookFD's error branches return without closing it.</li>
+<li>Reached by ANY caller whose mapped/booked file fails (absent/short/over-FILE_MAX_OPEN); fd table exhausts under repeated failure.</li>
+<li>Also abc/LEX.c (codegen-only) leaks an fd on an error branch — same close-on-error gap, low priority.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+abc is core — never land an abc edit autonomously; surface the diff. Decide whether FILEMapFD/FILEBookFD take ownership of the fd (close on every error) or the wrappers wrap the open in the same error scope.
+</p>
+<h2>Planned</h2>
+<p>
+Make the map/book primitives close the fd on every internal error branch.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a hermetic case that maps a file which passes open but fails the map (e.g. zero-length / unmappable), assert no fd leak across N iterations (fd count stable).</li>
+<li>Give FILEMapFD/FILEBookFD ownership of the fd: every error <code>return</code> closes it; success keeps it in the book/map descriptor.</li>
+<li>Audit the wrappers so the fd is closed exactly once on each path.</li>
+</ul>
+</body>
+</html>

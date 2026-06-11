@@ -1,0 +1,23 @@
+#   GET-013: `be get <path>` of a missing tracked file fails `FILENONE` — checkout doesn't create the parent directory
+
+Restoring a single tracked-but-missing file whose parent directory is also gone fails: `be get test/post/38-sub-push-beagle-peer-shard/run.sh` → `sniff: get: cannot open /home/gritzko/beagle/test/post/38-sub-push-beagle-peer-shard/run.sh for write: FILENONE`. The directory `test/post/38-sub-push-beagle-peer-shard/` does not exist on disk, and the checkout opens the target for write WITHOUT first creating its parent directory — so the open fails `FILENONE` and the `mis` file stays missing (`be status` still shows `mis` afterward). A `mis` file in a vanished directory therefore cannot be restored by a path-scoped `be get` — only a full re-checkout works (and that drags in the [[SUBS-018]] sub-recursion noise). See [GET], [CLAUDE].
+
+##  Issues
+The checkout writes a file without ensuring its directory exists.
+
+ -  `be get <path>` of a tracked file whose parent dir is absent → `FILENONE` on the open-for-write; nothing is restored.
+ -  No `mkdir -p` of the target's parent before the write; a removed intermediate directory is fatal.
+ -  Consequence: a `mis` entry (tracked, gone on disk) inside a deleted directory is unrecoverable via a scoped get — the user must full-re-checkout.
+ -  Surfaced restoring SUBS-017's `test/post/38-…/run.sh`, dropped from `~/beagle`'s working tree by a prior `be post`/sync.
+
+##  Blockers
+None. Localized to the checkout file-write path.
+
+##  Planned
+Create the parent directory before writing a checked-out file.
+
+ -  Repro-first ([CLAUDE] §17): `rm -rf <dir>` holding a tracked file, then `be get <dir>/<file>` restores it (recreating the directory), and `be status` no longer reports `mis`.
+ -  In the checkout write path, `mkdir -p` the target's parent directory(ies) before opening it for write — both for a single-path get and a full re-checkout of a `mis` entry.
+
+[GET]: README.mkd "checkout / fetch / view / search tickets"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

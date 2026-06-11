@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Plan</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>Plan: Beagle's live state in five fixed sections</h1>
+<p>
+Plan is the project's single live planning page and the template every tracking doc copies. The goal is one greppable place that answers what we want, what is wrong, what we do next, what stops us, and what is done — so no status lives only in code comments or a scratch todo. The method is five fixed sections (Goals, Issues, Action plan, Blockers, Landed) in <a href="WikiWeb.html">WikiWeb</a> shape, with each concrete discrepancy split out into a numbered <a href="../todo/DIS-001.html">DIS</a> ticket under <code>todo/</code> that repeats the same lifecycle sections (Issues, Blockers, Planned, Landed).
+</p>
+<h2>The five sections every plan doc carries</h2>
+<p>
+A plan doc is Goals (why), Issues (bugs, spec-vs-impl gaps, missing code), Action plan (ordered next steps), Blockers (what is waiting on a decision or upstream), and Landed (what shipped, newest first).
+</p>
+<ul>
+<li>Goals: the durable intent — what the system should do — independent of any one work item.</li>
+<li>Issues: every current discrepancy, one bullet each, linking its <a href="../todo/DIS-001.html">DIS</a> ticket; three flavors — bug, codebase-contradicting-spec, missing code.</li>
+<li>Action plan: the ordered steps in flight now; each step is land-and-stay-green, not a wishlist.</li>
+<li>Blockers: anything that cannot proceed without a user ruling, an upstream fix, or another ticket landing first.</li>
+<li>Landed: shipped work newest-first, kept as the regression memory so closed items are not re-opened by accident.</li>
+</ul>
+<h2>Discrepancies become numbered DIS tickets</h2>
+<p>
+A discrepancy found while testing (test surfaces a gap between spec and impl) is filed as <code>todo/DIS-NNN.mkd</code>, not patched silently into a test; the ticket owns the detail and Plan only links it.
+</p>
+<ul>
+<li>One ticket per discrepancy: <code>DIS-001</code>, <code>DIS-002</code>, … each a <a href="WikiWeb.html">WikiWeb</a> page with Issues, Blockers, Planned, Landed sections.</li>
+<li>Plan's Issues section is the index: a one-line claim per open ticket; the ticket carries the repro, root cause, and fix shape.</li>
+<li>When a ticket fully lands, move its line from Issues to Landed here and mark the ticket's own Landed section.</li>
+</ul>
+<h2>Goals</h2>
+<p>
+Beagle is a git-compatible revision-control system with a uniform HTTP-verb/URI command language, syntax-aware diff/merge, and a multi-project <code>~/.be</code> store built for parallel-worktree, rebase-centric workflows (see <a href="Verbs.html">Verbs</a>, <a href="Store.html">Store</a>).
+</p>
+<ul>
+<li>Verb × URI shape is unambiguous and orthogonal; POST is the only commit-maker, PUT the only ref-writer (see <a href="Verbs.html">Verbs</a>).</li>
+<li>Merges are token-level CRDT weaves with no false conflicts; every recorded commit is a tested commit (patch→test→post).</li>
+<li>One store per machine, many worktrees; per-wt state in <code>&lt;wt&gt;/.be/wtlog</code>, branches/tags as flat reflog rows (see <a href="Store.html">Store</a>, <a href="Home.html">Home</a>).</li>
+<li>The wiki (<a href="WikiWeb.html">WikiWeb</a>) is the spec; code is reconciled to it case by case, and gaps are filed as <a href="../todo/DIS-001.html">DIS</a> tickets, not hidden.</li>
+</ul>
+<h2>Issues</h2>
+<p>
+Open discrepancies, each tracked in its own ticket; this list is the index, the ticket carries the detail.
+</p>
+<ul>
+<li><a href="../todo/DIS-002.html">DIS-002</a>: <code>be patch ssh://host?br</code> over a transport drops freshly-fetched commits — theirs's added files never reach the wt.  (May share a root cause with <a href="../todo/DIS-025.html">DIS-025</a>.)</li>
+<li><a href="../todo/DIS-025.html">DIS-025</a>: <code>be patch ?&lt;target&gt;</code> squash uses the target's PARENT as merge base (<code>LCA(parent_tip,target)</code>), so when cur is <strong>behind</strong> the target it silently drops every commit in <code>(cur..fork]</code> — exit 0, HIGH/silent.  Root-caused (fork = <code>50722656</code> not <code>eb1945fb</code>); fix = require fork to be an ancestor of cur, else fall back to <code>LCA(our,theirs)</code>.</li>
+<li><a href="../todo/DIS-003.html">DIS-003</a>: WEAVEMerge token-identity is positional, so a few merges have a non-total, timestamp-dependent tie-break (fuzz holdout).</li>
+<li><a href="../todo/DIS-004.html">DIS-004</a>: <code>be delete</code> dirty gate is mtime-only and <code>--force</code> does not bypass it for a file/dir — spec wants a hash double-check.</li>
+<li><a href="../todo/DIS-005.html">DIS-005</a>: <code>sha1:</code>/projector single-scheme URI grammar needs an explicit doc note (<a href="Verbs.html">Verbs</a> §&quot;View projectors&quot;) — no bug.</li>
+<li><a href="../todo/DIS-006.html">DIS-006</a>: <code>be get file:&lt;legacy-store&gt;</code> into an empty dir crashes (FILEINVAL) on the elided no-shard layout.</li>
+<li><a href="../todo/DIS-011.html">DIS-011</a>: <code>be put ssh://host/path</code> (no <code>?ref</code>) force-pushes instead of the documented log-only.</li>
+<li><a href="../todo/DIS-015.html">DIS-015</a>: Keeper/PackLog/Indices specs describe the abandoned branch-dir DAG (flat-store migration); first-object-is-commit unenforced.</li>
+<li><a href="../todo/DIS-024.html">DIS-024</a>: retire the legacy flat layout (top-level <code>.be/refs</code>) — full flat→sharded migration (60+ tests); basename-derive measured too broad + escapes the hermetic shield into <code>$HOME/.be</code>. Staged plan + hermetic-ceiling prereq in the ticket; the dead <code>BEActResolveRef</code> band-aid is independently removable.</li>
+<li><a href="../todo/DIS-007.html">DIS-007</a>: magic refs <code>?null</code>/<code>?back</code> unimplemented; <a href="../todo/DIS-008.html">DIS-008</a>: GET <code>#~N</code> ancestor-rewind unimplemented.</li>
+<li><a href="../todo/BLAME-001.html">BLAME-001</a>: <code>graf blame</code> walks all ancestors, re-inflating the file blob at every commit (O(history), ~1.16s); keeper-side lazy/sha-dedup fix.</li>
+<li><a href="../todo/BLAME-002.html">BLAME-002</a>: DAG index has no <code>(tree,name)→child</code> records, so descent must inflate keeper; materialise tree entries for inflate-free descent.</li>
+<li><a href="../todo/BLAME-003.html">BLAME-003</a>: parallelize blame's inflate-bound fetch across cores (after BLAME-001/002); shared keeper/graf scratch must go per-thread first.</li>
+<li><a href="../todo/BLAME-004.html">BLAME-004</a>: <code>blame</code> of a large/long-history file (e.g. <code>keeper/KEEP.c</code>) returns <code>BNOROOM</code> — a fixed scratch cap overflows; correctness bug.</li>
+</ul>
+<h2>Action plan</h2>
+<p>
+Active feature work is the sha-bearing wtlog row-0 anchor (<a href="../todo/DIS-001.html">DIS-001</a>): collapse the row-0 anchor to one <code>get</code> row carrying title + branch + hash, fixing the keeper-leaf caveat.
+</p>
+<ul>
+<li>Steps 1–4, 7, 8 have landed (home query-first resolve, anchor-writer helper, secondary-wt + submodule writers, test, docs); 213/213 green.</li>
+<li>Remaining is only the OPTIONAL clone-path optimization (steps 5–6) — reorder BE_PLAN_GET so row 0 carries the tip and sniff GET skips its establishing append.</li>
+<li>That GET append records the tip on EVERY checkout, so steps 5–6 are a focused dispatch pass with full clone/get coverage, not a correctness gap.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+No hard external blockers; the merge-determinism ticket has a scope constraint, and the patch-fetch ticket may share a root cause with keeper shard visibility.
+</p>
+<ul>
+<li><a href="../todo/DIS-003.html">DIS-003</a>: a clean fix needs real cross-weave token identity (shared-sequence merge); a total topo-sort fix touches <code>graf/DAG.c</code> (out of prior edit scope).</li>
+<li><a href="../todo/DIS-002.html">DIS-002</a>: suspected keeper shard/index-visibility interaction after fetch; confirm before the merge walk is blamed.</li>
+</ul>
+<h2>Landed</h2>
+<p>
+Shipped work, newest first; kept so regressions are obvious and closed items stay closed.
+</p>
+<ul>
+<li>HEAD-001: <code>be head</code> transport mode (<code>ssh://host?ref</code>, <code>file://host?ref</code>) now prints the <code>ahead N, behind M</code> + differing-file summary — <code>BE_PLAN_HEAD</code> ran fetch+reindex but its only <code>BEActGrafHead</code> row excluded <code>URI_SCHEME</code>, so transport HEAD exited 0 with empty stdout; two transport-gated summary rows added after the get rows (graf head's authority-substring resolver ignores the scheme, so no second wire trip); repro <code>test/head/22</code> green; posted <code>eb1945fb</code> (../done/HEAD-001.mkd).</li>
+<li>SUBS-005: path-scoped <code>be delete</code> of a submodule or a sub-interior file no longer false-positives DELDIRTY — <code>sniff/DEL.c</code> <code>del_sub_classify</code> recognises gitlink + sub-interior paths and skips with a sub-aware message (full unmount deferred to SUBS-008); repro <code>test/delete/08</code> green; posted <code>9aabd863</code> (../todo/SUBS.mkd).</li>
+<li>SUBS-004: bare <code>be put</code> with only a mounted sub dirty now exits 0 — <code>be_recurse_capture</code> propagates a child <code>*NONE</code> as the NONE class (not collapsed to OK) and <code>BEActSubsRelay</code> returns <code>BESTOP</code> (→OK) when a sub staged work, clearing the parent's stale PUTNONE; a truly-empty put still surfaces PUTNONE; repro <code>test/put/09</code> green; posted <code>5fb56d6f</code> (../todo/SUBS.mkd).</li>
+<li>POST-005: commit-all POST no longer sweeps an untracked file whose mtime aliases a put/patch stamp (<code>SNIFFAtRowAtTs</code> is ts-keyed) — <code>post_classify_step</code> gains a theirs (absorbed-patch) tree ULOG cursor and ADDs an untracked file only when it is genuinely in an absorbed tree; fixes the patch-alias inclusion + the SUBS-001 put-alias regression that blocked <code>patch/28</code>; posted <code>eec94934</code> (../done/POST-005.mkd).</li>
+<li>SUBS-001: sub-gitlink-bump put rows no longer flip POST into selective mode (<code>post_pd_cb</code> classifies them before the <code>any_pd</code> flip), so a dirty/clean sub keeps the level's commit-all own-file edits; posted <code>97de77b8</code> (../todo/SUBS.mkd).</li>
+<li><a href="../done/DIS-022.html">DIS-022</a>: <code>be log</code> already resolves the current base attached or detached via the shared <code>--at</code> cur-tip (graf can't link sniff — no graf change); verified + detached regression case G; posted <code>0df8f226</code>.</li>
+<li><a href="../done/DIS-019.html">DIS-019</a>: a be-only synthetic dot-branch never reaches a git wire — <code>keeper_post</code> skips the push (no pack) when the branch is a dot-coordinate and the remote is a git transport (<code>DOGIsGitTransport</code>); posted <code>d0301bdc</code>.</li>
+<li><a href="../done/DIS-020.html">DIS-020</a>: <code>NOBRANCH</code> split from <code>POSTNONE</code> (distinct ron60 low byte); a missing target branch aborts <code>be</code> before any wire push; posted <code>3fbe4d3e</code>.</li>
+<li><a href="../done/DIS-023.html">DIS-023</a>: <code>be</code> status/<code>ls</code> confirm dirty by content hash (shared <code>CLASSWtState</code>), not mtime alone, so an mtime collision no longer hides real mods; posted <code>b974795c</code>.</li>
+<li><a href="../done/BE-001.html">BE-001</a>: red reserved for conflict statuses — conflict moved to theme slot <code>M</code>, default slot <code>S</code> left neutral; code render + ulog stop reddening non-conflict text; posted <code>2ac209a0</code>.</li>
+<li><a href="../done/DIS-021.html">DIS-021</a>: wpush debug <code>ABC_TRACE</code>-gated (silent by default); pack-after-validate locked + have-set pruning regression tests; <code>have_peer</code>→<code>have_ref</code>; posted <code>bd7ea8d6</code>.</li>
+<li><a href="../done/DIS-018.html">DIS-018</a>: PATCH conflicts report <code>conf</code>/<code>modl</code> (bright red) and return OK; POST's marker scan is the safety net; posted <code>bfc949f6</code>.</li>
+<li><a href="../done/DIS-017.html">DIS-017</a>: bareword classifies path-vs-branch by cur's baseline tree (not on-disk <code>stat</code>), so a deleted tracked file restores; posted <code>8c97df1e</code>.</li>
+<li><a href="../done/DIS-014.html">DIS-014</a>: StrictMark <code>\*</code> inline escape + 3-dash <code>---</code> ruler in the MKDT lexer; posted <code>270db7f</code>.</li>
+<li>GET-001: per-version weave decode scratch reclaimed (try() boundary + carried decode) — BNOROOM on long-history merges fixed; posted <code>3251cb48</code> (../done/GET-001.mkd).</li>
+<li><a href="../done/DIS-009.html">DIS-009</a>: detached checkout refuses POST/PATCH — GET writes <code>?&lt;sha&gt;</code> (sha in query, empty fragment), POSTDET/PATCHDET gates; posted <code>a2a13e4</code>.</li>
+<li>POST-001 done: phase 1 <code>--nosub</code> guard (<code>eabf0c6</code>) + phase 2 scheme-gated recursion — <code>be:</code>/<code>file://</code> parents recurse, git <code>ssh:</code>/<code>https:</code> skip subs, <code>--sub</code> opts in (<code>8254ee85</code>).</li>
+<li>GET-002: scheme-only (<code>ssh:</code>) and bare-authority transport URIs complete from the recentmost same-transport get/post; posted <code>0f7d06b2</code>.</li>
+<li><a href="../done/DIS-016.html">DIS-016</a>: HEAD reads the cache for <code>//host</code> (no scheme); only <code>ssh:</code>/<code>https:</code> open the wire — <code>BE_PLAN_HEAD</code> gated like GET; posted <code>ee54e27f</code>.</li>
+<li><a href="../done/DIS-010.html">DIS-010</a>: wtlog pd floor honours <code>get</code> rows; patch boundary resets only at <code>get</code>/commit-all <code>post</code> (commit-all predicate); posted <code>7b50ac9a</code>.</li>
+<li><a href="../done/DIS-012.html">DIS-012</a>: same-title + no-common-ancestor clone refused (<code>KEEPSharesAncestor</code> + <code>TITLECLSH</code>); posted <code>b7ebc61f</code>.</li>
+<li><a href="../done/DIS-013.html">DIS-013</a>: <code>mark --strict &lt;dir&gt;</code> exits non-zero on any budget breach (<code>mark_dir_cb</code> propagates the breach); posted <code>3be7bf45</code>.</li>
+<li>Shared hermetic test repo-setup lib + suite migration; fixed <code>be-get-nosub</code> leaking into <code>$HOME/.be/src</code>; posted <code>03fad04</code>.</li>
+<li>sha-bearing row 0 steps 1–4/7/8: query-first resolve, <code>SNIFFAtAnchorRef</code> writer, secondary-wt + submodule (gitlink-pin) anchors, get/29 assertion, AT.md docs; smoke-verified, 213/213 (<a href="../todo/DIS-001.html">DIS-001</a>).</li>
+<li>Row-0 scanner foundation: baseline/cur-tip exclude by tip-presence not position, so a sha-bearing row 0 is a valid anchor (<a href="../todo/DIS-001.html">DIS-001</a>).</li>
+<li><code>be patch</code> transport routing fix: gate <code>PATCHApplyFile</code> on empty authority; transport URIs go to whole-tree <code>PATCHApply</code> (<a href="../todo/DIS-002.html">DIS-002</a>).</li>
+<li>Retired the two-tip <code>graf get path?A&amp;B</code> merge surface; merge is PATCH territory only (test 101 removed).</li>
+<li>Keeper flat-store model: branch create/drop idempotent, lock at <code>.be/.lock</code>, objects survive branch drop (see <a href="Keeper.html">Keeper</a>, <a href="Store.html">Store</a>).</li>
+<li>WEAVEMerge in=0 mis-stamp fix: dedup keeps both tokens ordered by stamp so every ancestor recovers its own content (<a href="../todo/DIS-003.html">DIS-003</a>).</li>
+</ul>
+</body>
+</html>

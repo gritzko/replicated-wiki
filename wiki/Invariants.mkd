@@ -9,7 +9,7 @@ The write path has exactly one commit-maker and one ref-writer, a linear first-p
  -  POST is the only commit-maker, PUT the only ref-writer: [POST] advances cur; [PUT] writes a `refs` row but never a commit.
  -  First-parent linear, multi-parent at POST: first parent is cur's prior tip; the post fragment's `!` picks `parent`/`foster`, named-sha rows → `picked`.
  -  POST is fast-forward only, PUT unconstrained: POST refuses non-FF advance or push; PUT force-writes any ref on either side.
- -  Commit messages may not end in `!`: a trailing `!` is reserved for POST's forget modifier, so the parse stays unambiguous.
+ -  Commit messages may not end in `!`: trailing `!` is POST's forget modifier, so the parse stays unambiguous ([dirty words]).
 
 ##  Branch and worktree invariants
 
@@ -47,3 +47,4 @@ A few cross-cutting contracts are still unsettled; the per-verb pages carry thei
 [PUT]: PUT.mkd "PUT verb"
 [Bro]: Bro.mkd "the bro dog"
 [Home]: Home.mkd "wiki entry page"
+[dirty words]: ../blog/uris.mkd "Beagle: git, URIs and all the dirty words"

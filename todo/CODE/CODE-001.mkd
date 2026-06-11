@@ -1,0 +1,28 @@
+#   CODE-001: abc/URI.c reuses PATH/HEX, drops ptr-arith
+
+abc/URI.c hand-rolls RFC-3986 dot-segment removal, hex decode, and relative-path build with raw pointer arithmetic into static 4 KiB bufs, duplicating PATHu8bAbs/PATHu8bNorm and abc/HEX.h and violating CLAUDE.md §10/§13. Funnel path normalization and merge through abc/PATH, hex through abc/HEX, and dedup the 7-field component-copy block. Touches only abc, which is core — surface the diff for review before landing.
+
+##  Issues
+
+URI.c reimplements abc path/hex primitives with forbidden pointer arithmetic.
+
+ -  URIMergePath (URI.c:270) re-rolls remove_dot_segments via ptr-arith into a 4K static buf; PATHu8bAbs/Norm do it.
+ -  URIHexVal + a local HEX_DIGITS[16] (URI.c:439-463) duplicate abc/HEX.h decode; nibbles extracted by hand.
+ -  URIRelativePath (URI.c:125) builds the rel path into another static 4K buf with out++/endp loops.
+ -  The 7-field authority/path/query/fragment copy block is pasted 3x in URIRelative/URIAbsolute (URI.c:195,374,385).
+
+##  Blockers
+
+abc is core — per project rule never land an abc edit autonomously; the commit gate must show the diff.
+
+##  Planned
+
+Replace each hand-rolled block with the existing abc helper; delete the static bufs.
+
+ -  Repro first (§17): a URI merge/round-trip test over '../','./','/./','/../' that fails on any behavior change.
+ -  URIMergePath → PATHu8bAbs/PATHu8bNorm over base+rel; drop URIMergePathBuf.
+ -  Hex decode → abc/HEX.h; drop the local HEX_DIGITS + URIHexVal.
+ -  Factor the 7-field component copy into one helper reused by Relative/Absolute.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

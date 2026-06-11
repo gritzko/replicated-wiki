@@ -1,0 +1,26 @@
+#   CODE-010: spot: unify grep/pcre cbs + trigram scan
+
+spot/GREP.c's capo_grep_file_cb and capo_pcre_file_cb share a byte-identical tokenize-and-mark prologue and overall skeleton, and the trigram off-block scan is pasted between CAPO.c and GREP.c (with a manual u64css→seek_runs[] copy on both sides). Factor the shared callback core and the off-block scan; use an abc slice-array copy.
+
+##  Issues
+
+The two grep callbacks and the trigram off-block scan are each duplicated.
+
+ -  capo_grep_file_cb/capo_pcre_file_cb (GREP.c:58-156/300-400) share the tokenize prologue + hls state skeleton.
+ -  trigram off-block scan pasted CAPO.c:1244 (literal) vs GREP.c:217 (regex).
+ -  u64css live→seek_runs[CAPO_MAX_LEVELS] hand-copy twice (CAPO.c:1253, GREP.c:224); plus 4-ptr arena copies.
+
+##  Blockers
+
+None; spot-internal.
+
+##  Planned
+
+One shared callback core + one off-block scan helper; an abc slice-array copy.
+
+ -  Repro first (§17): spot grep + pcre search results over the fixture stay identical.
+ -  Extract the tokenize/mark prologue + hunk-emit skeleton; both cbs call it.
+ -  One trigram off-block scan; replace the manual seek_runs copy with an abc slice copy.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,26 @@
+#   MEM-042: keeper — REFSResolve leaks the ULOG map on a long URI; KEEPGetRemote double-error rarena
+
+REFSResolve (REFS.c:545) ULOGOpen's the refs log (mmaps `data`, allocates `idx`) then, when a matched REFS row's URI components together overflow the capture arena, the refs_capture call-chain early-returns without ULOGClose — a genuine, reachable leak driven by an over-long ref URI. KEEPGetRemote leaks `rarena` only on a narrower double-error path. The big known keeper recursion findings (MEM-022..025) are already tracked. From the [MEM] sweep.
+
+##  Issues
+
+A held ULOG map / arena isn't released on a post-open error.
+
+ -  REFS.c:545 REFSResolve: ULOG mmap+idx held across the refs_capture chain; an arena-too-small error (long URI) returns without ULOGClose.
+ -  KEEPGetRemote: rarena leaks on a double-error path (lower severity / narrower trigger).
+
+##  Blockers
+
+None; keeper-internal. ULOGClose is null-safe — use the capture-result/close/check idiom.
+
+##  Planned
+
+Close the ULOG / free the arena on the capture-error path.
+
+ -  Repro first ([CLAUDE] §17): resolve a REFS row with an over-long URI that overflows the capture arena; assert no map leak.
+ -  Bracket the refs_capture chain so ULOGClose runs on the arena-overflow error before returning.
+ -  Free rarena on the KEEPGetRemote double-error branch.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"
+[MEM]: MEM.mkd "memory-safety audit digest"

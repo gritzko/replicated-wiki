@@ -1,0 +1,26 @@
+#   CODE-004: keeper: one commit-parents/BFS/sha40 helper
+
+keeper open-codes commit ancestry in many places: three near-identical BFS loops in KEEP.c (IsAncestor/SharesAncestor), the 40-hex→sha1 decode at 7+ sites (the file-static keep_hex40_sha in WALK.c is unused elsewhere), and WIRECLI's own parent-walks. Extract a commit-parents collector, a bounded BFS-with-seen, and a shared sha40 decoder.
+
+##  Issues
+
+Commit BFS, parent collection, and hex40→sha1 decode are pasted across keeper.
+
+ -  Three BFS loops: KEEPIsAncestor + the two inlined in keep_shares_ancestor_inner (KEEP.c:1015-1160).
+ -  hex40→sha1 'bail on fail' block at WALK.c:633, KEEP.c:1030/1107/1144, WIRECLI.c:1228/1273, KEEP.exe.c:946.
+ -  wpush_walk_commit/wpush_collect_commits (WIRECLI.c:1219,1267) re-walk headers + decode the parent.
+
+##  Blockers
+
+None; keeper-internal. keep_hex40_sha already exists in WALK.c but is file-static and unused elsewhere.
+
+##  Planned
+
+Promote a sha40 decoder and a commit-parents helper; rebuild the walks on a BFS visitor.
+
+ -  Repro first (§17): ancestor / shares-ancestor table tests over a small fixture DAG.
+ -  sha1FromHex40(u8csc,sha1*) shared in KEEP.h; replace all 7 sites.
+ -  keep_commit_parents(commit)→parents; a BFS-with-seen helper; Is/SharesAncestor become visitors.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

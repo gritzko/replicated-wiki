@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Buffers</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>Buffers: own a range as past, live, free</h1>
+<p>
+A buffer is four pointers dividing one memory range into three slices: PAST (consumed), DATA (live), and IDLE (free). Feeding appends to DATA out of IDLE; draining consumes DATA into PAST; each move grows the adjoining slice, so a buffer tracks its own fill level and no length ever travels beside it. A buffer owns its backing memory — heap, mmap, arena, or stack — and the verb that created it decides who frees it. Pass a buffer down the call stack by pointer; never copy one.
+</p>
+<h2>The three slices</h2>
+<p>
+<code>buf[0..3]</code> bound PAST <code>[0,1)</code>, DATA <code>[1,2)</code>, and IDLE <code>[2,3)</code>. Reads and writes move the inner borders, so the buffer always knows what is live and what is free.
+</p>
+<ul>
+<li>Get the live span with <code>u8bData</code> / <code>u8bDataC</code>, the free span with <code>u8bIdle</code>; sizes via <code>u8bDataLen</code> / <code>u8bIdleLen</code>.</li>
+<li>Append with <code>u8bFeed</code> / <code>u8bFeed1</code>; clear with <code>u8bReset</code>; trim the DATA end with <code>u8bShed</code>.</li>
+</ul>
+<h2>Ownership</h2>
+<p>
+A buffer's backing comes from exactly one source, and you release it with the matching verb. Provenance lives in the caller's head, not the buffer's type — match create to release at every site.
+</p>
+<ul>
+<li><code>u8bAllocate</code> ↔ <code>u8bFree</code> (heap); <code>u8bMap</code> ↔ <code>u8bUnMap</code> (mmap, files).</li>
+<li><code>u8bAcquire</code> from an arena ↔ arena rewind (no per-buffer free); <code>a_pad</code> ↔ scope exit (stack).</li>
+</ul>
+<h2>Buffers as arenas</h2>
+<p>
+A buffer can dispense slices to other code, LIFO along the call tree. This removed most need for malloc: build records in place, then rewind to reclaim them all at once.
+</p>
+<ul>
+<li><code>u8aMark</code> / <code>u8aRewind</code> bracket a borrow; <code>u8bAcquire</code> rents a whole sub-buffer for the duration.</li>
+<li>Typed slice rentals: <code>a_lign</code> then <code>a_cquire</code> to build incrementally, <code>a_ren</code> for a one-shot copy.</li>
+<li>The process-wide instance of this pattern is <a href="BASS.html">BASS</a>; the spans buffers feed and drain are <a href="Slices.html">Slices</a>.</li>
+</ul>
+</body>
+</html>

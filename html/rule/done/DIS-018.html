@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-018</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIS-018: PATCH modify/delete reports <code>kept</code> and exits 0</h1>
+<p>
+<a href="../wiki/PATCH.html">PATCH</a> enumerates exactly four report statuses (applied/merged/mod/conflict) and states conflicts are &quot;loud … exits non-zero&quot;. A modify/delete divergence (theirs deletes a path ours modified, or vice versa) instead emits an undocumented <code>kept</code> status, keeps the file, and returns OK — a genuine conflict that silently drops one side's intent and exits 0. The goal is to treat modify/delete as a loud conflict (or document the status). See <a href="../wiki/PATCH.html">PATCH</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The modify/delete arm short-circuits to a non-spec OK status.
+</p>
+<ul>
+<li><code>sniff/PATCH.c:724-746,748-776</code> emit <code>emit_status(&quot;kept&quot;, …)</code>, bump <code>mod_del_kept</code>, and return OK — <code>kept</code> is not one of the four documented statuses.</li>
+<li>The exit code is set only on <code>merged_conflict</code>/<code>failed</code> (<code>PATCH.c:1653</code> → <code>PATCHCFLCT</code>); a modify/delete divergence exits 0, contradicting <a href="../wiki/PATCH.html">PATCH</a> §&quot;Conflicts are loud … exits non-zero&quot;.</li>
+<li>Effect: an unattended <code>patch &amp;&amp; post</code> records a commit that silently keeps a file the merge should have flagged as a delete/modify conflict.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; the code comment (<code>PATCH.c:716-723</code>) marks this as intentional, so a user ruling may prefer documenting <code>kept</code> over flipping it to a conflict.
+</p>
+<h2>Ruling (maintainer, 2026-06-03)</h2>
+<p>
+Relax the loud-exit contract — a hard non-zero PATCH exit breaks parent recursion when a submodule conflicts. PATCH reports conflicts in colour and returns OK; POST's conflict-marker scan (<code>POSTCFLCT</code>) is the patch→test→post safety net.
+</p>
+<ul>
+<li>Genuine WEAVE conflict → <code>conf</code> status, bright red, exit OK; markers still written (POST refuses them via <code>POSTCFLCT</code>).</li>
+<li>Modify/delete → a distinct <code>modl</code> status (replacing <code>kept</code>), bright red, exit OK.</li>
+<li>Report vocabulary becomes applied/merged/mod/<code>conf</code>/<code>modl</code>; PATCH no longer exits non-zero for conflicts/modl (genuine errors like <code>PATCHDET</code> still fail).</li>
+<li>Spec update: revise <a href="../wiki/PATCH.html">PATCH</a> §&quot;Reporting&quot; and the &quot;conflicts are loud … exits non-zero&quot; line accordingly (wiki edit, separate).</li>
+</ul>
+</body>
+</html>

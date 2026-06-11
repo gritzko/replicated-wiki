@@ -1,0 +1,31 @@
+#   GET-015: `be get be://…?/beagle` ships the full pack but the clone can't resolve the trunk tip commit (`object not found`, `keep_err=KEEPNONE`)
+
+A fresh full clone of the parent store over `be://` transfers every object — the clone's pool grows to ~33 MB, matching a healthy clone — yet the post-fetch checkout fails: `sniff: object not found: hex=4e8f5770… hexlen=15 hashlet=04e8f57705b6d7f4 … project=beagle … packs=1 keep_err=KEEPNONE` → `SNIFFFAIL`. The tip commit object is **locally intact in the parent** (`be log:?` renders `4e8f5770` with its message), so the parent has it; the clone received a full pack but cannot find that one commit in its own keeper index. This blocks the entire Issues.mkd loop — no ticket clone can update onto trunk, so nothing lands. The `hexlen=15` is normal (60-bit hashlet, clamped at `sniff/GET.c:1020`), not the bug. Earlier the same machinery worked: DIS-035's clone fetched trunk `8d313c50` cleanly today; the break appears at tip `4e8f5770`. See [GET], [Issues], [CLAUDE], [[GET-009]].
+
+##  Repro (clean, deterministic)
+ -  `mkdir ~/tmp/p && cd ~/tmp/p && be get 'be://localhost?/beagle'` → 33 MB pool written, then `object not found 4e8f5770`, exit 157. `be 'log:?'` in the clone → `REFSNONE` (no checked-out tip).
+ -  Confirmed **independent of refs state**: reproduces both with the live refs and after reverting `~/.be/beagle/refs` to the clean post-DIS-035 row (`26610MdAEi get ?#4e8f5770`); confirmed not a stale index (reproduces after `rm .refs.idx`); confirmed not a stale client binary (clean `ninja` rebuild of `be`).
+
+##  Issues
+The object is served (full pack arrives) but the client's keeper index for the received pack has no entry for the tip commit's 60-bit hashlet.
+
+ -  **Store side vs lookup side.** Pack-time hashlet is `WHIFFHashlet60((sha1cp)…)` from the binary sha (`keeper/UNPK.c:529`); checkout-time is `WHIFFHexHashlet60(hex)` from the hex string (`sniff/GET.c:1021`). Both should yield the first 60 bits — verify they agree for `4e8f5770` (the displayed `04e8f57705b6d7f4` is the right 60-bit value), and that the unpacker actually **indexed the tip commit** (not just streamed it into the pack).
+ -  **Reachability serving** ([[GET-009]] umbrella): if the upload-pack's want/have closure omits the tip commit object itself (vs its tree/parents), the pack would be ~complete yet miss exactly `4e8f5770`. Check whether `closure(wants)` includes the want commit.
+ -  Scope unknown: may be a pre-existing `be://` full-clone bug newly exposed, or object-pool/index damage from a botched landing session on this store (refs were hand-cleaned; the keeper `.idx` files were rewritten mid-session — `26610Nij7I.keeper.idx`). A second, independent parent store should be used to repro from clean.
+
+##  Root cause (confirmed) — this is [[GET-009]], not a new bug
+Isolated decisively:
+ -  A fresh independent store (`~/tmp/gtest`, 3 commits) clones perfectly over `be://localhost/tmp/gtest?/gtest` — tip resolves, files check out. So `be://` full-clone + client unpack are **fine**.
+ -  The parent store's objects are **intact**: `keeper verify .#4e8f5770` → "verified 1329 objects, 0 failed"; `be tree:?#4e8f5770` lists the whole tree.
+ -  `keeper status` → **1 pack, 67.5 MB, 46216 entries**, yet the clone received only **~33 MB**. The upload-pack ships an incomplete subset that **omits the tip commit** — the byte-offset-watermark serving of [[GET-009]] (St.2-4 still open; [[GET-007]] only fixed the latest-copy watermark anchor).
+ -  **Trigger:** a botched landing session fetched two divergent ticket commits (`97a0ddc9`, `f257a986`) into this pool via clobbering `be get`s (see [[GET-014]]), bloating the single pack with duplicate-tail objects and misanchoring the watermark so the served pack now misses the tip. Pre-session this store served fine (DIS-035 landed and was cloned). So GET-015 ≈ a reproduction of GET-009's "already-bloated shard" case on a real store.
+
+##  Blockers
+No GC/compaction verb exists (`keeper` has get/put/post/delete/status/import/verify/refs/tips/ls-files/upload-pack/receive-pack — no repack/gc/reindex). Repairing this store needs the GET-009 redundant-pack GC, or a manual recompaction. Until then this store cannot serve a clone of trunk, which blocks every ticket clone's update step.
+
+##  Planned
+Repro-first ([CLAUDE] §17) on a freshly-built **independent** store: `be put`-init a new project, commit a few times, `be get be://localhost?/<proj>` into a fresh dir, assert the tip checks out. If it fails there too → genuine `be://` full-clone bug; bisect serving (UNPK index entry for the want commit) vs WIRE closure. Add a `test/get` E2E that fresh-clones a multi-commit `be://` store and asserts the tip commit resolves. If it passes on a clean store → this store's pool/index is damaged; rebuild its keeper index.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"

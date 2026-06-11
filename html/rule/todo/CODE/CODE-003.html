@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>CODE-003: dog: collapse table-scan &amp; twin helper dups</h1>
+<p>
+dog repeats several small structural blocks: dog_proj_lookup/DOGIsTransport/DOGIsGitTransport walk a string table with the same loop, the ron60→time_t conversion is pasted across HUNK.c, WHIFF's 40/60 hashlet helpers are byte-twins on one shift constant, and ULOGVerbColor/ULOGVerbTag scan one table identically. Factor each into a single parameterized helper.
+</p>
+<h2>Issues</h2>
+<p>
+Repeated string-table scans, a 4x ron60→time_t block, and width-twinned helpers.
+</p>
+<ul>
+<li>dog_proj_lookup/DOGIsTransport/DOGIsGitTransport (DOG.c:61,87,104) = same NUL-table walk + u8csEq.</li>
+<li>ron60→time_t now/mktime block pasted in HUNK.c:52,85,392.</li>
+<li>WHIFFHashlet40/60, HexFeed40/60, HexHashlet40/60 (WHIFF.h:111-135) differ only by a 24-vs-4 shift.</li>
+<li>ULOGVerbColor/ULOGVerbTag (ULOG.c:1219,1228) scan ULOG_VERB_TAGS identically, differing only in the return.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; dog-internal. Shares DOG.c/HUNK.c with CODE-002, so land in the same dog worktree, serially.
+</p>
+<h2>Planned</h2>
+<p>
+One helper per duplicated shape; parameterize the differing value.
+</p>
+<ul>
+<li>Repro first (§17): keep existing dog tests green; add a case per collapsed helper if uncovered.</li>
+<li>String-table walk → one DOGTableLookup(table,key).</li>
+<li>ron60→time_t → one HUNK helper; WHIFF 40/60 → one width-param helper.</li>
+<li>ULOG verb table → one lookup returning the row; color/tag derive from it.</li>
+</ul>
+</body>
+</html>

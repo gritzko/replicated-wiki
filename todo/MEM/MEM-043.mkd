@@ -1,0 +1,28 @@
+#   MEM-043: dog — DOGPup pups-overflow leaks an mmap+fd; FILENext non-END error skips FILEIterClose
+
+dog's puppy-stack helpers leak on bounded-buffer overflow and on a mid-scan iterator error. DOGPupOpenAll (DOG.c:519-529) FILEMapRO+books a puppy file (fd at :524) then pushes it into the bounded `pups`; on a pups-overflow early return the just-mapped file's fd+map is not recorded and leaks. DOGPupCreateAt (DOG.c:576-581) has the same shape (map at :577 leaks before it's recorded). Separately, when FILENext fails with a non-END error, `seen(END)` short-circuits the return and SKIPS the following FILEIterClose in both DOGPupOpenAll and home_be_subdirs (HOME.c) — the directory handle leaks. HUNK.c chained heap allocs also leak on OOM (low). From the [MEM] sweep.
+
+##  Issues
+
+Bounded-push overflow and non-END iterator errors skip the matching release.
+
+ -  DOG.c:519-529 DOGPupOpenAll: a pups-overflow early return leaks the file mapped+booked at :524 (fd not yet recorded in pups).
+ -  DOG.c:576-581 DOGPupCreateAt: same — the map at :577 leaks before it is recorded.
+ -  DOG.c:496-510 / HOME.c home_be_subdirs: a non-END FILENext error skips FILEIterClose (dir handle leak).
+ -  HUNK.c chained heap allocs leak on OOM (low severity).
+
+##  Blockers
+
+None; dog-internal.
+
+##  Planned
+
+Release the just-mapped file on overflow and always FILEIterClose on iterator error.
+
+ -  Repro first ([CLAUDE] §17): force a pups-overflow (many puppy files) and a non-END FILENext error; assert no fd/map/dir-handle leak.
+ -  On the overflow branch, FILEUnMap/close the file mapped at :524/:577 before returning.
+ -  Move FILEIterClose to an unconditional path (or close on the non-END error before returning).
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"
+[MEM]: MEM.mkd "memory-safety audit digest"

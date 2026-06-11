@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-044</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-044: spot — LSM open/merge leaks on error; SPOTOpenBranch hand-free + a logical double-unmap</h1>
+<p>
+spot's LSM plumbing acquires several mmaps/fds/heap tables then uses bare call()s that early-return without freeing them. SPOTOpenBranch (CAPO.c:1426) frees s-&gt;puppies + s-&gt;leaf_branch by hand on exactly two early error branches but leaks them on the others after acquiring s-&gt;puppies (kv64bAllocate :1407) and s-&gt;leaf_branch. CAPOMergeWorkers (CAPO.c:446) acquires <code>wp</code> (a kv64 puppy table holding every worker subdir's mmapped run) plus mbuf and leaks them on post-acquisition call() errors. Plus a benign-but-wrong logical double-unmap: capo_spot_replace (CAPO.c:692) does <code>mapped=NULL</code> on its LOCAL copy, so the caller capo_spot_file_cb (CAPO.c:855) FILEUnMaps the same booked descriptor again. From the <a href="MEM.html">MEM</a> sweep.
+</p>
+<h2>Issues</h2>
+<p>
+LSM open/merge resources aren't uniformly released on error; one descriptor is unmapped twice.
+</p>
+<ul>
+<li>CAPO.c:1426 SPOTOpenBranch: s-&gt;puppies (kv64bAllocate :1407) + s-&gt;leaf_branch leak on the error branches that don't hand-free them.</li>
+<li>CAPO.c:446 CAPOMergeWorkers: wp (kv64 of per-worker mmaps) + mbuf leak on post-acquisition call() failures.</li>
+<li>CAPO.c:692/855 double-unmap: capo_spot_replace clears only its local <code>mapped</code>, so the caller FILEUnMaps the same descriptor twice (benign via book, but wrong).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; spot-internal.
+</p>
+<h2>Planned</h2>
+<p>
+Uniform release of the LSM resources on every error; fix the local-NULL so the descriptor is unmapped once.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): force an SPOTOpenBranch / CAPOMergeWorkers post-acquisition error; assert no map/fd/heap leak.</li>
+<li>Route SPOTOpenBranch + CAPOMergeWorkers error exits through one cleanup that frees puppies/leaf_branch/wp/mbuf.</li>
+<li>Make capo_spot_replace's unmap authoritative (clear the caller's pointer or don't unmap in the caller).</li>
+</ul>
+</body>
+</html>

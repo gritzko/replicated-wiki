@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>GET-016: <code>be get</code> is non-atomic for the wt (ref advances before the write) and <code>get --force</code>/<code>get!</code> won't full-reset a drifted worktree</h1>
+<p>
+<code>be get</code>'s COMMIT POINT (<code>sniff/GET.c:1338-1353</code>) appends the <code>get</code> ULOG row and advances the local branch tip BEFORE the worktree mutation, whose own comment admits it &quot;is not crash-safe — a partial run leaves a mix of new contents and old paths&quot;; so a midway fail (or any path that advances the ref without completing the write) leaves the ref/wtlog ahead of the tree, and because checkout is a baseline↔target <strong>delta</strong> (<code>get_overlap_check</code>, <code>GET.c:319-335</code>) the now-equal baseline==target paths fall into the no-op-overlay bucket (<code>GET.c:264-297</code>) and are skipped, so the stale bytes are never rewritten and the wt is permanently drifted with no automatic recovery — <code>--force</code> only steers the <strong>dirty</strong> classification (<code>GET.c:458-475</code>), never the no-op skip (<code>GET.c:272</code>), so even <code>get!</code> can't reset it. See <a href="../../wiki/GET.html">GET</a>, <a href="../../rule/Issues.html">Issues</a>, <a href="">[GET-012</a>], <a href="">[GET-014</a>].
+</p>
+<h2>Repro (observed this session, MEM-044 worktree)</h2>
+<ul>
+<li>Store-backed wt based at old tip <code>5104a855</code>; trunk advanced (MEM-038/040/043/045 then MEM-044 <code>91f215a4</code>); <code>be get --nosub</code> moved the ref to the tip but left the files — <code>be log</code> shows <code>91f215a4</code>, <code>be status</code> shows 13 phantom <code>mod</code> (changed-since-old-tip) + 3 <code>mis</code> (added files), the diff reading &quot;backwards&quot; (stale disk vs newer baseline).</li>
+<li><code>be get ?</code> (re-checkout) rewrote ONLY the genuinely-absent files (lstat-fail fall-through <code>GET.c:270-295</code>) + remounted abc; the 13 present-on-disk stale files stayed <code>mod</code>. <code>be get --force</code> leaves them too (no-op bucket ignores force).</li>
+<li>Footgun: <code>be put &lt;those 13&gt; ; be post</code> would commit the stale bytes and silently REVERT the four landed tickets — the &quot;backwards&quot; changeset.</li>
+</ul>
+<h2>Issues / root cause</h2>
+<ul>
+<li>Non-atomic by construction: ref+wtlog advance precedes the non-crash-safe wt block (WALKTreeLazy + merge/unlink drains + sub loop); a partial run is unrecoverable except by <code>be get --force ?&lt;cur&gt;</code>, which (below) doesn't actually work.</li>
+<li>Delta not materialization: once ref ≥ on-disk content, the baseline↔target delta is empty → <code>get_visit</code> writes nothing; the no-op skip exists to protect user edits but here it preserves stale bytes.</li>
+<li><code>--force</code> gap: <code>force</code> flips the dirty-overlay refusal into &quot;overwrite dirty bytes&quot;, but a stale-yet-baseline==target path is classified no-op, not dirty, so force never reaches it; no reliable reconcile short of a fresh re-clone.</li>
+</ul>
+<h2>Planned</h2>
+<ul>
+<li>*<strong>(1) Atomic wt GET.</strong>* Stage every wt mutation (writes/unlinks/merges/sub-mounts) and the ref/wtlog advance so a midway failure leaves NEITHER the tree NOR the wtlog changed (all-or-nothing): either advance the ref only after the write fully succeeds, or journal-and-rollback the partial write. Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): inject a mid-WALK failure, assert ref + wtlog + tree all unchanged.</li>
+<li>*<strong>(2) <code>get --force</code>/<code>get!</code> = full tree reset.</strong>* <code>--force</code> must re-examine EVERY path and force the wt to exactly match the target tree — override the no-op-overlay skip, rewrite/restat each file, unlink wt-only tracked paths — so a drifted wt converges regardless of an empty baseline↔target delta. Repro-first: drift a wt (ref ahead of disk), <code>be get!</code>, assert every file == target and status is clean.</li>
+<li>*<strong>(related, likely its own ticket → GET-017)</strong>* Sibling symptom: MEM-042's wt <code>be get --nosub</code> would NOT advance the ref at all (stuck at <code>5104a855</code>, never pulling <code>d857a9cc</code>/<code>91f215a4</code>), unlike MEM-044; its <code>.be</code> is a 105-byte switch file vs MEM-044's 223-byte — a possible <code>.be</code>-switch-shape fast-forward gap (<a href="">[GET-012</a>] area). Needs its own repro; split out if confirmed distinct.</li>
+</ul>
+<h2>Impact</h2>
+<p>
+The Issues.mkd loop's &quot;<code>be get --nosub</code> to update first&quot; step is unreliable today — it silently leaves stale trees and invites the revert footgun; fixing (1)+(2) restores a trustworthy update-then-post cycle.
+</p>
+</body>
+</html>

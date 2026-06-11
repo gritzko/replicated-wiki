@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>ULOG tickets: append-log &amp; store durability</h1>
+<p>
+Discrepancies in <code>dog/ULOG.*</code> — the append-only <code>&lt;ts&gt;\t&lt;verb&gt;\t&lt;uri&gt;</code> event log (worktree <code>.be</code> / store <code>wtlog</code>) and the <code>refs</code>/<code>.refs.idx</code> tip files built on it. Durability and crash-safety of these logs. Each entry is one ticket with its live state; it drops off once the ticket closes. The method is <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="ULOG-001.html">ULOG-001</a> — *<strong>LANDED <code>9cfa9639</code>.</strong>* Root cause: <code>be</code> <strong>amplified</strong> a torn ULOG into total loss — a NUL at byte 0 made <code>ulog_scan_log</code> read the log as empty, then <code>ULOGClose</code>→<code>FILETrimBook</code>→<code>ftruncate(0)</code> (<code>abc/FILE.c:945</code>) destroyed the surviving bytes (wtlog+refs are both ULOGs; <code>.keeper</code> packs are off this path, hence objects survived the 2026-06-09 incident). Fix: <code>ulog_scan_log</code> refuses a mid-content NUL with non-NUL bytes ahead (new <code>ULOGTORN</code>) and <code>ULOGOpenBooked</code> restores the original on-disk size on refusal — the torn log is left byte-for-byte for out-of-band repair, never zeroed. Regression <code>dog/test/ULOG.c</code> (torn-first-byte/torn-mid; fail pre-fix, pass post-fix). NB the <strong>initial-NUL trigger</strong> (ENOSPC / kill-mid-write / clone) was not pinned — H3 concurrent-race did NOT repro, H2 9p ruled out (all ext4). Follow-up candidates: clone of an empty/elided-refs store writes a 0-byte <code>refs</code> + <code>be get</code> HOME-escape; latent <code>O_TRUNC</code> seed at <code>sniff/SUBS.c:410/420</code>.</li>
+</ul>
+</body>
+</html>

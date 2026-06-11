@@ -1,0 +1,28 @@
+#   MEM-037: abc/FILE.c — FILEMapFD/FILEBookFD leak the opened fd on internal error (root cause)
+
+The lowest-level mapping primitives leak the file descriptor their wrappers hand them whenever the map/book itself fails. FILEMapRO/FILEMapRW/FILEMapCreate(At) and FILEBook/FILEBookRO/FILEBookAt/FILEBookCreate all `call(FILEOpen)` to get an fd, then pass it to FILEMapFD (FILE.c:671) / FILEBookFD (FILE.c:781), whose internal error branches `return` WITHOUT `close()`-ing that fd. Every per-dir 'leaks the fd on map failure' finding in the 2026-06-11 sweep traces back here, so this is the highest-leverage fix. abc is core — surface the diff for review. From the [MEM] error-path sweep.
+
+##  Issues
+
+The map/book primitive owns the fd on its error branches but never closes it.
+
+ -  FILE.c:671 FILEMapFD: wrappers open the fd then hand it in; mmap-failure / size-stat-failure branches return, fd leaked.
+ -  FILE.c:781 FILEBookFD: same shape — FILEBook* open the fd, FILEBookFD's error branches return without closing it.
+ -  Reached by ANY caller whose mapped/booked file fails (absent/short/over-FILE_MAX_OPEN); fd table exhausts under repeated failure.
+ -  Also abc/LEX.c (codegen-only) leaks an fd on an error branch — same close-on-error gap, low priority.
+
+##  Blockers
+
+abc is core — never land an abc edit autonomously; surface the diff. Decide whether FILEMapFD/FILEBookFD take ownership of the fd (close on every error) or the wrappers wrap the open in the same error scope.
+
+##  Planned
+
+Make the map/book primitives close the fd on every internal error branch.
+
+ -  Repro first ([CLAUDE] §17): a hermetic case that maps a file which passes open but fails the map (e.g. zero-length / unmappable), assert no fd leak across N iterations (fd count stable).
+ -  Give FILEMapFD/FILEBookFD ownership of the fd: every error `return` closes it; success keeps it in the book/map descriptor.
+ -  Audit the wrappers so the fd is closed exactly once on each path.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"
+[MEM]: MEM.mkd "memory-safety audit digest"

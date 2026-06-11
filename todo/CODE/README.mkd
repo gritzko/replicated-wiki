@@ -1,0 +1,25 @@
+#   CODE tickets: code-redundancy cleanup
+
+A 2026-06-11 per-directory redundancy review (12 reviewers, each reading ABC.md first) found 63 redundancies — code reimplementing abc primitives, intra-dir copy-paste, and dead duplicates. They group into 15 dir-themed tickets below, each a behavior-preserving refactor cleared via the [Issues] fix-and-land loop in a store-backed worktree. Run one worktree per dir, ~6 at once; abc and load-bearing spawn paths gate the diff before landing.
+
+ -  the first 15 tickets resulted in bullshit quality "improvements", but some got merged; todo: improve the process
+
+##  Active tickets
+
+ -  none — CODE-017 **LANDED `5104a855`** (the solid research-sweep findings; abc/js-FFI/marginal ones skipped or deferred); CODE-016 **LANDED `0a43dec5`**; CODE-001..015 abandoned (bullshit quality, see above).
+
+
+[CODE-017]: CODE-017.mkd "API-underuse + small-reimplementation cleanup (research sweep)"
+[CODE-001]: CODE-001.mkd "abc/URI.c reuses PATH/HEX, drops ptr-arith"
+[CODE-006]: CODE-006.mkd "sniff: extract ?branch REFS-key + helpers"
+[CODE-007]: CODE-007.mkd "graf/LOG.c: reuse BLOB/GIT descent & parsers"
+[CODE-008]: CODE-008.mkd "beagle: one sub-spawn helper; fold relay dup"
+[CODE-009]: CODE-009.mkd "beagle: abc buffer ctor + one uri-resolver"
+[CODE-010]: CODE-010.mkd "spot: unify grep/pcre cbs + trigram scan"
+[CODE-011]: CODE-011.mkd "bro/BRO.c: fork-drain, read-grow, goto helpers"
+[CODE-012]: CODE-012.mkd "woof/CONN.c: abc unescape/escape, slice slots"
+[CODE-013]: CODE-013.mkd "js: one UTF8↔JSString helper; abc slices"
+[CODE-015]: CODE-015.mkd "test: source lib helpers in case run.sh"
+[CODE-016]: CODE-016.mkd "centralize sha1↔hex through dog/git/SHA1.h"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-023</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIS-023: <code>be</code> status is non-idempotent — a re-run hides real modifications</h1>
+<p>
+Two consecutive <code>be</code> status runs with NO intervening edit or commit report different results: <code>?  1057 ok, 4 mod</code> then <code>?  1061 ok</code>. The dirty gate is mtime-only and re-stamps on read, so the first status records the current mtimes and the second sees them as matching → the 4 genuinely-modified tracked files are silently reported clean. The goal: status is idempotent and a modified file stays <code>mod</code> until it is actually committed; equality is confirmed by content hash, not just mtime. Shares its root with <a href="../todo/DIS-004.html">DIS-004</a> (mtime-only gate, no hash double-check). See <a href="../wiki/Sniff.html">Sniff</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The status/dirty check trusts mtime and rewrites the stamp during a read-only status.
+</p>
+<ul>
+<li><code>?  1057 ok, 4 mod</code> → <code>?  1061 ok</code> across two back-to-back <code>be</code> runs, no commit between — the 4 <code>mod</code> files flip to <code>ok</code>.</li>
+<li>A read-only <code>status</code> must not mutate the stamp-set; today it does, so the second run loses the modification.</li>
+<li>Same mtime-only gate as <a href="../todo/DIS-004.html">DIS-004</a>: drift is resolved by re-stamping instead of a content-hash double-check.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; needs the baseline-tree path→sha lookup for the content double-check (the same one <a href="../todo/DIS-004.html">DIS-004</a> needs).
+</p>
+<h2>Planned</h2>
+<p>
+Make status read-only and confirm modification by content hash, repro-first.
+</p>
+<ul>
+<li>Repro (rule 17): modify a tracked file, run <code>be</code> (status) TWICE; the file must stay <code>mod</code> on both runs (no flip to <code>ok</code>), no commit.</li>
+<li>Find the status dirty path (sniff status / <code>SNIFFAtKnown(mtime)</code> + stamp write); on mtime drift, hash the on-disk bytes vs the baseline blob sha — equal → clean, differ → <code>mod</code>; do NOT rewrite the stamp during a read-only status.</li>
+<li>Reuse the <a href="../todo/DIS-004.html">DIS-004</a> baseline-tree path→sha helper if present; otherwise factor it shared (CLAUDE.md §13).</li>
+</ul>
+</body>
+</html>

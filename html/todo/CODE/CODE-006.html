@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>CODE-006: sniff: extract ?branch REFS-key + helpers</h1>
+<p>
+sniff's biggest redundancy is the <code>?&lt;branch&gt;</code> REFS-key builder pasted ~14 times in POST.c; plus SNIFFSubBasename hand-rolls path-basename, two dirty-scan callbacks duplicate, del_collect_descendants does ptr-arith name scanning, and three blocks re-resolve the wt's current branch. Factor a REFS-key helper and a current-branch resolver; route basename through abc/PATH.
+</p>
+<h2>Issues</h2>
+<p>
+A 14x REFS-key builder, twin dirty callbacks, and triplicated branch resolution.
+</p>
+<ul>
+<li><code>?&lt;branch&gt;</code> key build (a_pad/u8bFeed1('?')/u8bFeed/a_dup) pasted ~14x: POST.c:1315,1584,1950,2157,2544,3036 +.</li>
+<li>SNIFFSubBasename (SUBS.c:47) hand-rolls last-'/' + a byte-indexed '.git' suffix; abc/PATH has basename.</li>
+<li>get_wt_dirty_cb/patch_dirty_report (GET.c:756, PATCH.c:1039) are near-identical dirty callbacks.</li>
+<li>resolve-current-branch pasted in PATCH.c:941, POST.c:1724, SNIFF.c:281.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None; sniff-internal. sniff is a separate binary — rebuild the sniff target, not just be.
+</p>
+<h2>Planned</h2>
+<p>
+One REFS-key builder + one current-branch resolver; basename via abc/PATH.
+</p>
+<ul>
+<li>Repro first (§17): keep sniff get/post/patch tests green; add a key-build unit case.</li>
+<li>SNIFFRefKey(buf,branch) used everywhere; SNIFFCurBranch() one resolver.</li>
+<li>Basename → abc/PATH; one dirty callback shared by get/patch.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,25 @@
+#   GET-016: `be get` is non-atomic for the wt (ref advances before the write) and `get --force`/`get!` won't full-reset a drifted worktree
+
+`be get`'s COMMIT POINT (`sniff/GET.c:1338-1353`) appends the `get` ULOG row and advances the local branch tip BEFORE the worktree mutation, whose own comment admits it "is not crash-safe — a partial run leaves a mix of new contents and old paths"; so a midway fail (or any path that advances the ref without completing the write) leaves the ref/wtlog ahead of the tree, and because checkout is a baseline↔target *delta* (`get_overlap_check`, `GET.c:319-335`) the now-equal baseline==target paths fall into the no-op-overlay bucket (`GET.c:264-297`) and are skipped, so the stale bytes are never rewritten and the wt is permanently drifted with no automatic recovery — `--force` only steers the *dirty* classification (`GET.c:458-475`), never the no-op skip (`GET.c:272`), so even `get!` can't reset it. See [GET], [Issues], [[GET-012]], [[GET-014]].
+
+##  Repro (observed this session, MEM-044 worktree)
+ -  Store-backed wt based at old tip `5104a855`; trunk advanced (MEM-038/040/043/045 then MEM-044 `91f215a4`); `be get --nosub` moved the ref to the tip but left the files — `be log` shows `91f215a4`, `be status` shows 13 phantom `mod` (changed-since-old-tip) + 3 `mis` (added files), the diff reading "backwards" (stale disk vs newer baseline).
+ -  `be get ?` (re-checkout) rewrote ONLY the genuinely-absent files (lstat-fail fall-through `GET.c:270-295`) + remounted abc; the 13 present-on-disk stale files stayed `mod`. `be get --force` leaves them too (no-op bucket ignores force).
+ -  Footgun: `be put <those 13> ; be post` would commit the stale bytes and silently REVERT the four landed tickets — the "backwards" changeset.
+
+##  Issues / root cause
+ -  Non-atomic by construction: ref+wtlog advance precedes the non-crash-safe wt block (WALKTreeLazy + merge/unlink drains + sub loop); a partial run is unrecoverable except by `be get --force ?<cur>`, which (below) doesn't actually work.
+ -  Delta not materialization: once ref ≥ on-disk content, the baseline↔target delta is empty → `get_visit` writes nothing; the no-op skip exists to protect user edits but here it preserves stale bytes.
+ -  `--force` gap: `force` flips the dirty-overlay refusal into "overwrite dirty bytes", but a stale-yet-baseline==target path is classified no-op, not dirty, so force never reaches it; no reliable reconcile short of a fresh re-clone.
+
+##  Planned
+ -  **(1) Atomic wt GET.** Stage every wt mutation (writes/unlinks/merges/sub-mounts) and the ref/wtlog advance so a midway failure leaves NEITHER the tree NOR the wtlog changed (all-or-nothing): either advance the ref only after the write fully succeeds, or journal-and-rollback the partial write. Repro-first ([CLAUDE] §17): inject a mid-WALK failure, assert ref + wtlog + tree all unchanged.
+ -  **(2) `get --force`/`get!` = full tree reset.** `--force` must re-examine EVERY path and force the wt to exactly match the target tree — override the no-op-overlay skip, rewrite/restat each file, unlink wt-only tracked paths — so a drifted wt converges regardless of an empty baseline↔target delta. Repro-first: drift a wt (ref ahead of disk), `be get!`, assert every file == target and status is clean.
+ -  **(related, likely its own ticket → GET-017)** Sibling symptom: MEM-042's wt `be get --nosub` would NOT advance the ref at all (stuck at `5104a855`, never pulling `d857a9cc`/`91f215a4`), unlike MEM-044; its `.be` is a 105-byte switch file vs MEM-044's 223-byte — a possible `.be`-switch-shape fast-forward gap ([[GET-012]] area). Needs its own repro; split out if confirmed distinct.
+
+##  Impact
+The Issues.mkd loop's "`be get --nosub` to update first" step is unreliable today — it silently leaves stale trees and invites the revert footgun; fixing (1)+(2) restores a trustworthy update-then-post cycle.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"

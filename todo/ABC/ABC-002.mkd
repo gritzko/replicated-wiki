@@ -1,0 +1,27 @@
+#   ABC-002: unify C errno→ok64 handling (one mapping, not `FILEerrno` vs `FILE_ERR_VOCAB`)
+
+abc has **two parallel errno→ok64 mechanisms that disagree**. `FILEerrno` (`abc/FILE.h`, a `switch`) maps each errno to the canonical `FILE*` symbol — e.g. `ENOENT`→`FILENONE`. `FILEErr` / `FILE_ERR_VOCAB` (`abc/FILE.c`, a hand-built `{errno, raw-hex}` table) returns its own **prefix-less ron60 literals that do NOT match the `FILE*` symbols** and omits several errnos. So `FILEErr(ENOENT)` = `0x39760e5dd` ≠ `FILEerrno(ENOENT)` = `FILENONE` (`0x3d254e5d85ce`); `FILEErr(EBADF)` = `0xe2ca34f` ≠ `FILEBADF` (`0x3d254e2ca34f`); and `FILE_ERR_VOCAB` omits `EEXIST` entirely. `FILEErr` is used by the open-failure paths (`FILEOpen`/`FILECreate` do `fail(FILEErr(FILENOOPEN))`), so a caller comparing the result against a `FILE*` symbol can silently never match. Collapse to ONE errno→ok64 mapping. abc/core change — maintainer-reviewed. See [Issues], [CLAUDE], [[ABC-001]], [[SUBS-016]].
+
+##  Issues
+Two mappings, disagreeing, one incomplete.
+
+ -  `FILEerrno` (switch) and `FILEErr`/`FILE_ERR_VOCAB` (table) return **different ok64 values for the same errno** — the table's literals are a separate, prefix-less encoding that never matched the `FILE*` constants.
+ -  `FILE_ERR_VOCAB` omits errnos `FILEerrno` maps (e.g. `EEXIST`→`FILEEXIST`), so `FILEErr` silently collapses them to the caller's `def`.
+ -  Consequence: error codes propagated from open/create failures (via `FILEErr`) are not the canonical `FILE*` codes, so equality checks against `FILENONE`/`FILEBADF`/… can quietly fail.
+ -  [[SUBS-016]] added a **stopgap** (`FILE_ERR_VOCAB[ENOENT]` → `FILENONE`'s value) so `FILENONE` works through both paths; this ticket removes the need for that patch.
+
+##  Blockers
+None functionally; abc/core so maintainer-reviewed. Must audit every errno→ok64 conversion site, not just `FILE.c`.
+
+##  Planned
+One source of truth.
+
+ -  Make `FILEErr(def)` **delegate to `FILEerrno(errno)`** (the canonical switch over the `FILE*` symbols), returning the caller's `def` only when `FILEerrno` yields the unmapped sentinel; **delete `FILE_ERR_VOCAB`**.
+ -  Grep abc for other ad-hoc `errno`→ok64 conversions (raw `FILEerrno(errno)`, hand-coded tables) and route them through the single `FILEerrno`.
+ -  Repro-first ([CLAUDE] §17): a table test asserting `FILEErr(e) == FILEerrno(e)` for every errno `FILEerrno` maps (incl. `EEXIST`), and that an unmapped errno returns `def`.
+ -  Remove the [[SUBS-016]] `{ENOENT, …}` stopgap once unified.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[ABC-001]: ABC-001.mkd "abc inet tests SEGV (sibling abc ticket)"
+[SUBS-016]: ../SUBS/SUBS-016.mkd "the FILENONE stopgap lives here"

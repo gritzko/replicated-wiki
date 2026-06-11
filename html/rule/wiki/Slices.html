@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Slices</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>Slices: spans you consume head-first</h1>
+<p>
+A slice is the ABC way to pass a span of memory: a pair of pointers <code>[head, term)</code>, consumed by moving <code>head</code> toward <code>term</code>. It replaces the pointer-plus-length pair, so a function that reads or writes part of a span advances the head and the remaining work is simply the rest of the slice — there is no separate count to keep in sync. Four const shades encode intent, typed helpers move the borders, and <code>a_</code>-macros carve slices over arrays, literals, and buffers without any pointer arithmetic.
+</p>
+<h2>The four shades</h2>
+<p>
+A slice's type says what you may do to it: change the bytes, or move the pointers. Picking the right shade documents whether a function consumes its input or only reads it.
+</p>
+<ul>
+<li><code>u8s</code> is writable (output / idle space); <code>u8cs</code> is const-value, the usual input you consume.</li>
+<li><code>u8sc</code> has fixed pointers but editable bytes; <code>u8csc</code> is fully immutable.</li>
+<li><code>u8s</code> as a parameter means consumed (head advances); <code>u8sp</code> means assigned (the function writes the head/term cells).</li>
+</ul>
+<h2>Typed helpers</h2>
+<p>
+Prefer the typed function over the generic macro: the typed names move borders explicitly and read clearly. Reach for a generic only when no typed form exists.
+</p>
+<ul>
+<li>Length / empty / validate: <code>u8csLen</code>, <code>u8csEmpty</code>, <code>u8csOK</code> over <code>$len</code> / <code>$empty</code> / <code>$ok</code>.</li>
+<li><code>u8csAt(s, i)</code> returns the byte value; <code>u8csHead(s)</code> returns the head pointer — they are not the same.</li>
+<li>Move borders with <code>u8csUsed</code> / <code>u8csUsed1</code> (head) and <code>u8sShed1</code> (term); never write <code>s[0] += n</code> by hand.</li>
+<li>Find with <code>u8csFind</code> (one byte) or <code>u8csFindS</code> (a sub-slice); copy pointers with <code>u8sMv</code>, bytes with <code>u8sFeed</code>.</li>
+</ul>
+<h2>Creation and iteration</h2>
+<p>
+Slices are carved over existing memory with <code>a_</code>-macros, never by computing pointers. Walk them with the <code>$for</code> family, which iterates without exposing raw pointer math.
+</p>
+<ul>
+<li><code>a_dup</code> (a consumable copy), <code>a_head</code> / <code>a_tail</code> / <code>a_rest</code> (sub-slices), <code>a_cstr</code> (a literal), <code>a_pad</code> (a stack span).</li>
+<li><code>$for</code> / <code>$rof</code> walk forward / back; <code>$eat</code> consumes while iterating.</li>
+</ul>
+<h2>Gauges</h2>
+<p>
+A gauge is two adjacent slices sharing a boundary — a left part and a rest — used to build a span up in place. Unlike a buffer it owns no memory.
+</p>
+<ul>
+<li><code>u8gOf(g, slice)</code> starts with an empty left and the full rest; <code>u8gFeed1</code> moves one element into the left.</li>
+<li>Pair <code>a_lign</code> with <code>a_cquire</code> (see <a href="BASS.html">BASS</a>) to grow a slice of unknown length in arena scratch.</li>
+</ul>
+</body>
+</html>

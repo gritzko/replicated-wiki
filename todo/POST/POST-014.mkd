@@ -1,0 +1,23 @@
+#   POST-014: `be post be://localhost?/<proj>` lands the push but strands the peer wt (wt-advance 157) and exits SNIFFFAIL
+
+A `be post --nosub be://localhost?/<proj>` to a local beagle peer DOES advance the peer trunk (`keeper: pushed (trunk) → <sha>`), yet the command also prints `SNIFFFAIL`/`BEDOGEXIT` (non-zero exit), and the peer-side auto wt-advance fails: `keeper: recv: wt-advance via 'be get ?' returned 157 (wt at /home/gritzko left at old tip; resolve and run 'be get ?' manually)`. So the data lands but the peer's working copy is stranded and the exit code says failure — a half-finished land that looks like a total failure. Note the peer wt-root is reported as `/home/gritzko` (HOME), not the real worktree `/home/gritzko/beagle` — the recv picks the wrong wt to advance. See [POST], [GET], [CLAUDE], [[be-dot-be-shield-walk]].
+
+##  Issues
+The push half-succeeds and reports failure.
+
+ -  Push advances the peer trunk (`pushed (trunk) → <sha>`) but the command exits non-zero (`SNIFFFAIL`/`BEDOGEXIT`) — success indistinguishable from failure.
+ -  The peer-side `be get ?` wt-advance returns 157 and leaves the colocated wt at the old tip; the user must manually `be get ?`.
+ -  The recv resolves the peer wt-root as `/home/gritzko` (HOME), not the actual worktree `/home/gritzko/beagle` — wrong wt advanced (the `.be` shield-walk HOME-escape, see [[be-dot-be-shield-walk]]).
+
+##  Blockers
+Ties to the wt-root resolution (HOME-escape) on the recv side.
+
+##  Planned
+Land cleanly: advance the right wt, report honestly.
+
+ -  Repro-first ([CLAUDE] §17): push to a local beagle peer; assert exit 0 and the peer's real wt advances to the new tip.
+ -  Recv resolves the correct colocated wt root (not HOME); on a genuine advance failure report it WITHOUT masking the successful push as a hard error — distinguish "pushed, wt-advance deferred" from "push failed" in the exit code.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[GET]: ../../wiki/GET.mkd "GET verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

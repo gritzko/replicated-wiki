@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-019</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-019: graf call() early-return skips mmap/handle cleanup (graf/MERGE.c, MAP.c, LOG.c, REBASE.c)</h1>
+<p>
+Several graf entry points acquire resources mid-function then reach a <code>call()</code>/bare-<code>return __</code> that short-circuits past their own cleanup label, leaking already-mapped files, fds, weave mmaps, or an owned graf-open on the error path — violating the acquire-at-top / release-by-owner discipline (CLAUDE.md §5). The goal is to route every failure through the single cleanup path.
+</p>
+<h2>Issues</h2>
+<p>
+Cleanup label bypassed by early returns.
+</p>
+<ul>
+<li><code>graf/MERGE.c:33-64</code> <code>GRAFMerge</code> — base maps, then ours/theirs <code>call(graf_merge_read,…)</code> fails → returns before the <code>FILEUnMap</code> cleanup; mapped file(s)+fds leak.</li>
+<li><code>graf/REBASE.c:1008-1025</code> <code>GRAFRebaseBlobMerge</code> — <code>call(WEAVEInit,&amp;w1/&amp;nu)</code> failure returns before <code>WEAVEFree(&amp;w0/&amp;w1)</code>; already-mapped weave tlv leaks.</li>
+<li><code>graf/MAP.c:244-252</code> <code>GRAFMap</code> — mid-function <code>wh128bAcquire</code> <code>NOROOM</code> → <code>return __</code> skips <code>if (own_graf) GRAFClose()</code> (:428).</li>
+<li><code>graf/LOG.c:966-1006</code> <code>graf_head_ahead_behind</code> — non-NOPATH <code>GRAFSwitchBranch</code> failure returns, skipping <code>if (own_open) GRAFClose()</code> (:1083).</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Reached on missing inputs / mmap / BASS pressure.
+</p>
+<h2>Planned</h2>
+<p>
+Single cleanup path per function.
+</p>
+<ul>
+<li>Repro first: <code>graf merge</code> with a missing <code>ours</code>/<code>theirs</code>; fault-inject <code>WEAVEInit</code>/<code>wh128bAcquire</code>/branch-switch failures; assert no map/fd/handle leak.</li>
+<li>Replace <code>call()</code>/bare returns with <code>try()</code> + <code>goto cleanup</code> (NULL-init the map/own_graf vars), so <code>FILEUnMap</code>/<code>WEAVEFree</code>/<code>GRAFClose</code> always run.</li>
+</ul>
+</body>
+</html>

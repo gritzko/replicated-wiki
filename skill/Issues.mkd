@@ -29,6 +29,7 @@ On approval the agent updates onto current trunk, re-tests, commits, and fast-fo
  -  `be get --nosub` to update first, re-run the suite, then `be post`; the push is ff-only and NEVER forced.
  -  Post one ticket at a time: two concurrent posts race the same base and the loser is non-FF — re-land it, don't force.
  -  Git-scheme (`ssh:`) remotes pass `--nosub` (submodules are manual there); messages may be multi-line once the parser allows.
+ -  Once a ticket is merged back into the main repo, the ticket's worktree can be removed to free disk space.
 
 ##  Reconcile against landed work
 Because tickets land while others are in flight, each post rebases onto the current tip and merges any file two tickets both touched.

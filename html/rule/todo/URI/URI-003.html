@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>URI-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>URI-003: URI serialization safety — <code>URIutf8FeedSafe</code> (no cross-component injection)</h1>
+<p>
+A <code>uri</code> is built from component slices (<code>scheme</code>/<code>authority</code>/<code>host</code>/<code>port</code>/<code>user</code>/<code>path</code>/<code>query</code>/<code>fragment</code>) and serialized back to text by <code>URIutf8Feed</code> / <code>URIMake</code> / <code>a_uri</code>. If a component carries a reserved delimiter that is not escaped, it bleeds across a boundary and the emitted text *<strong>re-parses into a different structure</strong>* — a structural injection: a branch/path/host name containing <code>#</code>, <code>?</code>, <code>/</code>, <code>@</code>, <code>:</code> can silently become a fragment, query, extra path segment, userinfo, or port. We want a guarantee that the generated URI fits the grammar and means exactly what the caller asked for. Provide <code>URIutf8FeedSafe(into, u)</code>: serialize via <code>URIutf8Feed</code>, parse the result back, and assert every parsed field is byte-identical to the input component — emit only if the round-trip is the identity, else *<strong>err out</strong>* (<code>URIUNSAFE</code>, emit nothing). The pre-existing leading-<code>/</code> round-trip defect (the original URI-003) is the first thing this catches: serialize→parse is not yet the identity even for <strong>valid</strong> input, so the serializer must be fixed before <code>FeedSafe</code> can pass. Found via <code>abc/fuzz/URI.c</code>. See <a href="../../wiki/URI.html">URI-spec</a>, <a href="">[POST-002</a>], <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+Component→text serialization has no guard that the text re-parses to the same components.
+</p>
+<ul>
+<li>Injection surface: <code>URIutf8Feed</code>/<code>URIMake</code>/<code>a_uri</code> concatenate component slices through <code>:</code>/<code>//</code>/<code>/</code>/<code>?</code>/<code>#</code> delimiters; an unescaped reserved char in a component re-parses into a DIFFERENT field (path <code>a#b</code> → fragment <code>b</code>; authority <code>h/p</code> → path; path <code>a?b</code> → query). Several component values come from untrusted input (branch / project / path / host names) — an injection can redirect a ref or host.</li>
+<li>No current API verifies that <code>feed(u)</code> then <code>parse</code> yields <code>u</code>'s fields; callers trust the serializer blindly.</li>
+<li>Concrete round-trip failure (the original URI-003, now the first <code>FeedSafe</code> reject): the <code>abc/fuzz/URI.c</code> &quot;parse → relative → absolute should preserve URI&quot; round-trip turns a path-noscheme ref <code>ht/h/p#abc</code> into <code>resolved.path = /ht/h/p</code> (spurious leading <code>/</code>, RFC 3986 §5.3) — serialize/relativize is not the identity even for valid input. Enters in <code>URIRelativePath</code> (<code>abc/URI.c:142</code>) / <code>URIRelative</code> (<code>:196</code>) / <code>URIAbsolute</code> (<code>:374</code>); grammar/lexer untouched. Pre-existing, independent of <a href="">[POST-002</a>] (which only widened fuzz reach).</li>
+<li>Feasibility (is it doable?): YES. The check is one extra parse + a per-field <code>u8csEq</code> over the 8 components; parse decodes percent-escapes and feed must encode them, so the comparison is decoded-vs-decoded (semantic field content), which is exactly the safety property. The forcing function: <code>URIutf8Feed</code> must percent-escape each component's reserved set per RFC 3986 — then the round-trip is the identity and <code>FeedSafe</code> passes; where a component is genuinely unrepresentable, <code>FeedSafe</code> errs out rather than emit an ambiguous URI.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+abc is core — surface the diff for review; never land an abc edit autonomously. The leading-<code>/</code> defect must be fixed first, else <code>FeedSafe</code> rejects valid inputs. Design call: does <code>URIutf8Feed</code> itself escape per-component (so a safe URL is always producible), with <code>FeedSafe</code> as the verifier/fuzz-invariant — or is <code>FeedSafe</code> detect-and-err-out only? Prefer the former (correct escaping) with <code>FeedSafe</code> as the guarantee at trust boundaries; either way an unrepresentable component errs out, never emits.
+</p>
+<h2>Planned</h2>
+<p>
+Make the serializer injection-safe, verified by a round-trip <code>FeedSafe</code> and a fuzz invariant.
+</p>
+<ul>
+<li>Property/repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a property test that, for random component tuples (incl. reserved chars in each field), runs feed→parse and asserts EITHER field-identity OR an explicit <code>URIUNSAFE</code> err-out — never a silent structural change. Subsumes the old <code>ht/h/p#abc</code> round-trip row (assert no leading <code>/</code>); confirm it fails today.</li>
+<li>Fix the serializer/relativizer so valid components round-trip: start with the noscheme leading-<code>/</code> bug (§5.2.3 merge / §5.3 recompose); ensure <code>URIutf8Feed</code> percent-escapes each component's reserved set per RFC 3986. Keep the grammar (<code>abc/URI.c.rl</code>) unchanged.</li>
+<li>Add <code>ok64 URIutf8FeedSafe(u8s into, uricp u)</code> to abc/URI: feed via <code>URIutf8Feed</code>, parse the emitted text back into a scratch <code>uri</code>, compare all 8 fields with <code>u8csEq</code>; on any mismatch return <code>URIUNSAFE</code> and emit nothing. Route URI construction from untrusted components through it (be/keeper/sniff ref+host builders).</li>
+<li>Fuzz the invariant on <code>abc/fuzz/URI.c</code> (multi-core, <code>$HOME/Corpus/URI</code>); feed every minimized failure back into the property test (<a href="../../CLAUDE.md">CLAUDE</a> §3).</li>
+</ul>
+</body>
+</html>

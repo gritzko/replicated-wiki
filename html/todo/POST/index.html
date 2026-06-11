@@ -4,14 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>README</title>
-<style>
-body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
-pre{background:#f4f4f4;padding:.6rem;overflow:auto}
-code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
-pre code{background:none;padding:0}
-a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
-h1,h2,h3,h4{line-height:1.2}
-</style>
+<link rel="stylesheet" href="/assets/css/style.css">
 </head>
 <body>
 <h1>POST tickets: commit / fast-forward / push</h1>
@@ -21,8 +14,6 @@ h1,h2,h3,h4{line-height:1.2}
 <h2>Active tickets</h2>
 <ul>
 <li><a href="POST-006.html">POST-006</a> — <code>POSTCFLCT</code> false-fires on conflict-marker strings in tracked source comments/literals (e.g. <code>sniff/PATCH.c:339</code>), forcing a blunt <code>--force</code>. Recognize only the real WEAVE output shape, not any inline <code>&lt;&lt;&lt;&lt;…||||…&gt;&gt;&gt;&gt;</code> occurrence.</li>
-<li><a href="POST-007.html">POST-007</a> — <code>be post</code> mangles <code>be://</code>→<code>be:/</code> in commit messages (a <code>//</code>-collapsing path normalization) and rejects multi-line / <code>#</code>-led messages as path-form URIs. Treat the message slot as opaque text that round-trips byte-identical.</li>
-<li><a href="POST-013.html">POST-013</a> — a submodule on the synthetic <code>?.beagle/&lt;parent&gt;</code> branch refuses to push to a git remote without explicit <code>?main</code>. When the local branch is a be-only synthetic coordinate and the target is git, default to the remote's advertised <code>HEAD</code> / <code>main</code> / <code>master</code>.</li>
 </ul>
 </body>
 </html>

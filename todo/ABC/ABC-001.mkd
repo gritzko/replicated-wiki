@@ -1,0 +1,29 @@
+#   ABC-001: network-dependent abc/ tests SEGV in system libcurl on a firewalled host instead of timing out
+
+Outbound HTTPS is firewalled in this sandbox (`https://www.google.com/` and friends are unreachable). The abc inet tests — `CURLtest`, `POLtest`, both gated on `WITH_INET` — are supposed to degrade gracefully (bounded connect timeout, a clean CURL transfer error, the ctest `TIMEOUT` only as a backstop). Instead they **SEGV inside the system `libcurl`** while the multi handle is being driven, so an unreachable network turns a should-be-skippable test into a crash. The crash is **not** a regression (verified by A/B against a clean `~/beagle` baseline — same fault address), but it is a real defect in abc's curl/poll integration and must be investigated and fixed. See [Issues], [CLAUDE], [[MEM-010]].
+
+##  Issues
+A firewalled target crashes the curl event loop instead of returning an error.
+
+ -  `CURLtest` (`abc/test/CURL.c`) fetches `https://www.google.com/`; `POLtest` (`abc/test/POL.c`) fetches cloudflare/facebook/fastly/google/aws. With the host firewalled both crash: `AddressSanitizer: SEGV` in `libcurl.so.4+0x2e0e4` ← `curl_multi_socket_action` ← `curl_pol_cb` (`abc/CURL.c:52`) ← `POLLoop` (`abc/POL.c:210`).
+ -  The faulting address varies run-to-run (`0x1c780000111a`, `0x0008…111b`, `0x0040…111b`) and the run is non-deterministic (sometimes a plain non-zero exit, sometimes the ASan SEGV) — a **wild-pointer READ**, i.e. heap corruption / use-after-free in the multi-socket teardown when the connect fails, not a clean error path.
+ -  Expected: an unreachable/firewalled target surfaces as a CURL transfer error under a bounded `CONNECTTIMEOUT`, the test exits non-zero-but-clean (or is skipped); it must **never** crash. The ctest `TIMEOUT` (15s/20s) is a backstop, not the mechanism.
+ -  Build context: Debug + ASan, clang, musl/Alpine, against system `libcurl.so.4` (not ASan-instrumented). Pre-existing; the same crash reproduces on a fresh baseline with none of the in-flight changes.
+
+##  Blockers
+The faulting frames are inside non-instrumented system libcurl, so ASan can't name them.
+
+ -  Needs a symbolized/valgrind libcurl, or instrumenting the abc side (the `curl_pol_cb` → `curl_multi_socket_action` → `CURLTick` completion lifecycle) to catch where a freed/stale `curl_multi`, easy handle, or `poller` slot is dereferenced after a failed connect. Likely overlaps [[MEM-010]] (abc/CURL.c unchecked allocs + handle/slist leaks) and the re-entrant-poller hazard already fixed in MEM-013 (abc/POL.c) — the `// p may become invalid if socket is removed` note at `abc/CURL.c:49` is the smell.
+
+##  Planned
+Make a firewalled host time out cleanly; fix the teardown UAF; bound the connect.
+
+ -  Repro-first ([CLAUDE] §17): a deterministic case pointing `CURLGet` at a guaranteed-unreachable target (a blackhole/firewalled `IP:port`, or a forced tiny `CONNECTTIMEOUT`) that asserts a clean timeout/error — non-zero exit, **zero ASan reports** — under ASan.
+ -  Set explicit `CURLOPT_CONNECTTIMEOUT_MS` / `CURLOPT_TIMEOUT_MS` on the easy handle so a firewalled host fails fast and bounded, independent of the ctest `TIMEOUT`.
+ -  Audit the failed-connect / socket-removal branch of `curl_pol_cb`→`curl_multi_socket_action`→`CURLTick` for use-after-free of the easy handle / `curl_multi` / `poller` slot; fix so a removed socket can't be re-driven.
+ -  Re-run `CURLtest`/`POLtest` in this firewalled sandbox: clean timeout, non-zero exit, no SEGV.
+ -  Optional: gate these live-network tests behind a reachability probe / opt-in env so a firewalled CI **skips** rather than fails — but the crash must be fixed regardless of gating.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[MEM-010]: ../MEM/MEM-010.mkd "abc/CURL.c unchecked alloc + handle/slist leaks"

@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-011: FILEFlush grows DATA into uninitialized IDLE (abc/FILE.c)</h1>
+<p>
+After writing, <code>FILEFlush</code> calls <code>u8bFed(buf, r)</code> — which advances the DATA→IDLE boundary (grows DATA into uninitialized IDLE) instead of consuming the written prefix; the PAST→DATA boundary is never advanced, so DATA is never actually consumed and on the next flush the buffer re-writes the already-flushed bytes plus <code>r</code> bytes of never-initialized memory to the file. The goal is to consume the written prefix and handle <code>r==0</code>.
+</p>
+<h2>Issues</h2>
+<p>
+Wrong boundary advanced after <code>write()</code>.
+</p>
+<ul>
+<li><code>abc/FILE.c:508-519</code> — <code>u8bFed(buf,r)</code> (= <code>u8sFed(u8bIdle(buf),r)</code>) extends DATA; <code>buf[1]</code> (PAST→DATA) never moves, so <code>u8bShift(buf,0)</code> at :515 never fires and DATA only grows.</li>
+<li>Effect: uninitialized bytes written to disk (info disclosure) + re-flush corruption; <code>u8sFed</code>'s internal guard keeps it inside the allocation (no pointer-past-end write), so it is contained but real.</li>
+<li>Latent: exported API with no in-tree caller filling past PAGESIZE today.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Consume, don't extend.
+</p>
+<ul>
+<li>Repro first: drive a <code>FILE_WANT_BUFS</code> stream past PAGESIZE, flush twice, assert the file equals the fed bytes (no duplication/garbage).</li>
+<li>Replace <code>u8bFed(buf,r)</code> with <code>u8bUsed(buf,(size_t)r)</code> (advance <code>buf[1]</code>), keep the <code>u8bShift</code> compaction, and guard <code>r==0</code> (avoid an infinite no-op flush).</li>
+</ul>
+</body>
+</html>

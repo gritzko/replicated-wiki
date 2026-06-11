@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-020</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-020: BROExec leaks mmap'd file (and keeper) on arena overflow (bro/BRO.exe.c)</h1>
+<p>
+In <code>BROExec</code>'s per-URI loop a file is <code>FILEMapRO</code>'d but only registered for cleanup (<code>BRODefer</code> → <code>b-&gt;maps</code>) several lines later; between the two, <code>call(u8bHost, b-&gt;arena, …)</code> can return <code>BNOROOM</code> when the 128MB arena fills, and the <code>call</code> returns from <code>BROExec</code> before the mapping is recorded — so <code>BROClose</code> (which iterates only <code>b-&gt;maps</code>) never unmaps it, and any open keeper teardown after the loop is skipped too. In an in-process <code>be</code> host this accumulates. The goal is to register the mapping before any returning call.
+</p>
+<h2>Issues</h2>
+<p>
+Mapping unregistered across a fallible <code>call()</code>.
+</p>
+<ul>
+<li><code>bro/BRO.exe.c:171-189</code> — <code>FILEMapRO</code> at :172, <code>BRODefer(mapped)</code> at :188; <code>call(u8bHost,…)</code> at :182 can return between them, leaking the mmap (and skipping <code>KEEPClose()</code>/<code>BROArenaCleanup()</code> at :192-193).</li>
+<li>Note: even when <code>BRODefer</code> is reached it silently drops the mapping if <code>b-&gt;maps</code> is full (<code>BRO.c:130</code>) while a live hunk still aliases it — also a leak.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Reached when the 128MB arena fills before all URIs are staged.
+</p>
+<h2>Planned</h2>
+<p>
+Acquire-then-register; teardown on every exit.
+</p>
+<ul>
+<li>Repro first: stage enough/large files to exhaust <code>b-&gt;arena</code> at the URI copy; assert the mapped file is unmapped (fd/map count stable).</li>
+<li>Move <code>BRODefer(mapped)</code> to immediately after <code>FILEMapRO</code>, or make :182 a non-returning <code>try</code>/checked form that <code>FILEUnMap(mapped); continue;</code> on <code>BNOROOM</code>; run keeper teardown in a single exit block.</li>
+</ul>
+</body>
+</html>

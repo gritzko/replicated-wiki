@@ -1,0 +1,13 @@
+#   ABC tickets: core library primitives
+
+Discrepancies in `abc/` — the foundational slice/buffer/net/poll/curl layer every other module builds on. Each entry is one ticket with its live state; it drops off once the ticket closes. The fix-and-land method is [Issues]. Memory-safety findings live under [MEM]; this topic is for behavioural/correctness gaps.
+
+##  Active tickets
+
+ -  [ABC-001] — **LANDED** (abc `37f85ddb`, parent gitlink `262e7e9e`). The `CURLtest`/`POLtest` SEGV was abc's own POL timer UAF feeding a wild fd into libcurl: `POLTimer` wrote `p->tofd` through a post-callback-stale `p` that aliased a curl socket poller after a re-entrant `POL_QUEUE` reorder → `curl_multi_socket_action(garbage fd)` → SEGV (MEM-013 class). Fix: re-resolve the timer slot by stable identity before writing, dedup timers by identity, bounded `CONNECTTIMEOUT`; hermetic `CURLfw.c` (RFC-5737, no live DNS). `MEM-010` overlap stays open.
+ -  [ABC-002] — **unify C errno→ok64 handling**: `FILEerrno` (switch, canonical `FILE*` symbols) and `FILEErr`/`FILE_ERR_VOCAB` (hand-built raw-hex table) return *different* codes for the same errno (`FILEErr(ENOENT)`=`0x39760e5dd` ≠ `FILENONE`; omits `EEXIST`). Delegate `FILEErr`→`FILEerrno`, delete the table, route all errno→ok64 through one mapping. Surfaced reviewing [[SUBS-016]] (which left a `{ENOENT,FILENONE}` stopgap).
+
+[ABC-001]: ABC-001.mkd "abc inet tests SEGV on firewalled host"
+[ABC-002]: ABC-002.mkd "unify C errno→ok64 (FILEerrno vs FILE_ERR_VOCAB)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[MEM]: ../MEM/README.mkd "memory-safety audit tickets"

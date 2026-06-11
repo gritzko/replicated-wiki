@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-020</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>DIS-020: <code>POSTNONE</code> is overloaded; define <code>NOBRANCH</code>; <code>be</code> must abort on it</h1>
+<p>
+<code>POSTNONE</code> is returned both for the benign &quot;nothing to post / already in sync&quot; case (which <code>be</code> treats as no-op-OK and continues past) AND for the hard error &quot;target branch does not exist&quot; (<code>sniff/POST.c:1763</code>, <code>?main does not exist</code>). Because <code>be</code> swallows <code>POSTNONE</code> as OK, <code>be post …?main</code> with no local <code>main</code> proceeds to a doomed wire push that dies later at <code>WIRECLNFF</code>. The goal: a distinct <code>NOBRANCH</code> code for &quot;no such branch&quot; that aborts before any push. See <a href="../wiki/POST.html">POST</a>, <a href="../wiki/Sniff.html">Sniff</a>.
+</p>
+<h2>Issues</h2>
+<p>
+One code carries two meanings; the hard case leaks past the abort point.
+</p>
+<ul>
+<li><code>sniff/POST.c:1746,1763</code> return <code>POSTNONE</code> for a missing parent/target branch — same code as &quot;nothing to commit&quot; (<code>:2554</code>).</li>
+<li><code>beagle/BE.cli.c:2014,2038</code> treat <code>POSTNONE</code> as no-op-OK, so the keeper push (<code>BEActKeeperPush</code>) still fires after a missing-branch local failure.</li>
+<li>Repro: <code>be post //host?nonexistent</code> (or <code>?main</code> absent) → wire push attempted; must abort instead.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None.
+</p>
+<h2>Planned</h2>
+<p>
+Split the meanings; gate <code>be</code> on the new hard code.
+</p>
+<ul>
+<li>Define <code>ok64 NOBRANCH</code> (&quot;no such branch&quot;, ron60 via <code>abc/ok64</code>, ≤10 chars) in <code>sniff/SNIFF.h</code> beside <code>POSTNONE</code>.</li>
+<li>Return <code>NOBRANCH</code> from the missing-branch sites in <code>sniff/POST.c</code>; keep <code>POSTNONE</code> strictly = nothing to post.</li>
+<li>In <code>beagle/BE.cli.c</code>, <code>NOBRANCH</code> is a hard error that aborts the POST plan (no <code>BEActKeeperPush</code>); <code>POSTNONE</code> stays no-op-OK.</li>
+<li>Repro test: a post to a non-existent branch exits non-zero with <code>NOBRANCH</code> and performs no wire push.</li>
+</ul>
+</body>
+</html>

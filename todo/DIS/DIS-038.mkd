@@ -1,0 +1,42 @@
+#   DIS-038: a fetched-but-not-DAG-indexed peer tip makes `DAGAncestors` bottom out at the tip, so `be head` reports a bogus huge ahead-count and `be patch ?br!` absorbs nothing
+
+`be head be://localhost?/beagle` from a full be:// clone reports `1317 ahead, 1 behind` when the true divergence is `1 ahead, 3 behind`, and `be patch --nosub be://localhost?/beagle!` absorbs nothing (`noop=11 … nothing absorbed`). Root cause: the peer tip and its parent chain ARE fetched into keeper (commit objects intact, parent headers correct, NOT re-rooted), but their `(COMMIT,COMMIT)` parent edges are NOT ingested into graf's `.graf.idx` DAG during the `be head`/`be patch` fetch. `DAGAncestors` ([Graf]) walks ONLY the DAG index with no keeper-commit-body fallback, so `DAGAncestors(peer_tip)` returns just `{peer_tip}` — the shared base is missing from the target set, `ahead = anc_cur \ anc_target` = nearly all of cur, and `get_lca(cur,theirs)` collapses to 0 (no common ancestor), making the whole-branch replay see nothing new. `graf log` already fixed this exact class for its own walk (DAG-miss → parse commit body); the ancestor/LCA walk never got that fallback. Diagnosed live on `/home/gritzko/todo/DIS-035` (cur `54d2eb5b` over base `479fcc96`, peer trunk `8d313c50`). See [HEAD], [PATCH], [Graf], [CLAUDE].
+
+**Blocks (confirmed 2026-06-11):** this single defect is the root of **[[GET-014]]** (`be head`/`be patch` clobber local trunk `?`→divergent-C — confirmed to be pure tip-resolution: zero rows written during the verb, the fetched C object in the pool makes the next `.refs.idx` regen pick C as the tip) AND **[[POST-015]]**'s silent-drop half (absorbed commit collapses to the existing tip). Fixing `DAGAncestorsTunable` (`graf/DAG.c:219`) to port `graf log`'s DAG-miss keeper-commit-body fallback (`graf/LOG.c:329`) closes all three at once.
+
+##  Issues
+The DAG-index-only reachability walk silently under-reports when a fetched tip is not yet graf-indexed.
+
+ -  `DAGAncestors`/`DAGAncestorsTunable` (graf/DAG.c) resolve parents ONLY via `DAGEdgesOf(runs,…)` (the `.graf.idx`); a tip absent from the index yields the singleton `{tip}`, never its real ancestors.
+ -  `graf/LOG.c` first-parent walk (lines ~312-348) ALREADY handles this — DAG miss → parse `parent <40hex>` from the keeper commit body — which is why `graf log ?#<peer_tip>` walks the full true chain while `graf head` does not. The ancestor/LCA walk lacks the same fallback (the asymmetry IS the bug).
+ -  `graf head` ahead/behind (`graf_head_ahead_behind`, graf/LOG.c ~943): target resolves CORRECTLY to the peer tip (the single `-` row confirms it), but `behind=1` (only the tip) and `ahead=1317` (cur down to the root `c7184818 initial`) because `anc_target={peer_tip}` omits the shared base.
+ -  `get_lca` (graf/GET.c ~136): intersects the two ancestor sets; with `anc_target={peer_tip}` the intersection is empty → `*out=0` (its own comment names this "DAG index empty" case). The whole-branch `?br!` replay then weaves against an empty/zero base, so every file reads as noop → "nothing absorbed".
+ -  The fetch path does NOT index the peer tip: `be head/​patch <scheme>://host?…` spawns `graf get <uri>` → `GRAFIndexFromTips(u)` (graf/GRAF.exe.c ~296), which resolves the URI to ONE tip via `GRAFResolveTip` and walks only that. It never ingests the freshly-fetched remote-tracking tip's closure. The full `GRAFIndex()` (which walks `KEEPEachRemote`, graf/INDEX.c ~321-323) runs only on explicit `graf index` / `be reindex`.
+
+##  Blockers
+Two independent layers, either fix alone removes the symptom; both are worth doing.
+
+ -  Layer 1 (reachability robustness): `DAGAncestors`/`DAGAncestorsTunable`/`get_lca` have no keeper-body fallback on a DAG miss, unlike `graf log`.
+ -  Layer 2 (index coverage): the `be head`/`be patch` fetch reindex (`GRAFIndexFromTips` via `graf get`) does not ingest the just-fetched remote-tracking peer tip — only a single resolved tip.
+ -  Note DIS-037 (project addressed by store-DIR `dogs` not TITLE `beagle`): the `?/beagle` query does not name a real branch here, so the head/lca path leans entirely on the implicit/remote-tracking target — which makes Layer-2's missing remote-tip ingest bite harder. Independent root cause, but they compound.
+
+##  Planned
+Make reachability self-sufficient on freshly-fetched history, and close the index gap.
+
+ -  Repro-first ([CLAUDE] §17), hermetic under `$HOME/tmp` with a scratch `$HOME` (never real `~/.be`): tiny project store + colocated wt; `be get be://localhost?/<proj>` full-clone; advance the PEER 2-3 commits; make 1 divergent commit in the clone; then `be head be://localhost?/<proj>` must report `1 ahead, N behind` (not a root-deep ahead-count) and `be patch --nosub be://localhost?/<proj>!` must absorb the N peer commits. EVIDENCE captured live on DIS-035 below.
+ -  Layer 1 fix (preferred, narrow): give `DAGAncestorsTunable` (hence `DAGAncestors` + `get_lca`) the same DAG-miss → keeper-commit-body parent fallback `graf/LOG.c` already uses, so a fetched-but-unindexed tip still yields its true ancestor closure. Reuse the LOG.c parse helper.
+ -  Layer 2 fix: have the `be head`/`be patch` fetch reindex ingest the just-fetched remote-tracking tip's closure — either route the transport fetch through `GRAFIndex()` (full local+remote tip walk) or have `GRAFIndexFromTips` also walk `KEEPEachRemote` after the URI tip.
+ -  Regression test under `test/head` (ahead/behind = true divergence after a be:// fetch) and `test/patch` (whole-branch `?br!` absorbs the fetched peer stack), both hermetic file:///be:// sources.
+
+##  Evidence (live, DIS-035 clone, read-only)
+Real DAG (commit objects in keeper, parent headers — NOT re-rooted):
+`54d2eb5b`(cur DIS-035)→`479fcc96`(base); `8d313c50`(peer)→`ba776788`→`29df3828`→`479fcc96`. True LCA = `479fcc96`.
+
+ -  `be head be://localhost?/beagle` (clone's own `./build/bin/be`) → `head: 1317 ahead, 1 behind, 19 changed`; the `+` rows list cur's WHOLE history down to `c7184818 initial`; the single `-` row IS `8d313c50` (target resolved right, ancestors missing).
+ -  `keeper get .#8d313c50` / `.#54d2eb5b` / `.#479fcc96` (in `.be/dogs`) show correct, shared `parent` chains; `graf log ?#8d313c50` walks the full true chain (its LOG.c fallback masks the bug).
+ -  `graf index` then `graf head --at … ?/beagle` → `1 ahead, 3 behind, 19 changed` (the TRUE divergence). Index files restored afterwards; the clone is left in its original buggy state.
+
+[HEAD]: ../../wiki/HEAD.mkd "HEAD verb"
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[Graf]: ../../wiki/Graf.mkd "the graf dog"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

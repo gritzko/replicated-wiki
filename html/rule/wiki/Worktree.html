@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Worktree</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>Worktree: a checked-out tree with its state in one wtlog</h1>
+<p>
+A worktree is a checked-out tree on disk, with its per-call state in one append-only <code>&lt;wt&gt;/.be/wtlog</code>. The goal is cheap, disposable worktrees over one hard-to-break <a href="Store.html">Store</a> — a machine needs only one store per upstream repo, and every extra worktree is just a dir pointing back. The method: row 0 anchors the store, later <code>get</code>/<code>post</code> rows track the branch and tip, <a href="Sniff.html">Sniff</a> stamps each file it touches with the row's timestamp, and <a href="POST.html">POST</a> reads those stamps back to classify files at commit time.
+</p>
+<h2>The wtlog and the anchor</h2>
+<p>
+Per-wt state — base branch, base tip, and pending <a href="PATCH.html">PATCH</a> parents — lives in <code>&lt;wt&gt;/.be/wtlog</code>; the current branch is the latest <code>get</code>/<code>post</code> row's <code>?branch</code>, never a fixed field, so switching just appends a row.
+</p>
+<ul>
+<li>Colocated: <code>&lt;wt&gt;/.be/</code> is the store dir itself, beside the wt files; wtlog row 0's <code>repo</code> is <code>file:&lt;wt&gt;/.be/&lt;project&gt;</code>.</li>
+<li>Secondary: <code>&lt;wt&gt;/.be</code> is a FILE whose first row <code>repo</code>-points at the primary store; <a href="Sniff.html">Sniff</a> follows it and shares the pool.</li>
+<li>One branch has at most one active worktree, tracked in the branch reflog; extra worktrees are dirs whose wtlog points back.</li>
+</ul>
+<h2>The --at coordinate</h2>
+<p>
+Every <code>be</code> invocation relays exactly one coordinate to each sub-dog on argv — <code>--at &lt;branch-uri&gt;#&lt;sha&gt;</code> — and the worker derives everything else itself, so the dogs share no out-of-band state.
+</p>
+<ul>
+<li><code>&lt;branch-uri&gt;</code> is cur's branch <a href="URI.html">URI</a> (the intent); <code>&lt;sha&gt;</code> is cur's tip at resolve time, pinned against a concurrent post.</li>
+<li>The format is <code>&lt;root&gt;?/&lt;project&gt;/&lt;branch&gt;#&lt;sha&gt;</code>; the resolved tip lives only here and in <code>refs</code>, never in an argv query.</li>
+<li>Everything else the worker derives: it walks cwd up to the nearest <code>.be/</code> and reads wtlog row 0 for the base branch.</li>
+</ul>
+<h2>File classification by stamps</h2>
+<p>
+Every sniff row stamps each file it touched with the row's <code>ts</code> via <code>utimensat</code>; at commit time <a href="POST.html">POST</a> reads each file's mtime, finds the owning row, and decides KEEP vs REWRITE in selective or implicit (commit-all) mode.
+</p>
+<ul>
+<li>KEEP (baseline): mtime older than the last <code>get</code>, or owned by a <code>get</code>/<code>post</code> row — baseline content, in both modes.</li>
+<li>REWRITE: owned by a <code>patch</code> row (merged bytes) or a <code>put</code> row (current bytes) — new content, in both modes.</li>
+<li>Off the stamp-set, tracked: ignored in selective mode unless an explicit <code>put</code> named it; REWRITE in implicit (git <code>commit -a</code>).</li>
+<li>Off the stamp-set, untracked: always ignored — a new file never commits without an explicit <code>be put &lt;path&gt;</code> first.</li>
+<li>Selective vs implicit: selective = at least one explicit <a href="PUT.html">PUT</a>/<a href="DELETE.html">DELETE</a> since the last post; implicit (commit-all) = none.</li>
+</ul>
+<h2>Eager branching replaces stash</h2>
+<p>
+Branches are mkdir-cheap, so the idiom is to fork preventively: mint a sub-branch before anything speculative, experiment freely, then bring the result home as one squash — there is never a reason to stash.
+</p>
+<ul>
+<li>Fork first: <code>be put ?./feat/exp &amp;&amp; be get ?./feat/exp</code> before risky work; a dead end drops with <code>be delete -r ?./feat/exp</code>.</li>
+<li>Stash is a code smell: speculative work belongs on a sub-branch, so staging and <code>git stash</code> are both unnecessary (see <a href="Store.html">Store</a>).</li>
+<li>Bring it home: <code>be patch ?./feat/exp</code> weaves the whole chain into the parent's wt, then <code>be post '#feat'</code> makes one commit.</li>
+</ul>
+</body>
+</html>

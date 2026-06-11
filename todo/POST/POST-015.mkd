@@ -1,0 +1,26 @@
+#   POST-015: `be post` silently drops a real absorption onto the existing tip, and spams `walk: bad path '.be'`
+
+After `be patch be://localhost/todo/<wt>?/<proj>` absorbs a peer's commit, `be post '#msg'` does two bad things: (1) it emits the absorbed change as a commit whose **hash is identical to the existing trunk tip** (`8d313c50`) and the absorbed change does NOT land (e.g. DIS-035's `keeper/KEEP.exe.c` edit is absent from the worktree afterward — `grep -c DIS-035 keeper/KEEP.exe.c` = 0) — a SILENT non-land that looks like a successful commit; and (2) it prints `walk: bad path '.be', skip` **hundreds of times** (one per scanned entry) during the file walk. The silent collapse is driven by [[DIS-038]] (the fetched peer tip's parent edges are never DAG-indexed, so `DAGAncestors` bottoms out → the absorbed commit looks already-reachable → patch-id/reachability dedup skips it); the `.be` spam is an independent file-walk defect. Net: the user believes a change committed when it did not. See [POST], [PATCH], [CLAUDE], [[DIS-038]].
+
+##  Issues
+A real absorption can vanish, and the walk floods stderr.
+
+ -  Silent non-land: `be post` after an absorb yields the existing tip's hash and the absorbed edit is NOT in the worktree — no error, no warning; the user thinks it committed.
+ -  Driven by broken reachability ([[DIS-038]]): with `DAGAncestors` bottomed out, the patch-id/reachability dedup wrongly classifies the absorbed commit as already-reachable and drops it.
+ -  `walk: bad path '.be', skip` is printed once per scanned path during the post file walk — hundreds of lines of noise that bury the real output.
+ -  Reproduced live: `be post '#DIS-035 applied, with hurdles and pain'` in `~/beagle` (after patching DIS-035 from `todo/DIS-035`) → commit `8d313c50` (= SUBS-017 tip), DIS-035 change absent.
+
+##  Blockers
+The silent-drop half depends on [[DIS-038]] (fix the reachability first); the `.be`-spam half is independent.
+
+##  Planned
+Never silently drop; skip `.be` quietly.
+
+ -  Repro-first ([CLAUDE] §17): a hermetic absorb-then-post that asserts the absorbed edit is present after post (and exit/report reflect a real commit, not the prior tip).
+ -  Guard `be post`: if a patch row's absorbed sha is NOT actually reachable from cur, it MUST land as a commit — never collapse to the existing tip; surface a loud error if dedup would drop a staged absorption. (Correctness depends on [[DIS-038]]'s reachability fix.)
+ -  **LANDED `fefaf7e4`.** The post file walk must skip the `.be` store dir/anchor SILENTLY (no per-entry `bad path` line) — `keeper/WALK.c` now skips a `.be` tree entry quietly (a genuinely-invalid name still warns); regression `test/get/48-walk-dot-be-quiet`. The silent-drop half above remains, blocked on [[DIS-038]].
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[DIS-038]: ../DIS/DIS-038.mkd "fetched peer tip not DAG-indexed → DAGAncestors bottoms out"

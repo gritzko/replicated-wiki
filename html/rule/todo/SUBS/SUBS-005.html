@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>SUBS-005: path-scoped DELETE of a submodule (or sub-interior file) false-positives DELDIRTY</h1>
+<p>
+*<strong>MEDIUM.</strong>*  There is no working way to remove a submodule, or a file inside
+one, via <code>be delete &lt;path&gt;</code>.  Both <code>be delete vendor/sub</code> (the gitlink dir) and
+<code>be delete vendor/sub/core.c</code> (a file inside the mount) abort with <code>DELDIRTY</code>
+(exit 157), leaving the path on disk and nothing staged.
+</p>
+<h2>Repro</h2>
+<ul>
+<li><code>be get &lt;parent&gt;?master</code>; <code>be delete vendor/sub/core.c</code></li>
+</ul>
+<p>
+    → <code>delete: vendor/sub/core.c has unstamped changes</code> / DELDIRTY / 157.
+</p>
+<ul>
+<li><code>be delete vendor/sub</code></li>
+</ul>
+<p>
+    → <code>delete: vendor/sub has unstamped changes</code> / DELDIRTY / 157.
+</p>
+<h2>Root cause</h2>
+<p>
+DELETE's dirty check refuses when a path's mtime is out of the parent
+stamp-set AND its content differs from the parent baseline sha.  For a
+sub-interior file the parent tree has no baseline entry (it holds only
+<code>160000 commit &lt;sha&gt; sub</code>), and for the gitlink dir the on-disk form (a
+directory with a <code>.be</code> mount) does not hash to the <code>160000</code> pin — so the dirty
+predicate false-positives in both cases.
+</p>
+<h2>Expected</h2>
+<p>
+Path-scoped delete is documented as non-recursing, but it must still have a
+defined, working behavior for the gitlink case:
+</p>
+<ul>
+<li><code>be delete vendor/sub</code> should remove the submodule — unmount the <code>.be</code></li>
+</ul>
+<p>
+    anchor, remove the worktree files, and stage the gitlink + <code>.gitmodules</code>
+    removal (git <code>git rm</code> of a submodule parity) — or refuse with a clear,
+    sub-aware message, not a spurious DELDIRTY.
+</p>
+<ul>
+<li><code>be delete vendor/sub/core.c</code> should either recurse into the sub to delete</li>
+</ul>
+<p>
+    that file, or skip cleanly with a sub-aware message — never DELDIRTY on a
+    byte-clean sub file.
+</p>
+<h2>Fix sketch</h2>
+<p>
+Teach DELETE's dirty check to recognise gitlink paths: a <code>160000</code> tree entry's
+on-disk mount is not &quot;dirty parent content&quot;.  For the whole-sub case, route to
+a submodule-removal path (unmount + stage gitlink/<code>.gitmodules</code> delete).
+Relates to SUBS-008 (unmount leaves orphaned files).
+</p>
+<h2>Tests</h2>
+<p>
+<code>test/delete/08-sub-path-scoped-deldirty</code> (<code>WILL_FAIL</code> until fixed);
+<code>test/delete/07-sub-delete-all-missing</code> (passing control — bare delete-all
+recurses correctly).
+</p>
+</body>
+</html>

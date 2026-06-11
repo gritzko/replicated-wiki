@@ -1,0 +1,28 @@
+#   CODE-003: dog: collapse table-scan & twin helper dups
+
+dog repeats several small structural blocks: dog_proj_lookup/DOGIsTransport/DOGIsGitTransport walk a string table with the same loop, the ron60→time_t conversion is pasted across HUNK.c, WHIFF's 40/60 hashlet helpers are byte-twins on one shift constant, and ULOGVerbColor/ULOGVerbTag scan one table identically. Factor each into a single parameterized helper.
+
+##  Issues
+
+Repeated string-table scans, a 4x ron60→time_t block, and width-twinned helpers.
+
+ -  dog_proj_lookup/DOGIsTransport/DOGIsGitTransport (DOG.c:61,87,104) = same NUL-table walk + u8csEq.
+ -  ron60→time_t now/mktime block pasted in HUNK.c:52,85,392.
+ -  WHIFFHashlet40/60, HexFeed40/60, HexHashlet40/60 (WHIFF.h:111-135) differ only by a 24-vs-4 shift.
+ -  ULOGVerbColor/ULOGVerbTag (ULOG.c:1219,1228) scan ULOG_VERB_TAGS identically, differing only in the return.
+
+##  Blockers
+
+None; dog-internal. Shares DOG.c/HUNK.c with CODE-002, so land in the same dog worktree, serially.
+
+##  Planned
+
+One helper per duplicated shape; parameterize the differing value.
+
+ -  Repro first (§17): keep existing dog tests green; add a case per collapsed helper if uncovered.
+ -  String-table walk → one DOGTableLookup(table,key).
+ -  ron60→time_t → one HUNK helper; WHIFF 40/60 → one width-param helper.
+ -  ULOG verb table → one lookup returning the row; color/tag derive from it.
+
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

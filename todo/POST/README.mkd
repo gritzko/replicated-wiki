@@ -5,10 +5,6 @@
 ##  Active tickets
 
  -  [POST-006] — `POSTCFLCT` false-fires on conflict-marker strings in tracked source comments/literals (e.g. `sniff/PATCH.c:339`), forcing a blunt `--force`. Recognize only the real WEAVE output shape, not any inline `<<<<…||||…>>>>` occurrence.
- -  [POST-007] — `be post` mangles `be://`→`be:/` in commit messages (a `//`-collapsing path normalization) and rejects multi-line / `#`-led messages as path-form URIs. Treat the message slot as opaque text that round-trips byte-identical.
- -  [POST-013] — a submodule on the synthetic `?.beagle/<parent>` branch refuses to push to a git remote without explicit `?main`. When the local branch is a be-only synthetic coordinate and the target is git, default to the remote's advertised `HEAD` / `main` / `master`.
 
 [POST-006]: POST-006.mkd "POSTCFLCT false-fires on marker strings in source"
-[POST-007]: POST-007.mkd "be:// mangled to be:/ ; multi-line message rejected"
-[POST-013]: POST-013.mkd "synthetic sub-branch push to git remote default"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

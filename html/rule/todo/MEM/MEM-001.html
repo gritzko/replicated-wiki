@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MEM-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>MEM-001: BSDPatch untrusted-patch integer overflows (abc/BSD.c)</h1>
+<p>
+<code>BSDPatch</code> decodes lengths and counts straight from an untrusted BSDIFF01 patch and checks them with additive comparisons that wrap, so a crafted patch defeats every bounds guard and drives an unbounded attacker-controlled <code>memcpy</code> into the caller's <code>neu</code> buffer (ASan-reproduced) plus wild-pointer OOB reads. The goal is to bound every patch-derived field with subtraction (no wrap) and re-validate source pointers against the patch end before each copy.
+</p>
+<h2>Issues</h2>
+<p>
+Three signed-overflow holes in one function, all reachable from a single malformed patch.
+</p>
+<ul>
+<li><code>abc/BSD.c:446-468</code> — <code>newpos + diff_len &lt;= neusize</code> / <code>newpos + extra_len &lt;= neusize</code> wrap negative for <code>diff_len≈INT64_MAX</code>; the following <code>memcpy(nb+newpos, dp, diff_len)</code> overflows <code>neu</code> (ASan abort at :456).</li>
+<li><code>abc/BSD.c:407-421</code> — <code>ctrl_bytes = ctrl_count*24</code> overflows i64; <code>patchlen &gt;= 24+ctrl_bytes</code> passes, then <code>cp+ctrl_bytes</code> and the <code>ci&lt;ctrl_count</code> loop read far past <code>patch[1]</code>.</li>
+<li><code>abc/BSD.c:424-442</code> — pre-scan <code>total_diff/total_extra</code> accumulation overflows, so <code>patchlen &gt;= 24+ctrl_bytes+total_diff+total_extra</code> passes and <code>ep = dp+total_diff</code> becomes a wild source pointer.</li>
+<li>Pre-scan only checks each field <code>&gt;=0</code>; the same wrapping accumulator gives no independent protection.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. <code>BSDPatch</code> is exported in <code>abc/BSD.h</code>; only in-tree caller today is <code>abc/test/BSD.c:37</code>, but the API's whole contract is consuming serialized (untrusted) bytes.
+</p>
+<h2>Planned</h2>
+<p>
+Make all patch-field arithmetic overflow-safe and add a crafted-patch repro.
+</p>
+<ul>
+<li>Repro first (CLAUDE.md §17): add a 2-triple BSDIFF01 patch (small <code>diff_len</code>, then <code>diff_len≈INT64_MAX</code>) to the table-driven <code>abc/test/BSD.c</code>; confirm ASan abort.</li>
+<li>Bound with subtraction: <code>test(diff_len&gt;=0 &amp;&amp; diff_len&lt;=neusize-newpos, BSDCORRUPT)</code> (same for <code>extra_len</code>), keeping <code>neusize-newpos</code> non-negative.</li>
+<li>Reject <code>ctrl_count &gt; (patchlen-24)/24</code> before multiplying; accumulate totals in a ceilinged/checked form bounded by <code>patchlen-24-ctrl_bytes</code>.</li>
+<li>Re-validate <code>dp</code>/<code>ep</code> have the bytes remaining before <code>patch[1]</code> ahead of every <code>memcpy</code>.</li>
+</ul>
+</body>
+</html>

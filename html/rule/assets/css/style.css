@@ -1,0 +1,103 @@
+/*  replicated.wiki page styles. Referenced by every mark-rendered page as
+    <link rel="stylesheet" href="/assets/css/style.css">. Plain CSS, no build. */
+
+/*  JetBrains Mono, served from jsDelivr (weights 400/500/700/800, roman + italic).
+    Used for code; the loaded weights cover bold/italic code spans. */
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono-Regular.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff/JetBrainsMono-Regular.woff') format('woff');
+    font-weight: 400; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono-Italic.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff/JetBrainsMono-Italic.woff') format('woff');
+    font-weight: 400; font-style: italic; font-display: swap;
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono-Medium.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff/JetBrainsMono-Medium.woff') format('woff');
+    font-weight: 500; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono-Medium-Italic.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff/JetBrainsMono-Medium-Italic.woff') format('woff');
+    font-weight: 500; font-style: italic; font-display: swap;
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono-Bold.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff/JetBrainsMono-Bold.woff') format('woff');
+    font-weight: 700; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono-Bold-Italic.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff/JetBrainsMono-Bold-Italic.woff') format('woff');
+    font-weight: 700; font-style: italic; font-display: swap;
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono-ExtraBold.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff/JetBrainsMono-ExtraBold.woff') format('woff');
+    font-weight: 800; font-style: normal; font-display: swap;
+}
+@font-face {
+    font-family: 'JetBrains Mono';
+    src: url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff2/JetBrainsMono-ExtraBold-Italic.woff2') format('woff2'),
+         url('https://cdn.jsdelivr.net/gh/JetBrains/JetBrainsMono/web/woff/JetBrainsMono-ExtraBold-Italic.woff') format('woff');
+    font-weight: 800; font-style: italic; font-display: swap;
+}
+
+body {
+    max-width: 48rem;
+    margin: 2rem auto;
+    padding: 0 1rem;
+    font: 16px/1.5 Verdana, system-ui, -apple-system, sans-serif;
+    color: #222;
+}
+
+/*  The justified-text look, with hyphenation so the gaps stay tight. */
+p, li {
+    text-align: justify;
+    hyphens: auto;
+}
+
+h1, h2, h3, h4 { line-height: 1.2 }
+
+pre  { background: #f4f4f4; padding: .6rem; overflow: auto }
+code { background: #f4f4f4; padding: 0 .2rem; border-radius: 3px }
+pre code { background: none; padding: 0 }
+pre, code { font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace }
+
+a       { color: #0366d6; text-decoration: none }
+a:hover { text-decoration: underline }
+
+/*  Images. Alignment and width ride in the URL fragment of the image link
+    (e.g. [img]: pic.jpg#rightw40), so a StrictMark page can style an image
+    without any HTML. The browser ignores the fragment when fetching. */
+img { max-width: 100%; height: auto }
+
+img[src*="#left"]   { float: left;  margin: .3rem 1.5rem 1rem 0 }
+img[src*="#right"]  { float: right; margin: .3rem 0 1rem 1.5rem }
+img[src*="#center"] { display: block; margin: 1rem auto; clear: both }
+
+img[src*="w40"]  { width: 40% }
+img[src*="w100"] { width: 100% }
+
+h1 + div p{
+  color: #338;
+  display: flex;
+  justify-content: right;
+  background: transparent;
+}
+
+/*  On narrow screens, stop floating: a 40% float is unreadable on a phone. */
+@media (max-width: 32rem) {
+    img[src*="#left"], img[src*="#right"] {
+        float: none; display: block; width: 100%; margin: 1rem auto;
+    }
+}

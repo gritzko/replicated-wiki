@@ -1,0 +1,23 @@
+#   DIS-037: the remote `~/.be` addresses projects by store-DIRECTORY name (`dogs`, `abc`), not by project TITLE
+
+In the remote `~/.be`, the beagle project resolves as `?/dogs` and libabc as `?/abc` — but `dogs`/`abc` are the on-disk store-DIRECTORY names, not the project TITLES (`beagle`, `libabc`). Addressing happens to work by dir-name coincidence; the canonical `?/<proj>` should resolve by project title, with the directory name an implementation detail. [Issues]'s own clone command uses `be get file:///home/gritzko/.be?/beagle` (title), yet only `?/dogs` (dir name) actually resolves — a direct mismatch. See [GET], [Submodules], [CLAUDE], [[wtlog-row0-sha-plan]].
+
+##  Issues
+Dir names are used where titles belong.
+
+ -  `?/<proj>` resolves a project by matching the `~/.be/<dir>/` directory name (`dogs`, `abc`), not the project's title.
+ -  [Issues] documents `?/beagle` / `?/libabc` (titles), but only `?/dogs` / `?/abc` (dirs) resolve — docs and behavior disagree.
+ -  A copied / renamed store dir breaks addressing, since identity rides the dir name instead of the title recorded in the project.
+
+##  Blockers
+Needs the project title (row-0 / config) as the identity key; ties to [[wtlog-row0-sha-plan]].
+
+##  Planned
+Resolve `?/<title>` to the matching store dir.
+
+ -  Repro-first ([CLAUDE] §17): a store whose dir name ≠ title resolves by TITLE (`?/beagle` → the `dogs/` shard).
+ -  `?/<proj>` matches the project title recorded in the shard, with dir-name a fallback during migration; report the title, not the dir, in listings.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[Submodules]: ../../wiki/Submodules.mkd "submodule recursion"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"

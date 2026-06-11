@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-010</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<h1>SUBS-010: stale &quot;git source needs <code>--sub</code>&quot; gating in comments and the test shim (LANDED)</h1>
+<p>
+*<strong>LOW — LANDED <code>cda5c691</code> (2026-06-06).</strong>*  The <code>--sub</code>-appending shim was
+removed from <code>test/lib/submodules.sh</code> and <code>test/lib/sub-deep.sh</code> (tests now
+drive default recursion via the real binary), and the stale &quot;POST-001 phase 2 /
+does NOT recurse by default&quot; narrative was purged from get/05, get/32, get/37,
+post/15, and <code>beagle/test/be-post-nosub.sh</code> (redundant <code>--sub</code> tokens dropped).
+<code>rg</code> confirms no remaining stale narrative; affected test surface stays green.
+</p>
+<p>
+*<strong>LOW (docs / test hygiene).</strong>*  Recursion is now default-on for every source
+type, including git/ssh: there is no <code>CLIHas(c,&quot;--sub&quot;)</code> anywhere in the code,
+only six <code>--nosub</code> opt-out sites in <code>beagle/BE.cli.c</code> (head 741, get 871, patch
+1007, post 2234/2310, relay 2501).  Several comments and one test shim still
+describe the removed &quot;POST-001 phase 2&quot; rule that a git/ssh parent does NOT
+recurse by default and must opt in with <code>--sub</code>.  This is misleading and the
+<code>--sub</code> shim masks the real default behavior under test.
+</p>
+<h2>Stale spots</h2>
+<ul>
+<li><code>test/lib/submodules.sh</code> wraps <code>$BE</code> in a shim that appends <code>--sub</code> to</li>
+</ul>
+<p>
+    every call (lines ~40-58), with a comment claiming git parents need it.
+    <code>--sub</code> is a dead no-op, so the shim is harmless but masks default-recursion
+    coverage — tests that mean to assert DEFAULT behavior should use
+    <code>$REAL_BE</code>.
+</p>
+<ul>
+<li><code>test/get/05-submodule-from-ssh</code> and <code>test/get/07-submodule-nosub</code> header</li>
+</ul>
+<p>
+    comments describe the <code>--sub</code> opt-in as load-bearing.
+</p>
+<ul>
+<li>Any <code>POST-001</code> / &quot;phase 2&quot; / &quot;does NOT recurse by default&quot; comments</li>
+</ul>
+<p>
+    referencing the git-source gate.
+</p>
+<h2>Action</h2>
+<ul>
+<li>Remove the <code>--sub</code>-appending shim (or keep it only where a case explicitly</li>
+</ul>
+<p>
+    wants the no-op flag exercised); default new tests to <code>$REAL_BE</code>.
+</p>
+<ul>
+<li>Update the get/05,07 and submodules.sh comments to state the current rule:</li>
+</ul>
+<p>
+    recursion default-on for all sources, <code>--nosub</code> the only opt-out, <code>--sub</code>
+    a tolerated no-op.
+</p>
+<ul>
+<li>Optionally drop the <code>--sub</code> token entirely if no longer wanted as an</li>
+</ul>
+<p>
+    explicit no-op.
+</p>
+<h2>Notes</h2>
+<p>
+Not a correctness bug — behavior already matches the desired
+&quot;<code>--sub</code> = default, suppressed by <code>--nosub</code>&quot; directive.  This ticket is purely
+to remove the stale narrative so future readers are not misled.
+</p>
+</body>
+</html>

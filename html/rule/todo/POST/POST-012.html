@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-012</title>
+<style>
+body{max-width:48rem;margin:2rem auto;padding:0 1rem;font:16px/1.5 system-ui,-apple-system,sans-serif;color:#222}
+pre{background:#f4f4f4;padding:.6rem;overflow:auto}
+code{background:#f4f4f4;padding:0 .2rem;border-radius:3px}
+pre code{background:none;padding:0}
+a{color:#0366d6;text-decoration:none}a:hover{text-decoration:underline}
+h1,h2,h3,h4{line-height:1.2}
+</style>
+</head>
+<body>
+<h1>POST-012: <code>be post</code> prints &quot;nothing to promote … already contains cur&quot; noise on a no-op submodule recursion</h1>
+<p>
+On a no-op <code>be post</code>, every submodule whose synthetic sub-branch already holds its current commit emits <code>sniff: post: nothing to promote (?/&lt;subproj&gt;/.beagle already contains cur)</code>. This is redundant clutter: the final <code>sniff: 0 change(s)</code> already conveys the no-op, and the per-sub line makes a clean post look like a problem — sitting right under the (now-fixed) <code>POSTNOMSG</code>, it read like an error. <code>be post</code> should stay quiet on no-ops and report a sub only when it actually promotes something (per <a href="">Verbs</a>/the verb report-channels rule: post reports real changes, TLV-only). Suppress the line. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/Submodules.html">Submodules</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+A clean post is noisy, one line per in-sync sub.
+</p>
+<ul>
+<li><code>be post &lt;remote&gt;</code> with a clean worktree + an in-sync <code>abc</code>/<code>libabc</code> sub prints <code>nothing to promote (?/libabc/.beagle already contains cur)</code> then <code>0 change(s)</code>.</li>
+<li>The <code>0 change(s)</code> summary already covers the no-op; the per-sub line adds nothing and obscures real output.</li>
+<li>It reads as a failure (it surfaced asking &quot;what does this mean?&quot; — looked like an error, was a clean no-op).</li>
+<li>Repro: <code>be post ssh://localhost/src/dogs</code> (or any remote) with nothing staged and the sub already at its pin → the noise line.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. Localized to the submodule-recursion post reporting in <code>sniff</code> (the <code>?/&lt;sub&gt;/.beagle already contains cur</code> branch).
+</p>
+<h2>Planned</h2>
+<p>
+Only report a sub that promotes a change; drop the no-op line.
+</p>
+<ul>
+<li>Repro first (<a href="../../CLAUDE.md">CLAUDE</a> §17): a no-op <code>be post</code> with an in-sync sub asserts the &quot;nothing to promote … already contains cur&quot; line is NOT printed and <code>0 change(s)</code> still is.</li>
+<li>Suppress the per-sub &quot;nothing to promote&quot; message when the sub already contains cur; keep it (or a real report) only when the sub actually promotes ≥1 change.</li>
+</ul>
+</body>
+</html>

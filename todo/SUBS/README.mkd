@@ -25,6 +25,7 @@ gitlink bumps, detached-refuse) all work.  The gaps below are the deltas.
 | [SUBS-013] | LOW | put | full `git submodule add` parity: stage a new `160000` gitlink + `.gitmodules` from `be put` — needs a chosen URL source + pin grammar (escalated from SUBS-009) |
 | [SUBS-014] | LOW | put | misleading "does not exist — skipped" PUTNONE fires for ANY plain untracked dir named without a trailing slash (not sub-specific); wants a "did you mean `dir/`?" hint |
 | [SUBS-015] | LOW | blob | `blob:<path>` WITHOUT `?ref` returns KEEPNONE even in the parent (pre-existing, not sub-related) |
+| [SUBS-016] | LOW (**LANDED** abc `8b9dfe0c`/parent `109c7467`) | get/fetch | sub-seed of `refs`/`wtlog` used `O_TRUNC` `FILECreate`, guarded only by `!already_mounted` — a false-negative would zero a live sub log ([[ULOG-001]] class). Fixed: guard the seed on `FILEExists` (revitalized as `ok64`: OK/FILENONE/error) — `if(e==OK) skip; if(e!=FILENONE) return e; else FILECreate` — so an existing log is never truncated regardless of the mount guard. Also purged the regex-migrated `FILENOENT` alias → canonical `FILENONE` (incl. 7 `vanished mid-walk` readers); left a `FILE_ERR_VOCAB[ENOENT]→FILENONE` stopgap pending [[ABC-002]]. Surfaced by ULOG-001 (not from the 2026-06-05 audit) |
 
 Tests added this audit: `test/put/08-10`, `test/delete/07-09`, `test/patch/28-29`,
 `test/post/26-27`, `test/head/21`, `test/all/01-subs-all-verbs` (bug repros
@@ -48,4 +49,5 @@ landed green with SUBS-004 (`5fb56d6f`) and `test/delete/08` with SUBS-005
 [SUBS-013]: SUBS-013.mkd
 [SUBS-014]: SUBS-014.mkd
 [SUBS-015]: SUBS-015.mkd
+[SUBS-016]: SUBS-016.mkd
 [Submodules]: ../wiki/Submodules.mkd "submodule model"
