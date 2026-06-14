@@ -51,9 +51,9 @@ was some reason for the other verbs to exist, right?
 
 While the vocabulary is a bit vague, fundamentally it grows
 out of the need to access a remote filesystem. That fits 
-naturally the git model, which is, as described, a [content-
-addressed filesystem][f]. For that reason, Beagle uses the
-HTTP verbs *exclusively*.
+naturally the git model, which is, as described, a 
+[content-addressed filesystem][f]. For that reason, Beagle 
+uses the HTTP verbs *exclusively*.
 
 Wait, but it only has *patch*? What about merge vs rebase?
 
@@ -100,39 +100,50 @@ of a branch, add a new message, refer back (the parent header).
 
 The way to express it in Beagle CLI:
 ````
-    # rebase one commit: apply, post
+    # rebase one commit: first apply it to the tree...
     be patch ?feature
+    # then post it with the same author/message, no parent ref 
     be post #!
 
-    # merge a branch: apply all, post with a new message
+    # merge a branch: apply all the commits...
     be patch ?feature!
+    # and post with a new message (retain the parent ref)
     be post '#merge the feature'
 
-    # squash a branch
+    # squash a branch: first apply all the changes...
     be patch ?feature!
+    # then commit it with a new message, no parent ref
     be post '#add a new feature!'
 
-    # rebase the entire branch
+    # rebase the entire branch, commit by commit
     while be patch ?feature; do
+        # check every tree state is valid, then commit
         make && make test && be post #!;
     done
 
-    # cherry pick one commit
+    # cherry pick one commit: just apply the diff
     be patch #391a0d33
+    # then post it (same author/message, no parent ref)
     be post #!
 ````
 
 Here we use the bang modifier to:
  
- 1. '?branch!' apply the entire branch (default: one commit),
- 2. '#message!' dont link the original commit (the parent ref).
+ 1. `?branch!` apply the entire branch (default: one commit),
+ 2. `#message!` forget the original commit (skip the parent ref).
 
-Note: when we supply no message, the original one gets reused.
-We may keep message/author but drop the original commit: `#!`.
+When we supply no message, the original one gets reused.
+With rebases, we may message/author but drop the original, so
+the spell is: `#!` (reuse message, forget the parent commit).
 
 Branch rebase here may only happen as a cycle, because we make
 as many posts as many commits we have. This also ensures that
-all the commited revisions build and pass the tests.
+all the commited revisions build and pass the tests (which is
+a clear gap in the git model).
+
+Overall, this model is optimized more for formal correctness
+and non-ambiguity with the general idea that it is the LLM
+who will be spelling the URIs most of the time.
 
 ##  FAQ
 

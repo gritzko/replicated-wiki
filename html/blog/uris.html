@@ -71,9 +71,9 @@ was some reason for the other verbs to exist, right?
 <p>
 While the vocabulary is a bit vague, fundamentally it grows
 out of the need to access a remote filesystem. That fits 
-naturally the git model, which is, as described, a [content-
-addressed filesystem]<a href="https://git-scm.com/book/en/v2/Git-Internals-Git-Objects">f</a>. For that reason, Beagle uses the
-HTTP verbs <strong>exclusively</strong>.
+naturally the git model, which is, as described, a 
+<a href="https://git-scm.com/book/en/v2/Git-Internals-Git-Objects">content-addressed filesystem</a>. For that reason, Beagle 
+uses the HTTP verbs <strong>exclusively</strong>.
 </p>
 <p>
 Wait, but it only has <strong>patch</strong>? What about merge vs rebase?
@@ -123,25 +123,30 @@ of a branch, add a new message, refer back (the parent header).
 </p>
 <p>
 The way to express it in Beagle CLI:
-<pre><code>    # rebase one commit: apply, post
+<pre><code>    # rebase one commit: first apply it to the tree...
     be patch ?feature
+    # then post it with the same author/message, no parent ref 
     be post #!
 
-    # merge a branch: apply all, post with a new message
+    # merge a branch: apply all the commits...
     be patch ?feature!
+    # and post with a new message (retain the parent ref)
     be post '#merge the feature'
 
-    # squash a branch
+    # squash a branch: first apply all the changes...
     be patch ?feature!
+    # then commit it with a new message, no parent ref
     be post '#add a new feature!'
 
-    # rebase the entire branch
+    # rebase the entire branch, commit by commit
     while be patch ?feature; do
+        # check every tree state is valid, then commit
         make &amp;&amp; make test &amp;&amp; be post #!;
     done
 
-    # cherry pick one commit
+    # cherry pick one commit: just apply the diff
     be patch #391a0d33
+    # then post it (same author/message, no parent ref)
     be post #!
 </code></pre>
 </p>
@@ -149,17 +154,24 @@ The way to express it in Beagle CLI:
 Here we use the bang modifier to:
 </p>
 <ol>
-<li>'?branch!' apply the entire branch (default: one commit),</li>
-<li>'#message!' dont link the original commit (the parent ref).</li>
+<li><code>?branch!</code> apply the entire branch (default: one commit),</li>
+<li><code>#message!</code> forget the original commit (skip the parent ref).</li>
 </ol>
 <p>
-Note: when we supply no message, the original one gets reused.
-We may keep message/author but drop the original commit: <code>#!</code>.
+When we supply no message, the original one gets reused.
+With rebases, we may message/author but drop the original, so
+the spell is: <code>#!</code> (reuse message, forget the parent commit).
 </p>
 <p>
 Branch rebase here may only happen as a cycle, because we make
 as many posts as many commits we have. This also ensures that
-all the commited revisions build and pass the tests.
+all the commited revisions build and pass the tests (which is
+a clear gap in the git model).
+</p>
+<p>
+Overall, this model is optimized more for formal correctness
+and non-ambiguity with the general idea that it is the LLM
+who will be spelling the URIs most of the time.
 </p>
 <h2>FAQ</h2>
 <h3>So, how PUT is different from POST?</h3>
