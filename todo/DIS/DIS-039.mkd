@@ -1,0 +1,20 @@
+#   DIS-039: bare `be get` is a no-op status per GET.mkd, but the Issues loop's "`be get --nosub` to update first" assumes it FFs — the two specs contradict, so the documented update step silently does nothing
+
+GET-017's worker repro'd the original premise (a `.be`-switch-shape FF gap) as **false**: a store-backed switch-shaped worktree FFs perfectly in place via `be get ?` (empty `?` = trunk) and via `be get ?#<tip>`. The actual gap is a **spec contradiction**: GET.mkd line 23 mandates "bare `be get` is a no-op status (≡ bare `be`)", and the impl honors it — `sniff/SNIFF.exe.c:1124-1132` routes a URI-less `get` to `SNIFFGetSummary` (prints `branches:`/`remotes:`), so it never reaches the resume-checkout path `sniff/GET.c:2204-2224` already implements ("Bare `be get` … resume the worktree's current branch", currently dead for the bare path). But the [Issues] skill line 31 prescribes "`be get --nosub` to update first" for the fix-and-land loop — so that step lists status and exits 0 without advancing the ref, the "stuck at base, forced fresh-clone salvage" symptom GET-017 described. Confirmed live during today's merge: `be get '?'` (with the `?`) FFs the canonical tree correctly; bare `be get` does not. See [GET], [Issues].
+
+##  Issues
+The bare-get-is-status spec and the loop's update-first instruction directly contradict; impl follows the former.
+
+ -  `sniff/SNIFF.exe.c:1124-1132` sends a zero-URI `get` to `SNIFFGetSummary`, never to the resume-checkout `SNIFFGetURI` at `sniff/GET.c:2204-2224` (which exists but is unreachable for the bare path).
+ -  GET.mkd:23 "bare `be get` ≡ status" vs Issues.mkd:31 "`be get --nosub` to update first" — mutually exclusive; the impl is consistent with GET.mkd, so the loop's update silently no-ops.
+ -  `be get ?` / `be get ?#<tip>` DO FF in place (verified on a switch-wt and on the canonical clone-wt), so the working form exists; only the bare form is dead.
+
+##  Planned
+Rule on the contradiction; deferred per the orchestrator's call (file-and-defer).
+
+ -  Option 1 (doc-only, lowest risk): keep bare `be get` = status; correct Issues.mkd:31 to `be get ? --nosub`. No production code change.
+ -  Option 2 (code): re-route the bare case at `sniff/SNIFF.exe.c:1124` to the orphaned resume path and amend GET.mkd:23 — convenient, but breaks the documented `be get ≡ be` equivalence.
+ -  Repro pin already landed as `be-get-50-switch-wt-ff-in-place` (asserts bare get is status-only AND `be get ? --nosub` FFs the switch-wt in place); green on the known-good binary.
+
+[GET]: ../../wiki/GET.mkd "GET verb"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

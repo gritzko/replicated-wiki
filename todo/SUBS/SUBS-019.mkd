@@ -1,0 +1,30 @@
+#   SUBS-019: be post records the EMPTY sha as the parent submodule gitlink when the sub is dirty after a be patch weave (fails to commit the sub first)
+
+`be post` in a submodule-bearing worktree, when the submodule carries uncommitted changes **after a `be patch` re-mount**, does NOT recurse to commit the sub first — it stamps the parent gitlink with the git **empty-blob sha** `e69de29bb2d1d6434b8b29ae775ad8c2e48c5391` (a non-commit). The parent commit is then poisoned: any later `be get`/`be patch` of it dies `sniff: not a commit` → `SNIFFFAIL`/`SUBSPARSE`. See [Submodules], [Sniff].
+
+##  Issues
+Reproduced landing MEM-021 (an abc-submodule fix) onto `main`, which already had MEM-010 (abc pin `f8bbaf19`).
+
+ -  Worktree `~/todo/MEM-021`: abc sub dirty with MEM-021's edits. `be patch '?main'` wove main (incl MEM-010's abc `f8bbaf19`) into it — afterward abc = `f8bbaf19` + MEM-021's dirty edits, **both present** (verified: `CURLReqFree` AND `abc/DNS.c`). Good so far.
+ -  `be post -m "…"` then committed the **parent** (`9c0c6b91`) but emitted **no** `be: post abc` / `sniff: commit <abcsha>` line — it never recursed to commit the dirty abc sub. (Contrast MEM-010's `be post`, which printed `be: post abc` + `sniff: commit f8bbaf19`.) The parent's `put abc` gitlink row recorded the abc pin as `e69de29b…` — the git **empty-blob** sha, not a commit.
+ -  `be patch 'be://localhost/todo/MEM-021?'` from `main` then ran `be get abc` at pin `e69de29b…` →
+    `sniff: not a commit` → `SNIFFFAIL` → `SUBSPARSE` → `BEDOGEXIT`. The land failed; `9c0c6b91` is a poisoned commit (its abc gitlink is a non-commit). `main` was left untouched (MEM-010 preserved, MEM-021 not landed).
+ -  Differential: MEM-010 (also an abc-submodule fix) landed cleanly — its `be post` DID recurse and commit the sub. The trigger here is that MEM-021's sub was dirty **after a `be patch '?main'` re-mounted/`be get abc`'d the sub**; that re-mount appears to leave the sub in a state where `be post`'s recursion neither commits it nor reads its real HEAD (reads empty instead).
+
+##  Impact
+Any submodule-bearing ticket that must be **stacked on a moved trunk** via `be patch '?main'` (the overlapping-ticket case — needed because [GET-017] blocks an in-place FF and [PATCH-002] is the regular-file half) cannot be committed: `be post` poisons the parent gitlink with the empty sha. This blocked MEM-021's land entirely.
+
+##  Blockers
+ -  None for diagnosis; the poisoned `9c0c6b91` + dirty abc in `~/todo/MEM-021` is live evidence. Sits next to [PATCH-002] (regular-file dirty-weave) and [GET-017] (no in-place FF) — together they break landing overlapping tickets.
+
+##  Planned
+ -  **First: a repro in `test/`** (the worker's priority — use the `test/lib/submodules.sh` fixture, like `test/patch/28-sub-gitlink-bump-reget` / `29` / `test/post/15`,`17`). Shape: parent + mounted sub; dirty-edit the sub; `be patch ?<branch>` (or `be get`) so the sub is dirty **after a re-mount**; `be post`; assert the parent gitlink is bumped to the sub's **real committed sha** (sub committed first), NOT `e69de29b…`, and that `be get`/`be patch` of that parent commit checks the sub out cleanly. Confirm it FAILS pre-fix (`not a commit`).
+ -  **Localize:** the submodule POST recursion (`sniff/POST.c`, `beagle/SUBS.c`/`BEActSubsPost`, and wherever the parent stages `put <sub>` and reads the sub HEAD). Why does `be post` skip committing a dirty sub after a `be patch` re-mount, and why does the gitlink read as the empty-blob sha? Pin the exact site that reads the sub pin and gets `e69de29b…`.
+ -  **Fix:** `be post` must recurse-and-commit a dirty submodule BEFORE bumping the parent gitlink, and the staged gitlink must be the sub's real committed sha — **never** the empty sha. A dirty sub after a `be patch`/`be get` re-mount must be committed exactly as on a fresh worktree.
+ -  Hand `~/todo/MEM-021` to this ticket's worker; don't reset it until the repro is captured.
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model"
+[Sniff]: ../wiki/Sniff.mkd "the sniff dog (worktree apply / post)"
+[PATCH-002]: ../PATCH/PATCH-002.mkd "be patch silently skips a wt-dirty file the incoming branch also changed"
+[GET-017]: ../GET/GET-017.mkd "detached/stale store-worktree won't FF in place"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

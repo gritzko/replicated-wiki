@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-019</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-019: be post records the EMPTY sha as the parent submodule gitlink when the sub is dirty after a be patch weave (fails to commit the sub first)</h1>
+<p>
+<code>be post</code> in a submodule-bearing worktree, when the submodule carries uncommitted changes *<strong>after a <code>be patch</code> re-mount</strong><strong>, does NOT recurse to commit the sub first — it stamps the parent gitlink with the git </strong><strong>empty-blob sha</strong>* <code>e69de29bb2d1d6434b8b29ae775ad8c2e48c5391</code> (a non-commit). The parent commit is then poisoned: any later <code>be get</code>/<code>be patch</code> of it dies <code>sniff: not a commit</code> → <code>SNIFFFAIL</code>/<code>SUBSPARSE</code>. See <a href="../wiki/Submodules.html">Submodules</a>, <a href="../wiki/Sniff.html">Sniff</a>.
+</p>
+<h2>Issues</h2>
+<p>
+Reproduced landing MEM-021 (an abc-submodule fix) onto <code>main</code>, which already had MEM-010 (abc pin <code>f8bbaf19</code>).
+</p>
+<ul>
+<li>Worktree <code>~/todo/MEM-021</code>: abc sub dirty with MEM-021's edits. <code>be patch '?main'</code> wove main (incl MEM-010's abc <code>f8bbaf19</code>) into it — afterward abc = <code>f8bbaf19</code> + MEM-021's dirty edits, *<strong>both present</strong>* (verified: <code>CURLReqFree</code> AND <code>abc/DNS.c</code>). Good so far.</li>
+<li><code>be post -m &quot;…&quot;</code> then committed the *<strong>parent</strong>* (<code>9c0c6b91</code>) but emitted *<strong>no</strong>* <code>be: post abc</code> / <code>sniff: commit &lt;abcsha&gt;</code> line — it never recursed to commit the dirty abc sub. (Contrast MEM-010's <code>be post</code>, which printed <code>be: post abc</code> + <code>sniff: commit f8bbaf19</code>.) The parent's <code>put abc</code> gitlink row recorded the abc pin as <code>e69de29b…</code> — the git *<strong>empty-blob</strong>* sha, not a commit.</li>
+<li><code>be patch 'be://localhost/todo/MEM-021?'</code> from <code>main</code> then ran <code>be get abc</code> at pin <code>e69de29b…</code> →</li>
+</ul>
+<div>
+<p>
+<code>sniff: not a commit</code> → <code>SNIFFFAIL</code> → <code>SUBSPARSE</code> → <code>BEDOGEXIT</code>. The land failed; <code>9c0c6b91</code> is a poisoned commit (its abc gitlink is a non-commit). <code>main</code> was left untouched (MEM-010 preserved, MEM-021 not landed).
+</p>
+</div>
+<ul>
+<li>Differential: MEM-010 (also an abc-submodule fix) landed cleanly — its <code>be post</code> DID recurse and commit the sub. The trigger here is that MEM-021's sub was dirty *<strong>after a <code>be patch '?main'</code> re-mounted/<code>be get abc</code>'d the sub</strong>*; that re-mount appears to leave the sub in a state where <code>be post</code>'s recursion neither commits it nor reads its real HEAD (reads empty instead).</li>
+</ul>
+<h2>Impact</h2>
+<p>
+Any submodule-bearing ticket that must be *<strong>stacked on a moved trunk</strong>* via <code>be patch '?main'</code> (the overlapping-ticket case — needed because <a href="../GET/GET-017.html">GET-017</a> blocks an in-place FF and <a href="../PATCH/PATCH-002.html">PATCH-002</a> is the regular-file half) cannot be committed: <code>be post</code> poisons the parent gitlink with the empty sha. This blocked MEM-021's land entirely.
+</p>
+<h2>Blockers</h2>
+<ul>
+<li>None for diagnosis; the poisoned <code>9c0c6b91</code> + dirty abc in <code>~/todo/MEM-021</code> is live evidence. Sits next to <a href="../PATCH/PATCH-002.html">PATCH-002</a> (regular-file dirty-weave) and <a href="../GET/GET-017.html">GET-017</a> (no in-place FF) — together they break landing overlapping tickets.</li>
+</ul>
+<h2>Planned</h2>
+<ul>
+<li>*<strong>First: a repro in <code>test/</code></strong>* (the worker's priority — use the <code>test/lib/submodules.sh</code> fixture, like <code>test/patch/28-sub-gitlink-bump-reget</code> / <code>29</code> / <code>test/post/15</code>,<code>17</code>). Shape: parent + mounted sub; dirty-edit the sub; <code>be patch ?&lt;branch&gt;</code> (or <code>be get</code>) so the sub is dirty *<strong>after a re-mount</strong><strong>; <code>be post</code>; assert the parent gitlink is bumped to the sub's </strong><strong>real committed sha</strong>* (sub committed first), NOT <code>e69de29b…</code>, and that <code>be get</code>/<code>be patch</code> of that parent commit checks the sub out cleanly. Confirm it FAILS pre-fix (<code>not a commit</code>).</li>
+<li>*<strong>Localize:</strong>* the submodule POST recursion (<code>sniff/POST.c</code>, <code>beagle/SUBS.c</code>/<code>BEActSubsPost</code>, and wherever the parent stages <code>put &lt;sub&gt;</code> and reads the sub HEAD). Why does <code>be post</code> skip committing a dirty sub after a <code>be patch</code> re-mount, and why does the gitlink read as the empty-blob sha? Pin the exact site that reads the sub pin and gets <code>e69de29b…</code>.</li>
+<li>*<strong>Fix:</strong>* <code>be post</code> must recurse-and-commit a dirty submodule BEFORE bumping the parent gitlink, and the staged gitlink must be the sub's real committed sha — *<strong>never</strong>* the empty sha. A dirty sub after a <code>be patch</code>/<code>be get</code> re-mount must be committed exactly as on a fresh worktree.</li>
+<li>Hand <code>~/todo/MEM-021</code> to this ticket's worker; don't reset it until the repro is captured.</li>
+</ul>
+</body>
+</html>

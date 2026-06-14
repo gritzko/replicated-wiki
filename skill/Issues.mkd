@@ -3,11 +3,12 @@
 Issues are cleared by a fleet of background agents — one per ticket, each in its own isolated clone. The loop is: agree the fix, fork an agent, it repros-first and implements, then STOPS for a human to gate the commit; on approval it updates, re-tests, and fast-forward-posts. The method keeps many fixes in flight at once while every landed commit stays reviewed, tested, and ff-only.
 
 ##  One ticket per issue
-Every discrepancy is a numbered ticket e.g. `todo/TOPIC/TOPIC-001.mkd`, and the fix approach is agreed before any agent is forked.
+Every issue is a numbered ticket e.g. `todo/TOPIC/TOPIC-001.mkd`, and the fix approach is agreed before any agent is forked.
 
- -  Tickets are [Plan]-shaped pages (Issues, Blockers, Planned, Landed); `DIS-NNN` for gaps, `GET-`/`POST-NNN` for verb-specific.
+ -  Tickets are [Plan]-shaped pages (Issues, Blockers, Planned, Landed); `DIS-NNN` for spec/code gaps, `GET-`/`POST-NNN` for verb-specific.
  -  Decide the fix first (the Planned section, or a design pass for open-ended ones), then fork — never on a vague idea.
- -  A discrepancy found mid-fix becomes its OWN ticket, never a silent patch (this session spawned POST-001/002, GET-002).
+ -  A spec-code discrepancy or a bug found mid-fix becomes its OWN ticket, never a silent patch (this session spawned POST-001/002, GET-002).
+ -  Issue docs have size limits. Sizes count in 64-char lines (top intro 8 lines, section intro 4, bulletpoint 2).
 
 ##  One agent per ticket, in an isolated tree (worktree or clone)
 Each agent gets its own tree WITH BEAGLE — either a store-backed worktree (cheap, shares the local `.be`) or a full independent clone — builds a debug tree there, and never touches another agent's files.
@@ -22,11 +23,13 @@ An agent repros the bug, fixes it, gets the suite green, then STOPS without comm
  -  Repro-first (`CLAUDE.md` §17): write a failing test, confirm it fails, then fix; the repro and full `ctest` must end green.
  -  The agent pauses at the commit boundary and reports root cause, fix (file:line), and test result; it does not post on its own.
  -  The human says "commit" (land it) or "iterate" (another pass); a real design fork makes the agent stop and ask, never guess.
+ -  Commit message is 1 line max (64 chars), must start with the ticket code
 
 ##  Commit and ff-post, serialized
 On approval the agent updates onto current trunk, re-tests, commits, and fast-forward-posts — one post at a time.
 
  -  `be get --nosub` to update first, re-run the suite, then `be post`; the push is ff-only and NEVER forced.
+ -  may also use `be patch` in either direction to recoincile the changes; never do manual `cp`, patching or merging.
  -  Post one ticket at a time: two concurrent posts race the same base and the loser is non-FF — re-land it, don't force.
  -  Git-scheme (`ssh:`) remotes pass `--nosub` (submodules are manual there); messages may be multi-line once the parser allows.
  -  Once a ticket is merged back into the main repo, the ticket's worktree can be removed to free disk space.

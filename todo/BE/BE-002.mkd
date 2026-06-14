@@ -1,0 +1,31 @@
+#   BE-002: cryptic errors for mistyped verbs/projectors (`be difff`)
+
+Beagle's CLI errors are opaque when the first token is a typo. A mistyped verb or projector is not recognised, so `be` silently treats the bareword as a file path and hands it to the [Bro] pager, which fails with a raw error code:
+
+    $ be difff
+    bro: cannot open difff: FILENONE
+
+This leaks the internal dog name (`bro` — the user typed `be`), surfaces a raw `ok64` code (`FILENONE`), offers no "did you mean", and — worst — exits **0**, so scripts read the failure as success. The user expected something like `be: 'difff' is not a beagle command — did you mean 'diff'?`. See [Verbs], [Projector].
+
+##  Issues
+The no-verb bareword path in `becli_inner` (beagle/BE.cli.c) routes any non-verb, non-projector bareword straight to `bro <word>` with no validation.
+
+ -  A typo of a verb/projector (`difff`→`diff`, `psot`→`post`, `stauts`→`status`) is indistinguishable from a real filename, so the diagnosis is bro's generic `cannot open <x>: FILENONE` — wrong layer, wrong vocabulary, no suggestion.
+ -  Exit code is **0**: bro `continue`s past the open-miss (bro/BRO.exe.c) without setting a failure code, so `be difff` reports success. A failed command must exit non-zero.
+ -  No nearest-command suggester exists; `BE_VERB_NAMES` (beagle) and the projector table (`DOG_PROJECTORS`, dog/DOG.c) are the command vocabulary but nothing measures a bareword against them.
+
+##  Blockers
+None. The edit-distance helper lands in `dog/` (app layer), not `abc/` — core abc edits need separate review ([[abc-changes-need-review]]); the verb/projector vocabulary is already a dog/beagle concern.
+
+##  Planned
+Own the diagnostic in `be` before bro is ever reached, with a "did you mean" suggester.
+
+ -  Add `DOGSuggestCommand(u8cs word, char const *const *extra, u8csp out)` in dog/DOG.c: bounded Levenshtein (`$at`/`$len`, no pointer arithmetic) over the single-sourced `DOG_PROJECTORS` table plus the caller's NUL-terminated `extra` list (beagle passes `BE_VERB_NAMES`). Returns YES + closest name when within a small typo threshold (dist ≤ 2 and < len(word)); NO otherwise. Out slice points into static literal storage. Declared in dog/DOG.h.
+ -  In the no-verb branch of `becli_inner`: when the URI is a pure local path (empty scheme/host/query) that does **not** `FILEStat` on disk (mirror bro's `PATHu8bFeed`+`FILEStat` resolution), diagnose instead of spawning bro — close match → `be: '<word>' is not a beagle command — did you mean '<sugg>'?`; else → `be: '<word>': no such file or beagle command (see be --help)`. Return a new non-zero `BENOCMD` (RON60 ≤ 10 chars, mint with `scripts/ok64-*`). Existing files/dirs, slashed paths, and `?ref`/`//host`/scheme URIs still reach bro unchanged.
+ -  Fix bro's success-on-miss: when no URI could be opened/listed, bro/BRO.exe.c must exit non-zero (so a direct `bro nonexistent` also fails honestly), not only rely on the be-side guard.
+ -  Repro test `beagle/test/be-unknown-command.sh` (repro-first, [CLAUDE] §17): `be difff` → stderr matches `did you mean 'diff'`, exit ≠ 0; `be psot` → `did you mean 'post'`; `be totallynotacommand` → `no such file or beagle command`, exit ≠ 0; regression guards — `be README.md` (real file) still pages, `be diff:` / `be status` (real projectors) still run, `be src/missing.c` (slashed miss) gives the generic line not a bogus suggestion.
+
+[Bro]: ../wiki/Bro.mkd "the bro pager dog"
+[Verbs]: ../wiki/Verbs.mkd "the HTTP-verb dictionary"
+[Projector]: ../wiki/Projector.mkd "read-only view projectors"
+[CLAUDE]: ../../beagle/CLAUDE.md "repro-first coding rule"

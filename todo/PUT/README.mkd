@@ -1,8 +1,15 @@
 #   PUT tickets: reflog edits (stage / branch / tag)
 
-`be put` is the reflog-write verb — stage files (into the `.be/wtlog` ULOG), set a branch tip, fast-forward a remote. No open tickets — landed ones kept as breadcrumbs below. The fix-and-land method is [Issues].
+`be put` is the reflog-write verb — stage files (into the `.be/wtlog` ULOG), set a branch tip, fast-forward a remote. Tickets here cover its reflog-edit correctness. The fix-and-land method is [Issues].
+
+##  Active tickets
+
+ -  [PUT-002] — **CRITICAL.** `be put ?#<sha>` can't reset a branch tip: a `POST_MIG` shared-ancestry walk refuses when the new sha doesn't reach the current tip within `POST_MIG_MAX` (a re-hashed/partially-indexed history bails), and neither `--force` nor the `!` bang bypasses the gate — contradicting "PUT is unconstrained." A contaminated `?main` can't be rolled back through `be` at all (only hand-editing `refs` + dropping `.refs.idx`). A bare/`--force` tip-set must set the ref OUTRIGHT, no reachability walk.
+
+##  Landed (breadcrumbs)
 
  -  [PUT-001] — **LANDED `d628fd67`.** `be put <sub>/<path>` now relays into a mounted submodule's own staging: `BEActSubsPut` (`beagle/BE.cli.c:2914`) routes each path-form arg that lands in a mount through `BERelaySub` to the sub's `be put`, parent-bound paths fall through to `sniff put`; honors `--nosub`, staging stays wtlog-only. Regression `test/put/12-sub-path-scoped` (passes WITH_SSH). Related: [[DIS-034]] (`be put <dir>` trailing-slash) is a separate PUT path-classification gap.
 
+[PUT-002]: PUT-002.mkd "be put ?#<sha> can't reset a tip — POST_MIG gate ignores --force/!"
 [PUT-001]: PUT-001.mkd "PUT delegates into a mounted submodule"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

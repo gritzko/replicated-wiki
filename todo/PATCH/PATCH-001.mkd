@@ -1,0 +1,25 @@
+#   PATCH-001: be patch of a behind source drops a forward submodule-gitlink bump (checks out the sub, never stages the parent row)
+
+`be patch` of a source whose ONLY forward change is a submodule gitlink bump checks the submodule out at the new pin but does NOT stage the parent gitlink row — so the merge silently leaves the parent pinning the OLD commit while the sub worktree sits at the NEW one, and `be post` records nothing. Hit while landing MEM-010 (an abc-submodule fix) per the dogfood flow. See [Verbs], [Submodules].
+
+##  Issues
+Observed landing MEM-010: worktree `be://localhost/todo/MEM-010?` was detached at `838e592b` (behind `main`), its tip commit `aa6c594a` bumping ONLY the abc gitlink to `f8bbaf19`.
+
+ -  `be patch 'be://localhost/todo/MEM-010?'` on `main` printed `sniff: patch: noop=239 take-theirs=0 merged=0 added=0 deleted=0 … (nothing absorbed — no patch row staged)` for the parent, yet its submodule-recursion arm ran `be get abc` and checked the sub out at the new pin (`upd CURL.c/CURL.h/test/CURLfw.c`, `checkout done`).
+ -  Result is a **half-applied, inconsistent state**: the abc *worktree* is at `f8bbaf19` (the fix is on disk) but `main`'s committed tree still pins `cd2057d0`, and `be status` reports the parent **clean** — so a following `be post` commits nothing. The bump only landed after a manual `be put abc` + `be post` (`a2e2300c`).
+ -  Root hypothesis: the behind source's parent tree is — apart from the one gitlink row — an ancestor of `main`, so the parent weave classifies EVERY row (including the lone forward gitlink) as "theirs older → noop" and drops it; the independent submodule-recursion arm still advances the sub on disk. The forward-moved gitlink is the one row that must NOT be treated as behind.
+
+##  Blockers
+ -  Adjacent to [[GET-017]] (a detached/stale store-backed worktree won't FF in place, so `be get` refuses the dirty/cross-branch update — which is *why* the land has to go through `be patch` from the worktree-remote at all). PATCH-001 is the merge-side half: even via `be patch`, the gitlink bump is dropped.
+
+##  Planned
+A submodule whose pin moved forward relative to the target is an absorbable change regardless of the surrounding behind/ahead verdict.
+
+ -  In the parent weave, classify a gitlink row by comparing the two pins against their common base independently of the rest of the tree: a pin that advanced (target-base..source = forward) is **take-theirs** and must stage a parent put-row, so `be post` records the bump — matching the sub checkout the recursion already performs.
+ -  Keep the sub-checkout and the parent-gitlink-row consistent: either both advance or neither (no half-applied state); never leave `be status` reporting clean while the sub worktree sits ahead of the recorded pin.
+ -  Repro test: a behind worktree whose ONLY forward change is a sub gitlink bump; `be patch 'be://…/<wt>?'` then assert the parent gitlink put-row is staged and a plain `be post` records the bump (NO manual `be put <sub>` needed), and that the sub checkout matches the newly-recorded parent pin.
+
+[Verbs]: ../wiki/Verbs.mkd "the HTTP-verb dictionary (PATCH = merge/rebase/cherry-pick)"
+[Submodules]: ../wiki/Submodules.mkd "submodule model"
+[GET-017]: ../GET/GET-017.mkd "detached/stale store-worktree won't FF in place"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

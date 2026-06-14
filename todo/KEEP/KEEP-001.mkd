@@ -1,0 +1,29 @@
+#   KEEP-001: converge the three near-duplicate keeper tree-walkers
+
+Keeper carries **three copies** of the same "recurse a git tree, hold a per-level scratch, collect subtree shas" walker. They drifted apart, and the MEM-023/MEM-024 memory-safety work had to fix the *same* per-level-1 MiB-buffer bug in each copy separately — the clearest possible signal they should be one function. Per [CLAUDE] §13 (don't reimplement) and the reuse-not-local-dups rule, fold them into a single keeper-owned walker with a visitor callback. See [Keeper].
+
+##  Issues
+The three walkers are byte-similar but each grew its own extra logic, so a fix in one silently leaves the others broken (exactly what happened in MEM-023/024).
+
+ -  `keeper/WALK.c:walk_tree_dive` (`:40`) — the general **visitor** form (`visit`/`ctx`, `pathbuf`, `eager` lazy flag); drives `WALKTree`/`WALKTreeLazy`, the pack-build reachable-set. Fixed by [[MEM-023]] (right-size the carve via `KEEPGetSize`, `WALK_MAX_DEPTH` 4096 cap).
+ -  `keeper/KEEP.c:keep_walk_tree` (`:2716`) — a **reachable-set collector** (`out`/`n`/`cap`), no dedup. Reachable ONLY from the legacy ssh `KEEPPush` — it has **no test caller at all**. Fixed by [[MEM-023]] (rewritten iterative, BASS worklist).
+ -  `keeper/WIRECLI.c:wpush_walk_tree` (`:1109`) — `keep_walk_tree` plus a `have`/`add_to_have` **dedup set** (the merge-history short-circuit at `:1183`); the LIVE `be://` `WIREPush` path. Its own comment (`:1069`) admits "Mirrors keep_walk_tree (KEEP.c) but lives [here]". Fixed by [[MEM-024]].
+ -  Net: a memory or correctness fix to tree-walking must be written three times; two of the copies are reachable-set collectors that differ only by an optional dedup set, and the third is a strict superset (a visitor) of both.
+
+##  Blockers
+ -  Land [[MEM-023]] and [[MEM-024]] FIRST, so the convergence starts from fixed, tested, depth-capped code rather than re-introducing the leaks during a refactor.
+ -  The copies carry differing extra behaviour the unified walker must parameterise without regressing: WALK's `eager`/lazy + path accumulation, WIRECLI's `have`-set dedup, KEEP/WIRECLI's bounded `out` reachable-set (vs WALK's visitor). The reachable-set output is order-independent (only consumer = the pack builder, iterates unordered) — verify before merging.
+
+##  Planned
+One iterative, depth-capped, right-sized keeper walker; the three call sites pass a visitor.
+
+ -  Extract `KEEPWalkTree(keeper*, sha1cp root, <visitor>, ctx)` from MEM-023's iterative BASS-worklist `keep_walk_tree` (right-size each tree carve via `KEEPGetSize`, single depth cap, O(1) live scratch, no recursion). The visitor receives each entry (sha, kind, path); per-site behaviour becomes the callback.
+ -  Re-express the three call sites as visitors: WALK's `WALKTree`/`WALKTreeLazy` keep their `visit`/`eager`/path semantics; the reachable-set collectors become a visitor that appends to `out` (cap-checked) — WIRECLI's version additionally consults/updates its `have` set in the callback. Delete the now-dead `keep_walk_tree` (legacy ssh `KEEPPush`, no caller) or route `KEEPPush` through the shared walker.
+ -  Reuse canonical keeper/dog-git tree-descent helpers (`KEEPGetSize`, the `WALK_KIND_*` decode) — no fresh re-rolls. Keep the change behaviour-preserving and file-scoped to keeper.
+ -  Repro/regression (repro-first, [CLAUDE] §17): a table-driven test exercising a deep tree (depth-cap), a wide tree (no arena exhaustion — the MEM-023/024 leak), and the `have`-set dedup short-circuit (a shared merge-history subtree visited once). Must pin the push round-trip (`WIREPush`) green so the live path is covered, unlike the dead `keep_walk_tree` today.
+
+[Keeper]: ../wiki/Keeper.mkd "the keeper dog (object pool)"
+[CLAUDE]: ../../beagle/CLAUDE.md "coding guidelines — reuse, repro-first"
+[MEM-023]: ../MEM/MEM-023.mkd "tree-walk recursion holds a 1MB buffer per level"
+[MEM-024]: ../MEM/MEM-024.mkd "push-side recursive walk holds 1MB mmap per frame"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

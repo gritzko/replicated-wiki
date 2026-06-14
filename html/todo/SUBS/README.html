@@ -15,39 +15,19 @@
 <p>
 Audit of <code>be</code>'s submodule recursion across all verbs (2026-06-05).  Model
 and spec in <a href="../wiki/Submodules.html">Submodules</a>.  Recursion is *<strong>default-on for every source type</strong>*
-(git/ssh included); <code>--sub</code> is a dead no-op, <code>--nosub</code> is the only opt-out
-(verified: no <code>CLIHas(c,&quot;--sub&quot;)</code> anywhere, six <code>--nosub</code> sites in
-<code>beagle/BE.cli.c</code>).  HEAD, GET (checkout/clone/force/prune), and POST
-topology (post-order, synthetic dot-branch <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;branch&gt;</code>,
-gitlink bumps, detached-refuse) all work.  The gaps below are the deltas.
+(git/ssh included); <code>--sub</code> is a dead no-op, <code>--nosub</code> is the only opt-out.
+HEAD, GET (checkout/clone/force/prune), and POST topology (post-order,
+synthetic dot-branch <code>?/&lt;sub&gt;/.&lt;parent&gt;/&lt;branch&gt;</code>, gitlink bumps,
+detached-refuse) all work.  SUBS-001..012, 016, 017, 018 landed; the gaps
+below are the deltas that remain.
 </p>
 <p>
 | Ticket | Sev | Verb | One-line |
 |--------|-----|------|----------|
-| <a href="SUBS-001.html">SUBS-001</a> | HIGH (LANDED <code>97de77b8</code>) | post | a level's own tracked edits silently dropped when that level also has a dirty sub (selective-mode flip from the recursion's gitlink-bump put-row) — fixed via option (a): <code>sniff/POST.c</code> <code>post_pd_cb</code> no longer flips <code>any_pd</code> on sub-bump put rows |
-| <a href="SUBS-002.html">SUBS-002</a> | HIGH (LANDED <code>a31bdfcf</code>) | patch | unusable on any gitlink-bearing parent — fixed: <code>BE_PLAN_PATCH</code> no longer excludes <code>BEActSubsPatch</code> on transport URIs (mask→0, <code>beagle/DISPATCH.c</code>); spurious <code>bad ref ''</code> silenced; patch/28+29 added |
-| <a href="SUBS-003.html">SUBS-003</a> | MED (FIXED) | get | clone status report stamped <code>DDMon</code> not <code>HH:MM</code> (mktime DST round-trip); broke get/05,07 — fixed in <code>dog/HUNK.c</code> |
-| <a href="SUBS-004.html">SUBS-004</a> | MED (LANDED <code>5fb56d6f</code>) | put | bare <code>be put</code> with only the sub dirty exited 206/PUTNONE — fixed: <code>be_recurse_capture</code> propagates a child <code>*NONE</code> as the NONE class (no longer collapsed to OK) and <code>BEActSubsRelay</code> returns <code>BESTOP</code> (→OK) when a sub staged work, clearing the parent's stale PUTNONE; a truly-empty bare put still surfaces PUTNONE |
-| <a href="SUBS-005.html">SUBS-005</a> | MED (LANDED <code>9aabd863</code>) | delete | path-scoped delete of a sub / sub-interior file false-positived DELDIRTY — fixed: <code>sniff/DEL.c</code> <code>del_sub_classify</code> recognises gitlink + sub-interior paths and skips with a sub-aware message instead of DELDIRTY (full unmount deferred to <a href="SUBS-008.html">SUBS-008</a>) |
-| <a href="SUBS-006.html">SUBS-006</a> | MED (LANDED <code>414d9f96</code>) | post | git-remote push aborts NOBRANCH on a clean nested sub whose synthetic branch does not yet exist — fixed: detached wt returns POSTNONE (no-op) from POSTPromote's missing-branch arm (<code>sniff/POST.c</code>); post/29 added |
-| <a href="SUBS-007.html">SUBS-007</a> | MED (LANDED <code>3ab50efd</code>) | head | <code>be head</code> omits sub working-tree dirty state (spec L20); head/04 is a false-positive test — fixed: <code>behead_recurse_cb</code> now relays each sub's bare status (<code>beagle/BE.cli.c</code>); head/21 added, head/04 tightened |
-| <a href="SUBS-008.html">SUBS-008</a> | LOW (LANDED <code>50722656</code>) | get | gitlink-removed target unmounts the <code>.be</code> anchor but orphans the sub's worktree files on disk — fixed: <code>BEGetSubUnmount</code> FILErmrf's the whole mount dir (<code>beagle/SUBS.c</code>); be-get-sub-unmount-clean added |
-| <a href="SUBS-009.html">SUBS-009</a> | LOW (PARTLY LANDED <code>50724d9a</code>) | put | sub-add via <code>be put</code> — fixed the misleading PUTNONE with an actionable refusal naming the <code>sniff sub-mount</code> step (<code>sniff/PUT.c</code>); full git-submodule-add parity (URL+pin) → <a href="SUBS-013.html">SUBS-013</a>. put/11 added |
-| <a href="SUBS-010.html">SUBS-010</a> | LOW (LANDED <code>cda5c691</code>) | docs | stale &quot;git source needs <code>--sub</code>&quot; comments/shim (<code>test/lib/submodules.sh</code>, get/05,07) describe removed gating — fixed: shim dropped, phase-2 narrative purged, tests now drive default recursion |
-| <a href="SUBS-011.html">SUBS-011</a> | HIGH (LANDED <code>7d37f90f</code>) | grep/spot/regex | search projectors don't descend into subs — fixed: index-on-mount (<code>BEIndexMount</code>) + <code>BEProjectorSubs</code> recursion (<code>beagle/SUBS.c</code>,<code>BE.cli.c</code>); spot/10 added |
-| <a href="SUBS-012.html">SUBS-012</a> | MED (LANDED <code>7d37f90f</code>) | diff/tree/blob/refs/log/blame | projectors parent-only at a gitlink — fixed: whole-tree fan-out (diff:/tree:) + path-in-mount routing (blob:/tree:/log:/blame:); diff/06, tree/01 added. <code>refs:?**</code> deferred (refs: unimplemented in keeper) |
+| <a href="SUBS-019.html">SUBS-019</a> | HIGH | post | <code>be post</code> records the git *<strong>empty sha</strong>* <code>e69de29b</code> as the parent gitlink when the sub is dirty after a <code>be patch</code> re-mount (never commits the sub first) → poisoned parent commit, later <code>be get</code>/<code>be patch</code> dies <code>not a commit</code>. Blocked MEM-021's land. Worker owns <code>~/todo/MEM-021</code>; repro-first in <code>test/</code>. |
 | <a href="SUBS-013.html">SUBS-013</a> | LOW | put | full <code>git submodule add</code> parity: stage a new <code>160000</code> gitlink + <code>.gitmodules</code> from <code>be put</code> — needs a chosen URL source + pin grammar (escalated from SUBS-009) |
 | <a href="SUBS-014.html">SUBS-014</a> | LOW | put | misleading &quot;does not exist — skipped&quot; PUTNONE fires for ANY plain untracked dir named without a trailing slash (not sub-specific); wants a &quot;did you mean <code>dir/</code>?&quot; hint |
 | <a href="SUBS-015.html">SUBS-015</a> | LOW | blob | <code>blob:&lt;path&gt;</code> WITHOUT <code>?ref</code> returns KEEPNONE even in the parent (pre-existing, not sub-related) |
-| <a href="SUBS-016.html">SUBS-016</a> | LOW (*<strong>LANDED</strong>* abc <code>8b9dfe0c</code>/parent <code>109c7467</code>) | get/fetch | sub-seed of <code>refs</code>/<code>wtlog</code> used <code>O_TRUNC</code> <code>FILECreate</code>, guarded only by <code>!already_mounted</code> — a false-negative would zero a live sub log (<a href="">[ULOG-001</a>] class). Fixed: guard the seed on <code>FILEExists</code> (revitalized as <code>ok64</code>: OK/FILENONE/error) — <code>if(e==OK) skip; if(e!=FILENONE) return e; else FILECreate</code> — so an existing log is never truncated regardless of the mount guard. Also purged the regex-migrated <code>FILENOENT</code> alias → canonical <code>FILENONE</code> (incl. 7 <code>vanished mid-walk</code> readers); left a <code>FILE_ERR_VOCAB[ENOENT]→FILENONE</code> stopgap pending <a href="">[ABC-002</a>]. Surfaced by ULOG-001 (not from the 2026-06-05 audit) |
-</p>
-<p>
-Tests added this audit: <code>test/put/08-10</code>, <code>test/delete/07-09</code>, <code>test/patch/28-29</code>,
-<code>test/post/26-27</code>, <code>test/head/21</code>, <code>test/all/01-subs-all-verbs</code> (bug repros
-registered <code>WILL_FAIL</code> until the owning ticket lands).  <code>test/post/26-27</code>
-landed green with SUBS-001 (<code>97de77b8</code>) and are off <code>WILL_FAIL</code>.  <code>test/put/09</code>
-landed green with SUBS-004 (<code>5fb56d6f</code>) and <code>test/delete/08</code> with SUBS-005
-(<code>9aabd863</code>).  The rest stay <code>WILL_FAIL</code> pending their tickets.
 </p>
 </body>
 </html>

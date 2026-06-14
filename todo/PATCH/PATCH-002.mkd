@@ -1,0 +1,31 @@
+#   PATCH-002: be patch does not weave an incoming change into a worktree-dirty file (silently skips it as noop)
+
+`be patch` MUST weave incoming-branch changes into a **dirty** worktree (fine-grained, no false conflicts — that is the whole point of the verb). It does not: when a file is BOTH locally-modified AND changed on the incoming branch, `be patch` leaves the local version untouched and the incoming change is silently dropped (counted in `noop`, not `merged`). A following `be post` then reverts the incoming side — silent data loss. This blocks landing any ticket that touches a file another ticket already landed. See [Verbs], [Sniff].
+
+##  Issues
+Reproduced live while landing MEM-024 onto `main` (which already had MEM-025).
+
+ -  Setup: worktree `~/todo/MEM-024` detached at base `838e592b`, with **dirty** rework edits to `keeper/WIRECLI.c` (function `wpush_walk_*`) and `keeper/test/WIRE_CLIENT.c` (new test `WIRECLIENTtest_deep_chain_walk`). `main` = `78fa65f5` had **already landed MEM-025**, which modified the SAME two files in **disjoint** regions (`wcli_match_advert` `first_name` snapshot; new test `WIRECLIENTtest_huge_advert_firstref`).
+ -  Ran `be patch '?main'` in the dirty worktree. Output:
+    `sniff: patch: noop=143 take-theirs=5 merged=0 added=0 deleted=0 content-conflict=0 mod-del-kept=0 failed=0`
+    It applied main's changes to 5 **clean** files (`take-theirs=5`: e.g. `sniff/SUBS.c`, `test/log/01-…/run.sh`) but did **nothing** for the two files that were dirty-AND-changed-upstream: `merged=0`, `content-conflict=0`. Afterwards those files are **MEM-024-only** — MEM-025's `first_name_buf`/`WIRECLIENTtest_huge_advert_firstref` are absent (verified by `rg`).
+ -  So the two dirty+upstream-changed files fell into the **`noop=143`** bucket: `be patch` evidently classifies a worktree-dirty path as *noop / skip* instead of routing it to the 3-way weave. Disjoint regions should weave clean (`merged++`); a genuinely overlapping region should report `content-conflict` — never silent-skip.
+ -  Corroboration: `be post --nosub` on the same worktree (cascade onto `main`) DID detect a conflict (`GRAFCNFL`, "cascade aborted (merge conflict in descendant)") — so the conflict machinery sees the overlap; only the `be patch`-into-dirty path silently skips it.
+
+##  Impact
+The parallel fix-and-land loop ([Issues]) depends on `be patch` weaving each ticket onto a moved trunk, **including files another ticket already touched**. Silent-skip means the second ticket either can't land or, if force-posted, **reverts the first ticket's landed change with no warning**. This is the concrete blocker that stranded MEM-024 (overlapping MEM-025). Distinct from [PATCH-001] (a behind-source gitlink bump not staged) — this one is the core weave-into-dirty defect.
+
+##  Blockers
+ -  None for diagnosis. The broken worktree is preserved AS the evidence (see Planned). Related: [[GET-017]] (the worktree is stuck at a stale base, which is *why* the in-place `be patch` update is needed at all).
+
+##  Planned
+ -  **First: a hermetic repro in `test/patch/`** (the worker's #1 priority). Minimal shape: a store with a base commit; a branch `B` that edits file `F` in region 1; a worktree that **dirty-edits `F` in region 2** (disjoint); `be patch ?B`; assert `F` afterwards contains BOTH edits (region 1 woven in, region 2 preserved) and the row is counted `merged`, not `noop`. Add an overlapping-region variant that must report `content-conflict` (not silent-skip). Follow the existing `test/patch/<NN>-<name>/run.sh` harness. Confirm it FAILS on current `be` before any fix.
+ -  **Localize:** the classification in `sniff/PATCH.c` (`PATCHApply` / the per-path `noop` / `take-theirs` / `merged` / `content-conflict` decision). Hypothesis: a path that is dirty in the wt is short-circuited to `noop` (or to a "protect local edit" skip) before the incoming-vs-base diff is consulted, so an incoming change to that path is dropped. Find the exact gate and why the weave isn't entered for a dirty path.
+ -  **Fix:** a wt-dirty path whose incoming side changed must enter the 3-way weave (base, theirs=incoming, ours=dirty-wt) → `merged` on disjoint, `content-conflict` on true overlap; never `noop`-skip. Then the repro goes green and MEM-024 can land by `be patch`-ing onto `main`.
+ -  The broken `~/todo/MEM-024` worktree (detached `838e592b`; ~5 staged `pat` rows from the failed `be patch ?main`; abc bumped to `f8bbaf19`; 4 dirty rework files lacking MEM-025) is **handed to this ticket's worker** as a live instance of the bug — do not reset it until the repro is captured.
+
+[Verbs]: ../wiki/Verbs.mkd "PATCH = weave-merge another branch into the worktree"
+[Sniff]: ../wiki/Sniff.mkd "the sniff dog (worktree apply)"
+[PATCH-001]: PATCH-001.mkd "be patch drops a forward submodule-gitlink bump from a behind source"
+[GET-017]: ../GET/GET-017.mkd "detached/stale store-worktree won't FF in place"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

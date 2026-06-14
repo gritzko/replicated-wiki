@@ -1,0 +1,29 @@
+#   GET-019: `be get be://host?/<title>` clone is broken — truncated pack + stale-server ?main
+
+A full `be://` clone produces an unusable worktree on two counts: the wire server ships a **truncated pack**, and it serves a **stale `?main`**.
+
+    $ be get be://localhost?/beagle
+    be: subdir clone — shard at /home/gritzko/.be/localhost
+    unpk: scan incomplete 128215/253812
+    …
+    BE.dbg: sub path=abc pin=e69de29bb2d1d6434b8b29ae775ad8c2e48c5391 …
+    sniff: not a commit  → SNIFFFAIL → SUBSPARSE → BEDOGEXIT
+
+See [Keeper], [Store].
+
+##  Issues
+ -  **Truncated pack:** `unpk: scan incomplete 128215/253812` — the pack the `be://` upload-pack sent declares 253812 objects but only ~128215 are present, so the clone is missing ~half its objects (checkout then fails on the missing ones).
+ -  **Stale-server ref:** the long-running `woof` server served a *pre-recovery* `?main` (a commit whose abc gitlink is the empty sha `e69de29b`, not the live tip) — it doesn't re-read `refs` after they change, so a clone gets poisoned/old history → `SUBSPARSE`.
+ -  (Store mis-naming `~/.be/localhost` is the separate [DIS-037] facet — a partial fix landed today; the clone-correctness bugs above are the blocker.)
+
+##  Impact
+The Issues loop needs **independent clones** per worker (`be get be://localhost?/beagle`); if a clone is truncated/poisoned, the isolated-tree workflow is impossible — which is part of why today's work fell back to the shared store and corrupted it. Workflow-critical.
+
+##  Planned
+ -  Upload-pack must serve the FULL reachable closure for the requested tip (count header == objects shipped); fail loudly, never ship a short pack.
+ -  The wire server must serve the CURRENT `refs` (re-read per request / invalidate on ref change), not a stale snapshot.
+ -  Repro: stand up a `be://` server, clone, assert `unpk` scans `count/count` and the cloned tip == the live `?main` (incl. a fresh submodule pin); mutate `?main`, re-clone, assert the new tip is served.
+
+[Keeper]: ../wiki/Keeper.mkd "the keeper dog (wire / packs)"
+[Store]: ../wiki/Store.mkd "store layout"
+[DIS-037]: ../DIS/DIS-037.mkd "remote store dir named by host, not project title"

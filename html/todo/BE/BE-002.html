@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-002: cryptic errors for mistyped verbs/projectors (<code>be difff</code>)</h1>
+<p>
+Beagle's CLI errors are opaque when the first token is a typo. A mistyped verb or projector is not recognised, so <code>be</code> silently treats the bareword as a file path and hands it to the <a href="../wiki/Bro.html">Bro</a> pager, which fails with a raw error code:
+</p>
+<div>
+<p>
+$ be difff
+bro: cannot open difff: FILENONE
+</p>
+</div>
+<p>
+This leaks the internal dog name (<code>bro</code> — the user typed <code>be</code>), surfaces a raw <code>ok64</code> code (<code>FILENONE</code>), offers no &quot;did you mean&quot;, and — worst — exits *<strong>0</strong>*, so scripts read the failure as success. The user expected something like <code>be: 'difff' is not a beagle command — did you mean 'diff'?</code>. See <a href="../wiki/Verbs.html">Verbs</a>, <a href="../wiki/Projector.html">Projector</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The no-verb bareword path in <code>becli_inner</code> (beagle/BE.cli.c) routes any non-verb, non-projector bareword straight to <code>bro &lt;word&gt;</code> with no validation.
+</p>
+<ul>
+<li>A typo of a verb/projector (<code>difff</code>→<code>diff</code>, <code>psot</code>→<code>post</code>, <code>stauts</code>→<code>status</code>) is indistinguishable from a real filename, so the diagnosis is bro's generic <code>cannot open &lt;x&gt;: FILENONE</code> — wrong layer, wrong vocabulary, no suggestion.</li>
+<li>Exit code is *<strong>0</strong>*: bro <code>continue</code>s past the open-miss (bro/BRO.exe.c) without setting a failure code, so <code>be difff</code> reports success. A failed command must exit non-zero.</li>
+<li>No nearest-command suggester exists; <code>BE_VERB_NAMES</code> (beagle) and the projector table (<code>DOG_PROJECTORS</code>, dog/DOG.c) are the command vocabulary but nothing measures a bareword against them.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None. The edit-distance helper lands in <code>dog/</code> (app layer), not <code>abc/</code> — core abc edits need separate review (<a href="">[abc-changes-need-review</a>]); the verb/projector vocabulary is already a dog/beagle concern.
+</p>
+<h2>Planned</h2>
+<p>
+Own the diagnostic in <code>be</code> before bro is ever reached, with a &quot;did you mean&quot; suggester.
+</p>
+<ul>
+<li>Add <code>DOGSuggestCommand(u8cs word, char const *const *extra, u8csp out)</code> in dog/DOG.c: bounded Levenshtein (<code>$at</code>/<code>$len</code>, no pointer arithmetic) over the single-sourced <code>DOG_PROJECTORS</code> table plus the caller's NUL-terminated <code>extra</code> list (beagle passes <code>BE_VERB_NAMES</code>). Returns YES + closest name when within a small typo threshold (dist ≤ 2 and &lt; len(word)); NO otherwise. Out slice points into static literal storage. Declared in dog/DOG.h.</li>
+<li>In the no-verb branch of <code>becli_inner</code>: when the URI is a pure local path (empty scheme/host/query) that does *<strong>not</strong>* <code>FILEStat</code> on disk (mirror bro's <code>PATHu8bFeed</code>+<code>FILEStat</code> resolution), diagnose instead of spawning bro — close match → <code>be: '&lt;word&gt;' is not a beagle command — did you mean '&lt;sugg&gt;'?</code>; else → <code>be: '&lt;word&gt;': no such file or beagle command (see be --help)</code>. Return a new non-zero <code>BENOCMD</code> (RON60 ≤ 10 chars, mint with <code>scripts/ok64-*</code>). Existing files/dirs, slashed paths, and <code>?ref</code>/<code>//host</code>/scheme URIs still reach bro unchanged.</li>
+<li>Fix bro's success-on-miss: when no URI could be opened/listed, bro/BRO.exe.c must exit non-zero (so a direct <code>bro nonexistent</code> also fails honestly), not only rely on the be-side guard.</li>
+<li>Repro test <code>beagle/test/be-unknown-command.sh</code> (repro-first, <a href="../../beagle/CLAUDE.md">CLAUDE</a> §17): <code>be difff</code> → stderr matches <code>did you mean 'diff'</code>, exit ≠ 0; <code>be psot</code> → <code>did you mean 'post'</code>; <code>be totallynotacommand</code> → <code>no such file or beagle command</code>, exit ≠ 0; regression guards — <code>be README.md</code> (real file) still pages, <code>be diff:</code> / <code>be status</code> (real projectors) still run, <code>be src/missing.c</code> (slashed miss) gives the generic line not a bogus suggestion.</li>
+</ul>
+</body>
+</html>

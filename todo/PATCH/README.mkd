@@ -1,0 +1,13 @@
+#   PATCH — `be patch` reconcile tickets
+
+`be patch` is the repo→worktree write: weave-merge another branch/commit/remote into the working tree (merge / rebase / cherry-pick by URI shape). Tickets here cover reconcile correctness. [Plan]-shaped, cleared via the [Issues] loop.
+
+##  Active tickets
+
+ -  [PATCH-002] — **`be patch` silently skips a worktree-dirty file that the incoming branch also changed** (counts it `noop`, not `merged`), dropping the incoming change → a following `be post` reverts it. Breaks landing any ticket that touches a file another ticket already landed; blocked MEM-024 (overlapping MEM-025). Worker owns the broken `~/todo/MEM-024` as evidence; repro-first in `test/patch/`.
+ -  [PATCH-001] — `be patch` of a behind source whose only forward change is a submodule gitlink bump checks the sub out at the new pin but never stages the parent gitlink row (half-applied: sub ahead on disk, parent still pins the old commit, `be status` clean). Needs a manual `be put <sub>` today; the gitlink row must absorb as take-theirs. Surfaced landing MEM-010.
+
+[Plan]: ../../wiki/Plan.mkd "the live planning page"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[PATCH-002]: PATCH-002.mkd "be patch silently skips a wt-dirty file the incoming branch also changed"
+[PATCH-001]: PATCH-001.mkd "be patch drops a forward submodule-gitlink bump from a behind source"

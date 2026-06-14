@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PUT-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PUT-002: <code>be put ?#&lt;sha&gt;</code> can't reset a branch tip — POST_MIG ancestry walk blocks it, and <code>--force</code>/<code>!</code> are ignored</h1>
+<p>
+Resetting a branch to an existing commit fails when the DAG can't connect the new sha to the current tip:
+</p>
+<div>
+<p>
+$ be put ?#78fa65f5
+sniff: put: ?#78fa65f5…: no shared ancestry with target.tip (chain didn't reach existing tip within POST_MIG_MAX)
+Error: SNIFFFAIL
+$ be put --force ?#78fa65f5   # and <code>be put! …</code>
+… same error …
+</p>
+</div>
+<p>
+PUT is documented as *<strong>unconstrained</strong>* (no FF/reachability check), yet a plain tip-set runs a <code>POST_MIG</code> shared-ancestry walk and refuses when the walk doesn't reach the tip within <code>POST_MIG_MAX</code> — and neither <code>--force</code> nor <code>!</code> bypasses it. This made it impossible to roll <code>?main</code> back to a known-good commit after the history was re-hashed/contaminated (DAG not fully indexed → walk bails). See <a href="../wiki/PUT.html">PUT</a>, <a href="../wiki/POST.html">POST</a>.
+</p>
+<h2>Issues</h2>
+<ul>
+<li><code>be put ?#&lt;sha&gt;</code> (and <code>?main#&lt;sha&gt;</code>, <code>?/proj#&lt;sha&gt;</code>) routes through a post-migration ancestry walk requiring the new sha to reach the current tip; on a re-hashed/partially-indexed history the walk fails (<a href="../DIS/DIS-038.html">DIS-038</a>/DAG-index class) and the reset is refused.</li>
+<li><code>--force</code> and the <code>!</code> bang are silently ignored on that gate — there is no escape hatch, contradicting &quot;PUT is unconstrained.&quot;</li>
+<li>A user cannot recover a branch (reset to any valid sha) through <code>be</code> at all; the only way out is hand-editing <code>~/.be/&lt;proj&gt;/refs</code> + removing <code>.refs.idx</code>.</li>
+</ul>
+<h2>Planned</h2>
+<ul>
+<li>A bare <code>be put ?branch#&lt;sha&gt;</code> (or with <code>--force</code>/<code>!</code>) sets the ref tip OUTRIGHT — no reachability/<code>POST_MIG</code> walk. Reserve the ancestry/migration logic for the forms that actually mean &quot;advance/ff&quot;, not &quot;set&quot;.</li>
+<li>Honor <code>--force</code>/<code>!</code> as the explicit &quot;set to any sha, no checks&quot; escape on every put path.</li>
+<li>Repro: re-hash a short history (or point at a non-reachable valid sha), <code>be put ?branch#&lt;sha&gt;</code>, assert the tip is set and <code>be get ?branch</code> resolves; assert <code>--force</code> never hits the ancestry gate.</li>
+</ul>
+</body>
+</html>

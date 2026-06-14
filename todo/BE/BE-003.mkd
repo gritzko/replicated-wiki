@@ -1,0 +1,26 @@
+#   BE-003: every dog must print name + verb + URI + error code on an error exit (uniform diagnostic)
+
+When a dog process exits with an error it must emit ONE uniform line naming itself, the verb, the URI it was acting on, and the `ok64` error code — e.g. `sniff: get file://<store>?/beagle#<sha>: KEEPNONE`. Today error exits are cryptic and contextless (`Error: SNIFFFAIL`, `Error: BEDOGEXIT`, `bro: cannot open difff: FILENONE`), so the user can't tell *which* dog failed, on *what*, doing *which* verb. This is the general form of [BE-002]. See [Verbs].
+
+##  Issues
+The error-exit surface is inconsistent and drops the context a user needs.
+
+ -  The PRO.h `MAIN` wrapper prints a bare `Error: <CODE>` with no dog name, no verb, no URI — `be difff` cascades to `Error: BEDOGEXIT` / `Error: NONE` telling you nothing.
+ -  Ad-hoc per-dog prints vary wildly: `bro: cannot open difff: FILENONE` (no verb/URI, raw code, leaks the dog name the user never typed), `sniff: object not found: hex=… keep_err=KEEPNONE` (verbose, bespoke), `Error: SUBSPARSE` (no context at all). Each dog rolls its own.
+ -  The user can't answer "what failed?" from the output — which dog, which verb, which URI, which code. (Seen all session: `KEEPNONE`, `SUBSPARSE`, `GRAFFAIL`, `POSTCFLCT` with no operand context.)
+
+##  Blockers
+None. The pieces already exist: every dog knows its name (`argv[0]`), its verb (the parsed `cli` verb), and its URI/operand (the `cli` at-URI or the failing operand); `ok64` codes already decode to names via `ok64str`/ron60. They just aren't composed into one line.
+
+##  Planned
+One uniform error-exit line, single-sourced, across every dog (be, sniff, keeper, graf, spot, bro, woof, mark, dog).
+
+ -  On any non-OK exit, print exactly one stderr line: `<dog>: <verb> <uri>: <CODE>` — `<dog>` = `argv[0]` basename, `<verb>` = the cli verb (or the projector/scheme for verbless), `<uri>` = the cli at-URI / failing operand, `<CODE>` = `ok64str(code)`. Empty fields are elided gracefully (`<dog>: <CODE>` when no verb/URI).
+ -  Single-source it: a shared reporter the dog's `MAIN` calls with its `cli` context — either a PRO.h `MAIN` hook the dog populates (name/verb/uri) so the wrapper's bare `Error: <CODE>` becomes the rich line, or a `dog/`-level `DOGFail(cli*, code)` every dog's entry funnels through. Format identical everywhere.
+ -  Fold the bespoke per-dog prints (bro's `cannot open`, sniff's `object not found`, the `*.dbg` chains) into the uniform line, keeping at most one extra detail line where it genuinely helps (e.g. the resolved fs path) — never instead of the uniform line.
+ -  A child dog's error must reach the user with ITS name/verb/uri, not be flattened to the parent's `BEDOGEXIT`: the spawn layer (`BERun`) should relay the child's already-printed line and surface the child's code, not just its exit byte.
+ -  Repro/test ([CLAUDE] §17): drive known failures (`be difff`, `be get ?<missing>`, a forced `KEEPNONE`) and assert stderr carries dog + verb + uri + decoded code in the one-line format.
+
+[Verbs]: ../wiki/Verbs.mkd "the HTTP-verb dictionary"
+[BE-002]: BE-002.mkd "did-you-mean for mistyped verbs/projectors"
+[CLAUDE]: ../../beagle/CLAUDE.md "repro-first coding rule"

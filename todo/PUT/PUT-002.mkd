@@ -1,0 +1,25 @@
+#   PUT-002: `be put ?#<sha>` can't reset a branch tip — POST_MIG ancestry walk blocks it, and `--force`/`!` are ignored
+
+Resetting a branch to an existing commit fails when the DAG can't connect the new sha to the current tip:
+
+    $ be put ?#78fa65f5
+    sniff: put: ?#78fa65f5…: no shared ancestry with target.tip (chain didn't reach existing tip within POST_MIG_MAX)
+    Error: SNIFFFAIL
+    $ be put --force ?#78fa65f5   # and `be put! …`
+    … same error …
+
+PUT is documented as **unconstrained** (no FF/reachability check), yet a plain tip-set runs a `POST_MIG` shared-ancestry walk and refuses when the walk doesn't reach the tip within `POST_MIG_MAX` — and neither `--force` nor `!` bypasses it. This made it impossible to roll `?main` back to a known-good commit after the history was re-hashed/contaminated (DAG not fully indexed → walk bails). See [PUT], [POST].
+
+##  Issues
+ -  `be put ?#<sha>` (and `?main#<sha>`, `?/proj#<sha>`) routes through a post-migration ancestry walk requiring the new sha to reach the current tip; on a re-hashed/partially-indexed history the walk fails ([DIS-038]/DAG-index class) and the reset is refused.
+ -  `--force` and the `!` bang are silently ignored on that gate — there is no escape hatch, contradicting "PUT is unconstrained."
+ -  A user cannot recover a branch (reset to any valid sha) through `be` at all; the only way out is hand-editing `~/.be/<proj>/refs` + removing `.refs.idx`.
+
+##  Planned
+ -  A bare `be put ?branch#<sha>` (or with `--force`/`!`) sets the ref tip OUTRIGHT — no reachability/`POST_MIG` walk. Reserve the ancestry/migration logic for the forms that actually mean "advance/ff", not "set".
+ -  Honor `--force`/`!` as the explicit "set to any sha, no checks" escape on every put path.
+ -  Repro: re-hash a short history (or point at a non-reachable valid sha), `be put ?branch#<sha>`, assert the tip is set and `be get ?branch` resolves; assert `--force` never hits the ancestry gate.
+
+[PUT]: ../wiki/PUT.mkd "PUT verb"
+[POST]: ../wiki/POST.mkd "POST verb"
+[DIS-038]: ../DIS/DIS-038.mkd "DAG ancestor-walk / index gaps"

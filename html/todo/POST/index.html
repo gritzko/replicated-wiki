@@ -17,6 +17,7 @@
 </p>
 <h2>Active tickets</h2>
 <ul>
+<li><a href="POST-016.html">POST-016</a> — *<strong>CRITICAL.</strong>* <code>be post</code> sweeps stray/unstaged worktree files into the commit: a <code>be put &lt;one-file&gt;</code> + <code>be post</code> committed the staged file PLUS unrelated dirty files (<code>sniff/*</code>, <code>test/patch/*</code>) left over from a prior failed <code>be patch</code>, contaminating <code>?main</code> (the test dirs land as <code>mis</code>). Commit scope must be EXACTLY the staged set (selective) or the genuinely-dirty set — never tree entries with no on-disk file, never partial-patch leftovers.</li>
 <li><a href="POST-006.html">POST-006</a> — <code>POSTCFLCT</code> false-fires on conflict-marker strings in tracked source comments/literals (e.g. <code>sniff/PATCH.c:339</code>), forcing a blunt <code>--force</code>. Recognize only the real WEAVE output shape, not any inline <code>&lt;&lt;&lt;&lt;…||||…&gt;&gt;&gt;&gt;</code> occurrence.</li>
 </ul>
 </body>

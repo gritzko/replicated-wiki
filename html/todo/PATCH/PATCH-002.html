@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PATCH-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PATCH-002: be patch does not weave an incoming change into a worktree-dirty file (silently skips it as noop)</h1>
+<p>
+<code>be patch</code> MUST weave incoming-branch changes into a *<strong>dirty</strong>* worktree (fine-grained, no false conflicts — that is the whole point of the verb). It does not: when a file is BOTH locally-modified AND changed on the incoming branch, <code>be patch</code> leaves the local version untouched and the incoming change is silently dropped (counted in <code>noop</code>, not <code>merged</code>). A following <code>be post</code> then reverts the incoming side — silent data loss. This blocks landing any ticket that touches a file another ticket already landed. See <a href="../wiki/Verbs.html">Verbs</a>, <a href="../wiki/Sniff.html">Sniff</a>.
+</p>
+<h2>Issues</h2>
+<p>
+Reproduced live while landing MEM-024 onto <code>main</code> (which already had MEM-025).
+</p>
+<ul>
+<li>Setup: worktree <code>~/todo/MEM-024</code> detached at base <code>838e592b</code>, with *<strong>dirty</strong>* rework edits to <code>keeper/WIRECLI.c</code> (function <code>wpush_walk_*</code>) and <code>keeper/test/WIRE_CLIENT.c</code> (new test <code>WIRECLIENTtest_deep_chain_walk</code>). <code>main</code> = <code>78fa65f5</code> had *<strong>already landed MEM-025</strong><strong>, which modified the SAME two files in </strong><strong>disjoint</strong>* regions (<code>wcli_match_advert</code> <code>first_name</code> snapshot; new test <code>WIRECLIENTtest_huge_advert_firstref</code>).</li>
+<li>Ran <code>be patch '?main'</code> in the dirty worktree. Output:</li>
+</ul>
+<div>
+<p>
+<code>sniff: patch: noop=143 take-theirs=5 merged=0 added=0 deleted=0 content-conflict=0 mod-del-kept=0 failed=0</code>
+It applied main's changes to 5 *<strong>clean</strong>* files (<code>take-theirs=5</code>: e.g. <code>sniff/SUBS.c</code>, <code>test/log/01-…/run.sh</code>) but did *<strong>nothing</strong>* for the two files that were dirty-AND-changed-upstream: <code>merged=0</code>, <code>content-conflict=0</code>. Afterwards those files are *<strong>MEM-024-only</strong>* — MEM-025's <code>first_name_buf</code>/<code>WIRECLIENTtest_huge_advert_firstref</code> are absent (verified by <code>rg</code>).
+</p>
+</div>
+<ul>
+<li>So the two dirty+upstream-changed files fell into the *<strong><code>noop=143</code></strong>* bucket: <code>be patch</code> evidently classifies a worktree-dirty path as <strong>noop / skip</strong> instead of routing it to the 3-way weave. Disjoint regions should weave clean (<code>merged++</code>); a genuinely overlapping region should report <code>content-conflict</code> — never silent-skip.</li>
+<li>Corroboration: <code>be post --nosub</code> on the same worktree (cascade onto <code>main</code>) DID detect a conflict (<code>GRAFCNFL</code>, &quot;cascade aborted (merge conflict in descendant)&quot;) — so the conflict machinery sees the overlap; only the <code>be patch</code>-into-dirty path silently skips it.</li>
+</ul>
+<h2>Impact</h2>
+<p>
+The parallel fix-and-land loop (<a href="../../rule/Issues.html">Issues</a>) depends on <code>be patch</code> weaving each ticket onto a moved trunk, *<strong>including files another ticket already touched</strong><strong>. Silent-skip means the second ticket either can't land or, if force-posted, </strong><strong>reverts the first ticket's landed change with no warning</strong>*. This is the concrete blocker that stranded MEM-024 (overlapping MEM-025). Distinct from <a href="PATCH-001.html">PATCH-001</a> (a behind-source gitlink bump not staged) — this one is the core weave-into-dirty defect.
+</p>
+<h2>Blockers</h2>
+<ul>
+<li>None for diagnosis. The broken worktree is preserved AS the evidence (see Planned). Related: <a href="">[GET-017</a>] (the worktree is stuck at a stale base, which is <strong>why</strong> the in-place <code>be patch</code> update is needed at all).</li>
+</ul>
+<h2>Planned</h2>
+<ul>
+<li>*<strong>First: a hermetic repro in <code>test/patch/</code></strong>* (the worker's #1 priority). Minimal shape: a store with a base commit; a branch <code>B</code> that edits file <code>F</code> in region 1; a worktree that *<strong>dirty-edits <code>F</code> in region 2</strong>* (disjoint); <code>be patch ?B</code>; assert <code>F</code> afterwards contains BOTH edits (region 1 woven in, region 2 preserved) and the row is counted <code>merged</code>, not <code>noop</code>. Add an overlapping-region variant that must report <code>content-conflict</code> (not silent-skip). Follow the existing <code>test/patch/&lt;NN&gt;-&lt;name&gt;/run.sh</code> harness. Confirm it FAILS on current <code>be</code> before any fix.</li>
+<li>*<strong>Localize:</strong>* the classification in <code>sniff/PATCH.c</code> (<code>PATCHApply</code> / the per-path <code>noop</code> / <code>take-theirs</code> / <code>merged</code> / <code>content-conflict</code> decision). Hypothesis: a path that is dirty in the wt is short-circuited to <code>noop</code> (or to a &quot;protect local edit&quot; skip) before the incoming-vs-base diff is consulted, so an incoming change to that path is dropped. Find the exact gate and why the weave isn't entered for a dirty path.</li>
+<li>*<strong>Fix:</strong>* a wt-dirty path whose incoming side changed must enter the 3-way weave (base, theirs=incoming, ours=dirty-wt) → <code>merged</code> on disjoint, <code>content-conflict</code> on true overlap; never <code>noop</code>-skip. Then the repro goes green and MEM-024 can land by <code>be patch</code>-ing onto <code>main</code>.</li>
+<li>The broken <code>~/todo/MEM-024</code> worktree (detached <code>838e592b</code>; ~5 staged <code>pat</code> rows from the failed <code>be patch ?main</code>; abc bumped to <code>f8bbaf19</code>; 4 dirty rework files lacking MEM-025) is *<strong>handed to this ticket's worker</strong>* as a live instance of the bug — do not reset it until the repro is captured.</li>
+</ul>
+</body>
+</html>

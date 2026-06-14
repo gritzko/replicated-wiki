@@ -1,0 +1,20 @@
+#   DIS-040: POSTCFLCT cannot be de-falsed at the byte level — genuine WEAVE conflicts are emitted INLINE, byte-identical to doc/literal marker quotes; the fix must be provenance-based and couples to POST-016's classification pipeline
+
+POST-006's worker proved the ticket's premise (a byte-shape discriminator between a real conflict and a quoted marker) is **impossible**. `be post`'s refusal calls `SNIFFHasConflictMarker(body)` (`sniff/POST.c:2921`), the SAME predicate PATCH uses to classify its own WEAVE output as `conf` (`sniff/PATCH.c:352`, used at `:667/:724/:1795`). The critical finding: a genuine WEAVE conflict is emitted **mid-line**, abutting the divergent tokens — `WEAVEEmitMerged` (`graf/WEAVE.c:1138-1148`) produces e.g. `const char *greet = <<<<"hello"||||"salaam">>>>;` (test `be-patch-31-force-past-conflict`). That is byte-for-byte the shape of a doc comment quoting the markers (`sniff/PATCH.c:340`). The worker implemented the ticket's suggested "markers at line-start" discriminator: it cleared the doc false-positives but **broke 4 genuine-conflict tests** (`be-patch-31`, `16/17-conflict-*`, `branches-08-conflict`) and was reverted. Because PATCH's `conf` and POST's refusal share one byte-scanning predicate and the real output is inline, any byte-narrowing that clears the doc case misclassifies real conflicts. **Actively biting:** during today's merge, landing PATCH-002 and PATCH-001 (both edit `sniff/PATCH.c`, which legitimately contains marker literals in its detection code) each forced a verified `be post --force`. See [POST], [PATCH].
+
+##  Issues
+A shared byte-level predicate cannot tell a real inline conflict from a quoted-marker literal; both are identical bytes.
+
+ -  `SNIFFHasConflictMarker` flags ANY `<<<<…||||…>>>>` triple; genuine WEAVE conflicts are inline (`graf/WEAVE.c:1138-1148`), so there is no positional or byte discriminator vs a comment/string quoting the markers.
+ -  POST (`sniff/POST.c:2921`) and PATCH conf-classification (`sniff/PATCH.c:667/724/1795`) call the same predicate; narrowing it for POST's benefit breaks PATCH's `conf` detection (4 tests proved this).
+ -  Real-world impact: any commit touching a file that quotes the markers (notably `sniff/PATCH.c` itself) false-fires POSTCFLCT and demands a blunt `--force`, exactly the blast radius the original POST-006 warned about.
+
+##  Planned
+Make POST's refusal provenance-scoped, not byte-scoped; this overlaps POST-016's commit-classification pipeline.
+
+ -  POST must refuse only files whose conflicting bytes actually originated from a PATCH that classified them `conf` — thread per-file conflict provenance from PATCH's wtlog `patch` row through to POST's commit-time classification (`sniff/POST.c` change-set pipeline, the same path POST-016 (`b99e921e`) reworked for in-scope stamps).
+ -  Repro (table-driven, in `sniff/test/SNIFF.c`): the `doc_comment_inline` case (the `sniff/PATCH.c:339` shape) must classify NO-conflict for POST while a genuine PATCH-`conf` file still trips it; the worker staged this repro and reverted it to keep the tree green.
+ -  Decision needed: where to record conflict provenance (a wtlog row flag vs a per-file sidecar) and how POST consults it — a real design pass, coordinated with the POST-016 classifier.
+
+[POST]: ../../wiki/POST.mkd "POST verb"
+[PATCH]: ../../wiki/PATCH.mkd "PATCH verb"

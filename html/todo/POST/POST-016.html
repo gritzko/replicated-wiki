@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-016</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-016: <code>be post</code> sweeps stray/unstaged worktree changes into the commit (commit contamination)</h1>
+<p>
+A <code>be put &lt;one-file&gt;</code> + <code>be post</code> committed <code>beagle/BE.cli.c</code> *<strong>plus</strong>* unrelated stray files (<code>sniff/PATCH.c</code>, <code>sniff/POST.c</code>, <code>test/patch/34/35/*</code>) that were sitting dirty in the worktree from earlier operations — so a one-file fix produced a contaminated commit, and the same contamination got folded into a second commit on the next post. Selective staging is not isolating the commit to the staged set, and/or a partially-applied <code>be patch</code> leaves stray tracked rows that the next post absorbs. This is what wrecked today's <code>?main</code> (two contaminated commits, <code>mis</code>/<code>mod</code> worktree). See <a href="../wiki/POST.html">POST</a>, <a href="../wiki/Sniff.html">Sniff</a>.
+</p>
+<h2>Issues</h2>
+<ul>
+<li><code>be put beagle/BE.cli.c</code> then <code>be post --nosub -m &quot;…&quot;</code> committed <code>BE.cli.c</code> AND <code>sniff/PATCH.c</code>/<code>sniff/POST.c</code>/<code>test/patch/34/35</code> — files dirty from a prior failed <code>be patch</code> + a worker that ran in the same tree. <code>be status</code> had shown the tree clean just before, so the sweep is non-obvious.</li>
+<li>Result: <code>diff:?&lt;parent&gt;#&lt;commit&gt;</code> shows the stray files; the test dirs land as *<strong>tracked-but-missing</strong>* (<code>mis</code>) because the commit recorded tree entries the disk never had.</li>
+<li>A <code>be post</code> must commit EXACTLY the staged set (or the genuinely-dirty set the user intends), never silently absorb leftover stray/partial-patch state.</li>
+</ul>
+<h2>Planned</h2>
+<ul>
+<li>Make <code>be post</code> commit-scope explicit and minimal: selective mode commits only the <code>put</code>-staged rows; non-selective commits only genuinely-dirty tracked paths — never tree entries with no on-disk file. Refuse (or warn loudly) when about to commit a path the user didn't stage/touch.</li>
+<li>Guarantee a partially-applied / aborted <code>be patch</code> leaves no half-staged rows that a later post can absorb (atomic patch, or a clean rollback).</li>
+<li>Repro: dirty an unrelated file, <code>be put &lt;fileA&gt;</code> + <code>be post</code>, assert only <code>&lt;fileA&gt;</code> is in the commit; abort a <code>be patch</code> mid-way, assert the next <code>be post</code> commits nothing stray.</li>
+</ul>
+</body>
+</html>

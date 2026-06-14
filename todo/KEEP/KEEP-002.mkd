@@ -1,0 +1,35 @@
+#   KEEP-002: `?main` advanced to a commit whose object is absent from the keeper → `be get ?main` dies KEEPNONE (dangling ref, main unreachable)
+
+Concurrent `be post`s from multiple **store-backed worktrees sharing one store** (`~/.be/beagle`) advanced the shared `?main` ref past the objects/index actually written to the keeper, leaving `?main` pointing at a commit the keeper can't resolve. `be get ?main` then dies:
+
+    $ be get ?main
+    sniff: object not found: hex=0b987f41…  hexlen=15 hashlet=00b987f41c54745b source=?main
+        root=/home/gritzko project=beagle cur_branch= leafdir=/home/gritzko/.be/beagle packs=1 keep_err=KEEPNONE
+    Error: SNIFFFAIL
+
+The committed history is NOT lost (objects up to the last reachable commit are intact); the `?main` **ref** is dangling, so main is currently unusable until the ref is repaired or the missing objects are recovered. See [Keeper], [ULOG], [Issues].
+
+##  Issues
+Surfaced when a lagging worktree (`$HOME/beagle` at `a2e2300c`) tried to catch up to `?main`.
+
+ -  `~/.be/beagle/refs` shows `?main` advanced from `a2e2300c` (the last hand-landed commit, reachable) through **seven** further post rows — `4200e11e` (also `get be://localhost/todo/MEM-021?#4200e11e`), `3cd4ea6a`, `ae70cc57`, `6e41a900`, `44e63c8c`, `7bfff098`, `0b987f41` (current tip). None of the seven resolve (`be log:?<sha>` → `NONE`); `be get ?main` reports `keep_err=KEEPNONE` for `0b987f41`.
+ -  Those seven posts came from **background fix-and-land workers running in store-backed worktrees** (`~/todo/MEM-021`, `MEM-024`, … all created via `be get file:///home/gritzko/.be?/beagle`, sharing the one `~/.be/beagle` object pool) whose repro/land steps ran `be post` against the shared store **concurrently**.
+ -  The shared keeper is a single flat pool: one pack `0000000001.keeper` (171 MB, written this session) plus several `*.keeper.idx`, including a **16-byte (truncated/near-empty) `266128ea3H.keeper.idx`** alongside a 12 KB one written the same minute — a red flag that the index write under concurrent posts was racy/torn. So the ref row landed but the object is either not packed or not indexed → unresolvable.
+ -  Worktrees lagging the ref is normal and expected; the bug is that the ref was allowed to advance to objects the keeper cannot serve.
+
+##  Impact
+`?main` is a dangling ref: `be get ?main` / `be head ?main` fail, main cannot be checked out. No committed data is lost — everything up to the last reachable commit (`a2e2300c`) is intact. **Recoverable**, not catastrophic. But it means a `be post` (or concurrent posts) can leave the canonical branch unreachable — a serious store-integrity break.
+
+##  Blockers
+ -  None for diagnosis. Two intertwined causes to separate: (1) a real `be post` atomicity/concurrency defect (ref advanced without a durably-packed+indexed object), and (2) a process/isolation problem — posting workers on a **shared** store instead of independent clones, and repro `be post`s escaping a hermetic `.be` into `~/.be/beagle` ([[be_dot_be_shield_walk]], [[test_hermetic_be_store]]).
+
+##  Planned
+ -  **Repro:** drive ≥2 concurrent `be post`s from store-backed worktrees of one shared store (or a single post whose object-write/index-update is interrupted) and assert `?main` is NEVER advanced to a sha the keeper can't resolve — i.e. `be get ?main` always succeeds or the post fails atomically. Also a torn/empty `.keeper.idx` repro (16-byte idx) to confirm the index path.
+ -  **Localize:** the `be post` write order in keeper — object append → index update → ref-row append. The ref (refs ULOG) must not be advanced until the object is durably packed AND indexed; and concurrent posts to one store must serialize (lock) or use atomic index swaps. Inspect the `*.keeper.idx` writer for a torn-write / lost-update under concurrency (the 16-byte idx).
+ -  **Fix:** make `be post` ref-vs-object atomic — write+fsync+index the object, verify resolvable, THEN append the ref row; refuse (or roll back the ref) if the object isn't resolvable. Serialize concurrent posts to a shared store (store-level lock), or rebuild the keeper index from the pack on open if torn.
+ -  **Process guard (separate, smaller):** posting/landing workers must run in **independent clones** (`be get be://localhost?/beagle`), not store-backed worktrees of the live store; repro tests must anchor a hermetic `.be` that never escapes to `~/.be` ([[test_hermetic_be_store]]).
+ -  **Recovery for the current break:** reset `?main` to the last reachable commit (`a2e2300c`) by removing the seven dangling `post ?main#…` rows from `~/.be/beagle/refs` + the wtlog + deleting `.refs.idx` ([[be_undo_commit_procedure]]) — OR locate/repack the seven missing objects if a worker store still holds them. (Do under human direction.)
+
+[Keeper]: ../wiki/Keeper.mkd "the keeper dog (flat object pool + refs)"
+[ULOG]: ../ULOG/README.mkd "append-log durability (refs/wtlog are ULOGs)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop (one isolated tree per agent)"

@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-042</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-042: when cur has its OWN divergent commit, <code>be patch &lt;peer&gt;</code> then <code>be post</code> replays cur's stack ONTO the peer and silently drops cur's own committed bytes from the tree (first parent = peer, not cur — violates Invariant 2)</h1>
+<p>
+After <a href="">[DIS-038</a>] fixed POST-015's silent-collapse, a DISTINCT divergent-case defect remains: when cur carries its own commit <code>C</code> forked off a shared base, absorbing a divergent peer <code>T</code> (<code>be patch file://A?/A</code> OR <code>?A!</code>) then <code>be post '#m'</code> produces a commit whose *<strong>single first parent is the peer <code>T</code></strong><strong>, with committer <code>rebase &lt;rebase@dogs&gt;</code> ts 0 — i.e. POST routes the absorb through <code>GRAFRebase</code>, replaying cur's stack onto <code>T</code>. The committed tree carries the peer's bytes but DROPS cur's own committed bytes (<code>C</code>'s edit) even though they are still present on disk, so the </strong><strong>worktree diverges from the committed tree</strong>* and <code>C</code>'s work is silently lost from history. This contradicts <a href="../../wiki/Invariants.html">Invariants</a> Invariant 2 (&quot;the new commit's first parent is always cur's prior tip&quot;) and <a href="../../wiki/POST.html">POST</a> §&quot;Commit assembly&quot;. Reproduced live (debug build, <code>$HOME/tmp</code>, hermetic). The non-divergent (FF) and same-base cases are correct; only a genuinely-divergent cur triggers it. See <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../wiki/Invariants.html">Invariants</a>, <a href="../../wiki/Graf.html">Graf</a>, <a href="../../CLAUDE.md">CLAUDE</a>.
+</p>
+<h2>Issues</h2>
+<p>
+The absorb-then-post commit-assembly takes the rebase-onto-peer path instead of a merge/commit on cur's tip.
+</p>
+<ul>
+<li>Committed first parent is the absorbed peer <code>T</code>, not cur's prior tip <code>C</code> — <code>keeper get .#&lt;post-sha&gt;</code> shows a single <code>parent &lt;T&gt;</code> and <code>committer rebase &lt;rebase@dogs&gt; 0 +0000</code>, the GRAFRebase signature.</li>
+<li>The committed tree contains only the peer's net edit; cur's own committed bytes (the <code>C</code> commit's edit) are absent from the tree while still present on disk — wt ≠ committed tree, a silent history loss.</li>
+<li>Affects BOTH scopes: <code>be patch file://A?/A</code> (NEXT, no bang) and <code>be patch file://A?/A!</code> (WHOLE) — both land the absorb via <code>patch ?&lt;T&gt;</code> / <code>?&lt;T&gt;!</code> rows, and POST replays the same way.</li>
+<li>Distinct from POST-015's silent-collapse (now fixed): here the tip DOES advance and the peer's bytes DO land — it is cur's OWN bytes that vanish, the inverse failure mode.</li>
+</ul>
+<h2>Blockers</h2>
+<p>
+None for diagnosis; the fix is a POST commit-assembly decision (which is out of POST-015's silent-drop scope, hence this ticket).
+</p>
+<ul>
+<li>Likely site: <code>sniff/POST.c</code> POSTCommit's rebase-emit pipeline (<code>post_rebase_emit_cb</code>, ~POST.c:1265-1313) — the non-ff &quot;replay cur onto the live tip&quot; branch is firing for a foster/parent absorb where the correct shape is a merge (two parents: cur <code>C</code> first, peer <code>T</code> second) or a plain commit on cur's tip carrying the merged wt bytes.</li>
+<li>Invariant 2 demands first-parent = cur's prior tip; the absorbed peer should be the SECOND parent (<code>parent</code>/<code>foster</code> per the post fragment's forget modifier), never the first.</li>
+</ul>
+<h2>Planned</h2>
+<p>
+Repro-first, then make absorb-then-post keep cur as first parent.
+</p>
+<ul>
+<li>Repro-first (<a href="../../CLAUDE.md">CLAUDE</a> §17), hermetic under <code>$HOME/tmp</code> (evidence below): two <code>file://</code> stores sharing base <code>v0</code>; peer <code>A</code> advances to <code>T</code>; clone <code>B</code> makes its OWN divergent commit <code>C</code>; from <code>B</code> <code>be patch file://A?/A!</code> then <code>be post '#m'</code>. EXPECT: post commit's first parent == <code>C</code>, peer <code>T</code> is a second <code>parent</code>/<code>foster</code>, and the committed tree carries BOTH <code>C</code>'s and <code>T</code>'s bytes (a real merge), matching the worktree. ACTUAL: first parent == <code>T</code>, tree drops <code>C</code>'s bytes.</li>
+<li>Add a regression under <code>test/post</code> (divergent absorb-then-post: assert first-parent == cur and a fresh re-checkout carries cur's own committed bytes). The companion <code>test/post/39-absorb-no-silent-collapse</code> already locks the NON-divergent silent-collapse half and references this ticket.</li>
+<li>Fix in <code>sniff/POST.c</code> commit assembly: do not route a foster/parent absorb through the same-branch non-ff rebase-onto-peer path; build the commit on cur's tip (Invariant 2) with the peer as an additional parent/foster header.</li>
+</ul>
+<h2>Evidence (live, debug build, hermetic <code>$HOME/tmp</code>)</h2>
+<p>
+DAG: base <code>v0</code> ─ <code>C</code>(cur, BOF edit <code>BLOCAL</code>) and <code>v0</code> ─ <code>T</code>(peer, EOF edit <code>PEER</code>).  After <code>be patch file://A?/A!</code> the wt holds BOTH edits; <code>be post '#absorbed'</code> commits.
+</p>
+<ul>
+<li><code>keeper get .#&lt;post-sha&gt;</code> → <code>tree &lt;X&gt;</code> / <code>parent &lt;T&gt;</code> / <code>committer rebase &lt;rebase@dogs&gt; 0 +0000</code> (single parent = peer, rebase signature) — NOT <code>parent &lt;C&gt;</code>.</li>
+<li>Fresh re-checkout of the post-sha (<code>be get file://B/.be?/A/</code> into a third wt) → <code>f.c</code> has <code>PEER</code> but NOT <code>BLOCAL</code>; cur's <code>C</code> edit dropped from the committed tree though still on disk in <code>B</code>.</li>
+<li>Same outcome with the no-bang NEXT scope (<code>be patch file://A?/A</code>): post commit first parent == peer, tree drops <code>BLOCAL</code>.</li>
+</ul>
+</body>
+</html>

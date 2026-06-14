@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>KEEP-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>KEEP-002: <code>?main</code> advanced to a commit whose object is absent from the keeper → <code>be get ?main</code> dies KEEPNONE (dangling ref, main unreachable)</h1>
+<p>
+Concurrent <code>be post</code>s from multiple *<strong>store-backed worktrees sharing one store</strong>* (<code>~/.be/beagle</code>) advanced the shared <code>?main</code> ref past the objects/index actually written to the keeper, leaving <code>?main</code> pointing at a commit the keeper can't resolve. <code>be get ?main</code> then dies:
+</p>
+<div>
+<p>
+$ be get ?main
+sniff: object not found: hex=0b987f41…  hexlen=15 hashlet=00b987f41c54745b source=?main
+</p>
+<div>
+<p>
+root=/home/gritzko project=beagle cur_branch= leafdir=/home/gritzko/.be/beagle packs=1 keep_err=KEEPNONE
+</p>
+</div>
+<p>
+Error: SNIFFFAIL
+</p>
+</div>
+<p>
+The committed history is NOT lost (objects up to the last reachable commit are intact); the <code>?main</code> *<strong>ref</strong>* is dangling, so main is currently unusable until the ref is repaired or the missing objects are recovered. See <a href="../wiki/Keeper.html">Keeper</a>, <a href="../ULOG/README.html">ULOG</a>, <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Issues</h2>
+<p>
+Surfaced when a lagging worktree (<code>$HOME/beagle</code> at <code>a2e2300c</code>) tried to catch up to <code>?main</code>.
+</p>
+<ul>
+<li><code>~/.be/beagle/refs</code> shows <code>?main</code> advanced from <code>a2e2300c</code> (the last hand-landed commit, reachable) through *<strong>seven</strong>* further post rows — <code>4200e11e</code> (also <code>get be://localhost/todo/MEM-021?#4200e11e</code>), <code>3cd4ea6a</code>, <code>ae70cc57</code>, <code>6e41a900</code>, <code>44e63c8c</code>, <code>7bfff098</code>, <code>0b987f41</code> (current tip). None of the seven resolve (<code>be log:?&lt;sha&gt;</code> → <code>NONE</code>); <code>be get ?main</code> reports <code>keep_err=KEEPNONE</code> for <code>0b987f41</code>.</li>
+<li>Those seven posts came from *<strong>background fix-and-land workers running in store-backed worktrees</strong>* (<code>~/todo/MEM-021</code>, <code>MEM-024</code>, … all created via <code>be get file:///home/gritzko/.be?/beagle</code>, sharing the one <code>~/.be/beagle</code> object pool) whose repro/land steps ran <code>be post</code> against the shared store *<strong>concurrently</strong>*.</li>
+<li>The shared keeper is a single flat pool: one pack <code>0000000001.keeper</code> (171 MB, written this session) plus several <code>*.keeper.idx</code>, including a *<strong>16-byte (truncated/near-empty) <code>266128ea3H.keeper.idx</code></strong>* alongside a 12 KB one written the same minute — a red flag that the index write under concurrent posts was racy/torn. So the ref row landed but the object is either not packed or not indexed → unresolvable.</li>
+<li>Worktrees lagging the ref is normal and expected; the bug is that the ref was allowed to advance to objects the keeper cannot serve.</li>
+</ul>
+<h2>Impact</h2>
+<p>
+<code>?main</code> is a dangling ref: <code>be get ?main</code> / <code>be head ?main</code> fail, main cannot be checked out. No committed data is lost — everything up to the last reachable commit (<code>a2e2300c</code>) is intact. *<strong>Recoverable</strong>*, not catastrophic. But it means a <code>be post</code> (or concurrent posts) can leave the canonical branch unreachable — a serious store-integrity break.
+</p>
+<h2>Blockers</h2>
+<ul>
+<li>None for diagnosis. Two intertwined causes to separate: (1) a real <code>be post</code> atomicity/concurrency defect (ref advanced without a durably-packed+indexed object), and (2) a process/isolation problem — posting workers on a *<strong>shared</strong>* store instead of independent clones, and repro <code>be post</code>s escaping a hermetic <code>.be</code> into <code>~/.be/beagle</code> (<a href="">[be_dot_be_shield_walk</a>], <a href="">[test_hermetic_be_store</a>]).</li>
+</ul>
+<h2>Planned</h2>
+<ul>
+<li>*<strong>Repro:</strong>* drive ≥2 concurrent <code>be post</code>s from store-backed worktrees of one shared store (or a single post whose object-write/index-update is interrupted) and assert <code>?main</code> is NEVER advanced to a sha the keeper can't resolve — i.e. <code>be get ?main</code> always succeeds or the post fails atomically. Also a torn/empty <code>.keeper.idx</code> repro (16-byte idx) to confirm the index path.</li>
+<li>*<strong>Localize:</strong>* the <code>be post</code> write order in keeper — object append → index update → ref-row append. The ref (refs ULOG) must not be advanced until the object is durably packed AND indexed; and concurrent posts to one store must serialize (lock) or use atomic index swaps. Inspect the <code>*.keeper.idx</code> writer for a torn-write / lost-update under concurrency (the 16-byte idx).</li>
+<li>*<strong>Fix:</strong>* make <code>be post</code> ref-vs-object atomic — write+fsync+index the object, verify resolvable, THEN append the ref row; refuse (or roll back the ref) if the object isn't resolvable. Serialize concurrent posts to a shared store (store-level lock), or rebuild the keeper index from the pack on open if torn.</li>
+<li>*<strong>Process guard (separate, smaller):</strong>* posting/landing workers must run in *<strong>independent clones</strong>* (<code>be get be://localhost?/beagle</code>), not store-backed worktrees of the live store; repro tests must anchor a hermetic <code>.be</code> that never escapes to <code>~/.be</code> (<a href="">[test_hermetic_be_store</a>]).</li>
+<li>*<strong>Recovery for the current break:</strong>* reset <code>?main</code> to the last reachable commit (<code>a2e2300c</code>) by removing the seven dangling <code>post ?main#…</code> rows from <code>~/.be/beagle/refs</code> + the wtlog + deleting <code>.refs.idx</code> (<a href="">[be_undo_commit_procedure</a>]) — OR locate/repack the seven missing objects if a worker store still holds them. (Do under human direction.)</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,15 @@
+#   KEEP — keeper dog tickets
+
+The keeper owns the flat per-project object pool (git blobs/trees/commits; branches/tags/remotes are refs into it). Tickets here cover the object store, tree/commit walks, refs, and the wire pack paths. [Plan]-shaped, cleared via the [Issues] loop.
+
+##  Active tickets
+
+ -  [KEEP-002] **LANDED `8f7233c3`** — torn `.keeper.idx` (concurrent posters sharing a pid-less temp) served as `KEEPNONE` for in-pack objects; fix = per-pid temp index names + `keep_rebuild_torn_idx` rebuilds a short index from the pack on rw-open (which also auto-recovered the live store). Hermetic repro `sniff/test/keep002-torn-idx.sh`, 282/282.
+ -  [KEEP-001] — converge the three near-duplicate keeper tree-walkers (`WALK.c:walk_tree_dive`, `KEEP.c:keep_walk_tree`, `WIRECLI.c:wpush_walk_tree`) into one visitor-driven walker; the MEM-023/024 work had to fix the same per-level-buffer leak in each copy. Blocked on landing [MEM-023]/[MEM-024] first.
+
+[Plan]: ../../wiki/Plan.mkd "the live planning page"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[KEEP-002]: KEEP-002.mkd "?main advanced to an object the keeper can't resolve (dangling ref)"
+[KEEP-001]: KEEP-001.mkd "converge the three keeper tree-walkers"
+[MEM-023]: ../MEM/MEM-023.mkd "tree-walk recursion holds a 1MB buffer per level"
+[MEM-024]: ../MEM/MEM-024.mkd "push-side recursive walk holds 1MB mmap per frame"

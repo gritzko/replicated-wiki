@@ -1,0 +1,16 @@
+#   POST-016: `be post` sweeps stray/unstaged worktree changes into the commit (commit contamination)
+
+A `be put <one-file>` + `be post` committed `beagle/BE.cli.c` **plus** unrelated stray files (`sniff/PATCH.c`, `sniff/POST.c`, `test/patch/34/35/*`) that were sitting dirty in the worktree from earlier operations — so a one-file fix produced a contaminated commit, and the same contamination got folded into a second commit on the next post. Selective staging is not isolating the commit to the staged set, and/or a partially-applied `be patch` leaves stray tracked rows that the next post absorbs. This is what wrecked today's `?main` (two contaminated commits, `mis`/`mod` worktree). See [POST], [Sniff].
+
+##  Issues
+ -  `be put beagle/BE.cli.c` then `be post --nosub -m "…"` committed `BE.cli.c` AND `sniff/PATCH.c`/`sniff/POST.c`/`test/patch/34/35` — files dirty from a prior failed `be patch` + a worker that ran in the same tree. `be status` had shown the tree clean just before, so the sweep is non-obvious.
+ -  Result: `diff:?<parent>#<commit>` shows the stray files; the test dirs land as **tracked-but-missing** (`mis`) because the commit recorded tree entries the disk never had.
+ -  A `be post` must commit EXACTLY the staged set (or the genuinely-dirty set the user intends), never silently absorb leftover stray/partial-patch state.
+
+##  Planned
+ -  Make `be post` commit-scope explicit and minimal: selective mode commits only the `put`-staged rows; non-selective commits only genuinely-dirty tracked paths — never tree entries with no on-disk file. Refuse (or warn loudly) when about to commit a path the user didn't stage/touch.
+ -  Guarantee a partially-applied / aborted `be patch` leaves no half-staged rows that a later post can absorb (atomic patch, or a clean rollback).
+ -  Repro: dirty an unrelated file, `be put <fileA>` + `be post`, assert only `<fileA>` is in the commit; abort a `be patch` mid-way, assert the next `be post` commits nothing stray.
+
+[POST]: ../wiki/POST.mkd "POST verb"
+[Sniff]: ../wiki/Sniff.mkd "the sniff dog (wtlog / post)"
