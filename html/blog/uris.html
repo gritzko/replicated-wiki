@@ -36,6 +36,15 @@ wait, we have HTTP and URI, which are as standard as it gets.
 Those were specifically designed for this task. Supported in 
 so many apps and libs. Can we apply that to git?
 </p>
+<p>
+Sure we can. Take GitHub URIs for example, they map the git
+space onto the HTTP URI space. The interesting part of this 
+work is to define a set of orthogonal operations (a basis)
+so any git wizardry can be represented as a sequence of such
+steps, unambiguously, but no step can be represented as such
+a combo of other basic steps. The merge/rebase/cherrypick
+example will clarify this point later.
+</p>
 <h2>URIs</h2>
 <p>
 The URI layout we all remember by heart:
