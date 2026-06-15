@@ -57,7 +57,12 @@ showing only changed hunks.  Method: [Issues].
     need a file-scope override (verify the BNOROOM-class limits).
 
 ##  Outcome
- -  (open)
+ -  Landed `eaa75793`: file-scope `diff:` reuses the `cat:` emitter
+    `WEAVEEmitFull` (change-tagged, no windowing) via a `b8 full` flag threaded
+    through `GRAFDiff2Layer`; tree-scope keeps windowed `WEAVEEmitDiff`.
+ -  `WEAVEEmitFull` gained a `scheme` param so `dog/HUNK` routes the full-file
+    hunk to the unified +/- formatter (`cat:` passes empty → byte-identical).
+    Test `test/diff/11-file-scope-full`; 373/373 green.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
 [Bro]: ../../wiki/Bro.mkd "the bro pager / shared hunk renderer"

@@ -1,0 +1,62 @@
+#   GET-020: `be get file:<wt>` leaves an incomplete checkout + SNIFFFAIL
+
+The worktree-form clone `be get file:/home/gritzko/beagle` (the [Issues] worker
+setup: a store-backed wt sharing `~/beagle/.be`) intermittently exits
+`SNIFFFAIL` with a HALF-POPULATED tree: `abc/` empty (submodule not mounted),
+`woof/` and 3 `test/tree/` files absent — yet most of the tree is present, so it
+looks done.  The DIFF-003 worker hit this, then silently restored the missing
+build-only dirs from the canonical tree to make cmake work — a workaround that
+should have been THIS ticket, not a silent patch ([Issues] / CLAUDE §17).
+Distinct from [GET-018] (atomic rollback ON failure): here GET reports failure
+yet leaves partial state.
+
+##  Input
+
+### Context
+ -  `be get file:/home/gritzko/beagle` into a fresh `$HOME/todo/DIFF-003/` →
+    `SNIFFFAIL`; `abc/` empty (sub unmounted), `woof/` + 3 `test/tree/` files
+    missing; cmake config then failed on the gaps.
+ -  Same form also `SNIFFFAIL`'d in earlier probes this session; a single
+    UNCONTENDED `be get` succeeded — multiple worker trees were cloned from the
+    one shared store concurrently, so store contention is the prime suspect.
+ -  Worker workaround (now ticketed): restored the missing dirs verbatim from
+    canonical; its DIFF-003 edits (graf/sniff/test) were unaffected.
+
+### Goals
+ -  `be get` either produces a COMPLETE checkout (every tree file + mounted
+    subs) or fails leaving the wt visibly unusable — never a half-populated
+    tree that reads as done.
+ -  A `SNIFFFAIL` mid-checkout must surface WHICH step failed and not silently
+    drop files / skip the sub mount.
+
+### Constraints
+ -  Shares ground with [GET-018] (atomic wt GET) — the fix may reuse a
+    stage-to-temp + atomic-swap.  The empty `abc/` ties to the submodule mount
+    step ([SUBS]); both must be covered by the complete-or-fail guarantee.
+ -  No `abc/` edits; this IS the dogfood worker-clone path.
+
+##  WIP
+
+### Design decisions (open — repro before forking)
+ -  Pin the trigger: concurrent worktree creation from one store (lock /
+    partial-write race), an independent abc sub-mount failure, or a `SNIFFFAIL`
+    mid-checkout leaving partial state.  Repro deterministically first.
+
+### TODOs
+ -[ ] Repro: N concurrent `be get file:<wt>` from one store; also a single run
+      under disk pressure.  Capture which files/subs drop and the SNIFFFAIL site.
+ -[ ] Fix: complete-or-fail checkout (likely the [GET-018] atomic-swap);
+      `SNIFFFAIL` names the failed step; no silent partial tree.
+ -[ ] Test: an errored checkout leaves no half-populated tree; subs mount or
+      the whole GET fails.
+
+### Blockers and bummers
+ -  Intermittent / likely concurrency-dependent → repro may need parallel
+    invocations against a shared store.
+
+##  Outcome
+ -  (open)
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[GET-018]: GET-018.mkd "atomic wt GET: stage/swap or journal+rollback"
+[SUBS]: ../SUBS/README.mkd "submodule-recursion tickets"

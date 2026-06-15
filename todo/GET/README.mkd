@@ -4,19 +4,16 @@
 
 ##  Active tickets
 
- -  [GET-019] — **CRITICAL.** `be get be://host?/<title>` clone is broken on two counts: the `be://` upload-pack ships a **truncated pack** (`unpk: scan incomplete 128215/253812` — count header declares more objects than it sends, so checkout fails on the missing ones), and the long-running `woof` server serves a **stale `?main`** (doesn't re-read `refs` after they change → poisoned/old history, `SUBSPARSE`). Blocks the isolated per-worker clone the [Issues] loop depends on; upload-pack must serve the full reachable closure and the current refs.
-
  -  [GET-009] — efficient beagle↔beagle (`be://`) sync umbrella: replace `WIRE.c`'s byte-offset watermark with object-level reachability serving (`closure(wants) − closure(haves)`), cross-`file_id` serving, and a redundant-pack GC/compaction for already-bloated shards. St.1 ([[GET-007]] latest-copy) landed; St.2-4 open.
-
- -  [GET-014] — head/get/patch against a divergent ticket remote silently reset local trunk `?` to the fetched commit (non-ff), dropping four landed commits; a dry-run/fetch must never move `?` non-ff. Recovered via `be put '?#<sha>'` (`be get [--force]` won't move a divergent ref). Needs a clean repro to pin the verb.
 
  -  [GET-017] — `be get --nosub` won't advance a store-backed *switch*-worktree's ref at all (stays pinned at its base; MEM-041/042 stuck at `5104a855` while clone-shaped MEM-044 advanced), forcing fresh-clone salvage to land. Likely a `.be`-switch-shape FF gap ([[GET-012]] area); `.refs.idx` was fresh (not the stale-idx trap). Needs a deterministic repro pinning the `.be` shape.
 
  -  [GET-018] — make `be get`'s wt update atomic (mid-write failure → ref/wtlog/tree all unchanged). Split from GET-016 Part 1: can't just reorder the commit point (breaks `test/get/09`/`10`'s documented wtlog-grows-then-`--force`-replay model); needs stage-to-temp+atomic-swap or journal+rollback, design pass first.
 
-[GET-019]: GET-019.mkd "be:// clone ships a truncated pack + stale-server ?main"
+ -  [GET-020] — `be get file:<wt>` (worker-clone form) intermittently exits `SNIFFFAIL` with a HALF-POPULATED tree (empty `abc/`, missing `woof/` + 3 `test/tree/` files); store contention from concurrent worktree creation suspected. Complete-or-fail checkout; relates to [[GET-018]].
+
 [GET-009]: GET-009.mkd "efficient be:// sync: reachability upload-pack + GC"
-[GET-014]: GET-014.mkd "head/get/patch silently non-ff-resets local trunk to a divergent remote commit"
 [GET-017]: GET-017.mkd "be get --nosub won't advance a switch-worktree's ref (forces fresh-clone salvage)"
 [GET-018]: GET-018.mkd "atomic wt GET: stage/swap or journal+rollback so mid-write failure leaves nothing changed"
+[GET-020]: GET-020.mkd "be get file:<wt> leaves an incomplete checkout + SNIFFFAIL"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

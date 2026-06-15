@@ -11,9 +11,8 @@ Index of Beagle's open work: one topic per dir, each holding numbered [Plan]-sha
  -  [KEEP] — keeper object pool / walks / wire; open: KEEP-001 (converge the 3 tree-walkers), KEEP-002 (torn-index publish).
  -  [SUBS] — submodule recursion; open: SUBS-013 (`git submodule add` parity), SUBS-014/015 (put/blob edge cases).
  -  [POST] — commit-path gaps; open: POST-006 (POSTCFLCT false-fires on marker strings → [[DIS-040]]).
- -  [GET] — checkout / fetch / sync; open: GET-009 (be:// sync umbrella), GET-017 (→ [[DIS-039]]), GET-018 (atomic wt GET).
+ -  [GET] — checkout / fetch / sync; open: GET-009 (be:// sync umbrella), GET-017 (→ [[DIS-039]]), GET-018 (atomic wt GET), GET-020 (incomplete checkout + SNIFFFAIL).
  -  [BLAME] — blame perf + output; open: BLAME-001, BLAME-003 (needs a ruling). BLAME-005 (per-commit hunks) landed `d2a7219c`.
- -  [DIFF] — the `diff:` view; open: DIFF-003 (file-scoped `diff:` shows whole file w/ changes hili'd, vs tree-scope hunks-only).
 
 [Plan]: ../wiki/Plan.mkd "the live planning page"
 [Issues]: ../skill/Issues.mkd "the parallel fix-and-land loop"
@@ -26,4 +25,3 @@ Index of Beagle's open work: one topic per dir, each holding numbered [Plan]-sha
 [POST]: POST/README.mkd "commit / fast-forward / push tickets"
 [GET]: GET/README.mkd "checkout / fetch / view / search tickets"
 [BLAME]: BLAME/README.mkd "blame-performance tickets"
-[DIFF]: DIFF/README.mkd "the diff: view tickets"

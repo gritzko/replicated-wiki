@@ -4,11 +4,7 @@
 
 ##  Active tickets
 
- -  [DIFF-003] — file-scoped `diff:<file>#L<n>` should render the WHOLE file
-    with changes highlighted in place (vs tree/dir `diff:` = changed hunks only).
+ -  None — DIFF-003 (file-scoped whole-file diff) landed `eaa75793`. DIFF-001
+    (gitlink line + sub recursion) landed `ef0430da`+`018a59c4`; DIFF-002 earlier.
 
-DIFF-001 (gitlink line + submodule content recursion) fully landed
-(`ef0430da` part-a, `018a59c4` part-b). DIFF-002 landed earlier.
-
-[DIFF-003]: DIFF-003.mkd "file-scoped diff: shows the whole file, changes hili'd"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
