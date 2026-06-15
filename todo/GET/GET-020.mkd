@@ -16,11 +16,15 @@ yet leaves partial state.
  -  `be get file:/home/gritzko/beagle` into a fresh `$HOME/todo/DIFF-003/` →
     `SNIFFFAIL`; `abc/` empty (sub unmounted), `woof/` + 3 `test/tree/` files
     missing; cmake config then failed on the gaps.
- -  Same form also `SNIFFFAIL`'d in earlier probes this session; a single
-    UNCONTENDED `be get` succeeded — multiple worker trees were cloned from the
-    one shared store concurrently, so store contention is the prime suspect.
- -  Worker workaround (now ticketed): restored the missing dirs verbatim from
-    canonical; its DIFF-003 edits (graf/sniff/test) were unaffected.
+ -  DIFF-004 worker (2026-06-15) found it DETERMINISTIC: `be get file:<wt>`
+    checks out 1171/1200, an IDENTICAL 29-file miss across fresh re-runs (all of
+    `woof/`, some `test/spot/07-10`, `test/tree/`), `SNIFFFAIL` each time;
+    re-running does NOT converge. So NOT mere contention (earlier theory).
+ -  Objects ARE in the store: per-file `be get <path>` materializes every
+    missing file (→ 1200 ok). So this is a BULK-checkout defect, not missing
+    data — a specific set of paths is silently skipped by the multi-file walk.
+ -  Recovery used (legit, not a silent patch): complete the tree via per-file
+    `be get <path>` (real store checkouts), verify 1200 ok, then build.
 
 ### Goals
  -  `be get` either produces a COMPLETE checkout (every tree file + mounted
@@ -37,10 +41,12 @@ yet leaves partial state.
 
 ##  WIP
 
-### Design decisions (open — repro before forking)
- -  Pin the trigger: concurrent worktree creation from one store (lock /
-    partial-write race), an independent abc sub-mount failure, or a `SNIFFFAIL`
-    mid-checkout leaving partial state.  Repro deterministically first.
+### Design decisions (open)
+ -  Repro is DETERMINISTIC (above): the bulk/multi-file checkout walk silently
+    skips a fixed set of paths (`woof/`, some `test/spot`+`test/tree`) and exits
+    `SNIFFFAIL`, while per-file `be get` for the same paths works.  Find why the
+    walk drops them (tree-descent order? a count/cursor bug? a per-entry error
+    swallowed mid-walk?) — objects are present, so it's the walk, not the pool.
 
 ### TODOs
  -[ ] Repro: N concurrent `be get file:<wt>` from one store; also a single run

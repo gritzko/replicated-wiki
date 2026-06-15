@@ -1,0 +1,78 @@
+#   DIFF-004: clickable difflet URIs — `diff:<path>?<from>..<to>#L<n>`
+
+Clicking a diff hunk's nav link (e.g. `diff:ast/BAST.c#L362`) gives "be: no
+results".  The hunk's click-target URI is built with an EMPTY query
+(`graf/WEAVE.c` ~861/961: `HUNKu8sMakeURI(..,name,empty,line)` → `diff:<path>#L`),
+so clicking runs **wt-vs-base** (`beagle/BE.cli.c:251`) — empty for a committed
+file.  `diff:`'s range form `?from#to` spends the fragment on `<to>`, leaving no
+room for `#L`.  The `weave` verb already takes a `..` range in the QUERY
+(`graf/GRAF.exe.c:483-493`), freeing the fragment.  Adopt that for `diff:`:
+clickable difflets become `diff:<path>?<from>..<to>#L<n>`.  Method: [Issues].
+
+##  Input
+
+### Context
+ -  Nav-URI is the per-hunk `U` click target bro renders; today it omits the
+    version → wt-vs-base → "no results" on a committed file (pre-existing;
+    DIFF-003 `eaa75793` made file diffs worth clicking, exposing it).
+ -  `diff:` range = `?from#to` (query=from, **fragment=to**) — no room for `#L`.
+    `weave file?from..to` (GRAF.exe.c:483-493) puts both refs in the query.
+ -  Repro: `be diff:graf/WEAVE.c#L100` → empty; `be diff:graf/WEAVE.c?<from>..<to>`
+    (range in query) leaves the fragment free for `#L`.
+
+### Goals
+ -  `diff:` accepts `?<from>..<to>` (range via `..` in the query); the fragment
+    is the line anchor `#L<n>` (jump), not the range `to`.
+ -  Diff hunks emit clickable nav URIs `diff:<path>?<from>..<to>#L<hunk_line>`;
+    clicking opens the file-scoped (whole-file, DIFF-003) diff at that line.
+ -  wt-vs-base hunks keep `diff:<path>#L<n>` (no query — correct, file is dirty).
+ -  Commit-show (`diff:?<sha>` → `GRAFDiffTreeRefs(parent,sha)`) per-file nav =
+    `diff:<path>?<parent>..<sha>#L<n>`.
+
+### Constraints
+ -  Reuse the `weave` verb's `..` split (GRAF.exe.c:483-493) — do NOT reinvent.
+ -  Guard the bare `?..` parent-branch relative form (`URI.mkd:42`): the split
+    must not fire on a relative `..`/`?./x` ref.
+ -  Producer/renderer split: graf emits the URI (data); bro owns the click +
+    `#L` jump (existing fragment handling).  `abc/` untouched.
+
+##  WIP
+
+### Design decisions (settled with user 2026-06-15)
+ -  URI form `diff:<path>?<from>..<to>#L<n>` chosen over `?from#to:L<n>` (the
+    `#sym:L` overload) — it matches the live `weave` form and keeps the fragment
+    purely a line anchor.  Legacy `?from#to` may stay as a fallback when the
+    query has no `..` (back-compat), but `..` is the canonical range.
+
+### TODOs
+ -[ ] Repro-first: `test/diff/12-difflet-click` — assert (a)
+      `diff:<path>?<from>..<to>#L<n>` resolves to the file's range diff (whole
+      file, far unchanged line + change present) and (b) a tree/commit diff's
+      per-file hunk URI is the `?from..to#L` form, NOT the empty-query form, in
+      Plain/TLV.  Confirm red first.
+ -[ ] Parse: `diff:` query with `..` → split `from`/`to` (reuse GRAF.exe.c
+      483-493), route to the range diff; fragment = line anchor.  Guard `?..`.
+ -[ ] Nav-URI: thread a `u8cs navver` (`<from>..<to>`) GRAFDiffTreeRefs /
+      GRAFWeaveDiff → GRAFDiff2Layer → WEAVEEmitDiff/WEAVEEmitFull; the FLUSH
+      macros build `scheme + name + "?" + navver` then `HUNKu8sMakeURI(empty
+      path, sym, line)` for `#L`.  wt-vs-base callers pass empty navver.
+ -[ ] Spec/usage: update `URI.mkd` (`diff:?a..b` + `#L`) and the GRAF diff
+      usage string.  Keep `weave` behaviour unchanged.
+
+### Blockers and bummers
+ -  Signatures to extend: `GRAFDiff2Layer` (DIFFREF.c:136 / GRAF.h:335),
+    `GRAFDiffTreeRefs` (GRAF.h:326), `GRAFWeaveDiff` (BLAME.c / GRAF.h:301),
+    `GRAFDiffWtFile`/`WtTree` (GRAF.h:324-325), `WEAVEEmitDiff`/`Full`
+    (WEAVE.h:180/190) — wide but mechanical.
+
+##  Outcome
+ -  Landed `7317bb48`: shared `graf_query_range()` factors the `weave` `..`
+    split (guards relative `?..`/`?./x`); `diff:` takes `?<from>..<to>` as the
+    canonical range, fragment kept free for `#L<n>` (legacy `?from#to` = no-`..`
+    fallback). `navver` (`from..to`) threaded GRAFDiffTreeRefs/GRAFWeaveDiff →
+    GRAFDiff2Layer → WEAVEEmitDiff/Full so hunks emit `diff:<path>?<from>..<to>#L`;
+    wt-vs-base + `cat:` pass empty → bare `#L`. Test `12-difflet-click`; 374/374.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[DIFF-003]: DIFF-003.mkd "file-scoped diff: shows the whole file"
+[Bro]: ../../wiki/Bro.mkd "the bro pager / shared hunk renderer"

@@ -4,7 +4,9 @@
 
 ##  Active tickets
 
- -  None — DIFF-003 (file-scoped whole-file diff) landed `eaa75793`. DIFF-001
-    (gitlink line + sub recursion) landed `ef0430da`+`018a59c4`; DIFF-002 earlier.
+ -  None — DIFF-004 (clickable `diff:<path>?<from>..<to>#L<n>` difflet URIs)
+    landed `7317bb48`. DIFF-003 (file-scoped whole-file diff) landed `eaa75793`.
+    DIFF-001 (gitlink + sub recursion) `ef0430da`+`018a59c4`; DIFF-002 earlier.
 
+[DIFF-004]: DIFF-004.mkd "clickable difflet URIs diff:<path>?<from>..<to>#L<n>"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

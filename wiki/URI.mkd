@@ -15,7 +15,7 @@ Each populated URI slot adds its effect orthogonally, and the slot combination d
  -  `be patch ?feat` absorbs one commit, `?feat!` the whole branch, `#sha` one named commit — scope at [PATCH], provenance at [POST].
  -  A bare `//host` reads the cache while `ssh://host` opens the wire — the scheme alone flips cached vs network.
  -  The scheme also picks the protocol: `ssh:`/`https:`/`http:`/`git:` run git's pack wire, `be:` runs beagle's keeper wire (a `.git` path forces git).
- -  `diff:` vs `diff:?br` vs `diff:?a#b` change the diff from/to sides — projector slots compose like verb slots.
+ -  `diff:` vs `diff:?br` vs `diff:?a..b` change the diff from/to sides; the `..` range keeps the fragment free for a `#L<n>` line anchor (`diff:<path>?a..b#L12`, clickable). Legacy `?a#b` (fragment = to) still parses. Slots compose like verb slots.
  -  An empty `?` slot in a URI means the project trunk; no `?` slot at all means cur (see Refs rule 0).
 
 ##  Relative URIs
