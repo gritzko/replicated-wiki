@@ -1,0 +1,21 @@
+#   BRO — pager / hunk-renderer tickets
+
+[Bro] is the interactive pager and the **shared hunk renderer**: every
+projector (`log`/`status`/`grep`/`diff`/`commit`/`blame`…) emits `dog/HUNK`
+streams that bro renders. Tickets here improve that rendering — presentation
+is bro's job, producers only emit `{ts,verb,uri}`+body. Method: [Issues].
+
+##  Active tickets
+
+ -  (none — all BRO tickets landed)
+
+BRO-002 (one hunk-header drawer + unified table-hunk output) landed
+`25abfece`+`acbda302`; subsumed BRO-001 (`afc2bd48`). BRO-003 (status-row
+regressions: sub-relay rows + patch `modl`) landed `3aca0998`.
+
+[BRO-001]: BRO-001.mkd "hunk status-line banner"
+[BRO-002]: BRO-002/README.mkd "unify action/status output into one table-hunk per (sub)module"
+[BRO-003]: BRO-003.mkd "BRO-002 status-row regressions (sub-relay rows + patch modl)"
+[BLAME-005]: ../BLAME/BLAME-005.mkd "blame produces per-commit hunks"
+[Bro]: ../../wiki/Bro.mkd "the bro pager"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

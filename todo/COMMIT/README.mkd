@@ -1,0 +1,18 @@
+#   COMMIT tickets: the `commit:` view
+
+`be commit:<uri>` renders a commit object (keeper [Projector]: headers then
+message).  Tickets here grow what the view shows.  Each entry is one active
+ticket; it drops off once the whole ticket lands.  Method: [Issues].
+
+##  Active tickets
+
+ -  (none — all COMMIT tickets landed)
+
+COMMIT-001 (link `commit:` to `diff:?<sha>`) landed `dac9dab7`; superseded by
+COMMIT-002 (inline the full diff as relayed graf hunks), landed `df596d0f`.
+
+[COMMIT-001]: COMMIT-001.mkd "surface the diff from commit: (link — superseded)"
+[COMMIT-002]: COMMIT-002.mkd "inline the full diff as relayed hunks"
+[DIFF-001]: ../DIFF/DIFF-001.mkd "diff: recurse into subs + render gitlink/pin changes"
+[Projector]: ../../wiki/Projector.mkd "read-only verbless views"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

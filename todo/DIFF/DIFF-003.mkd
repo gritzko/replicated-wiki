@@ -1,0 +1,64 @@
+#   DIFF-003: file-scoped `diff:` shows the whole file, changes highlighted
+
+A hunk nav-URI like `diff:ast/BAST.c#L362` (the `U` link bro emits on each diff
+hunk) currently opens a FILE-SCOPED `diff:` that shows only that file's changed
+hunks, scrolled to the line.  For a single file the user wants the opposite of
+the dir/tree view: render the WHOLE file content with the changed lines
+highlighted in place (like `git diff --color` over the full file, a review
+pane), so a change reads in full surrounding context.  Tree/dir `diff:` keeps
+showing only changed hunks.  Method: [Issues].
+
+##  Input
+
+### Context
+ -  `diff:` is URI-driven (`graf/DIFFREF.c`: "file or whole tree, ref vs wt or
+    ref vs ref").  A file path scopes to that file; today it emits only the
+    file's changed hunks.
+ -  bro emits a `U` nav-URI per hunk carrying a `#L<n>` line anchor (`dog/HUNK.c`
+    fragment grammar; built via `HUNKu8sMakeURI`, `graf/WEAVE.c`).  Clicking it
+    re-dispatches `diff:<path>#L<n>` — the entry point for this view.
+ -  Distinct from dir/tree `diff:` (changed-hunks-only), which must NOT change.
+
+### Goals
+ -  `be diff:<file>#L<n>` (file-scoped) renders the FULL file, every line, with
+    added/removed/changed lines highlighted in place and the `#L<n>` anchor
+    honored for scroll/jump.
+ -  Tree/dir-scoped `diff:` (no single-file path) stays changed-hunks-only.
+ -  Works in Plain/Color/TLV; composes the same under sub recursion.
+
+### Constraints
+ -  Producer/renderer split: graf decides the EMIT scope (full-file lines vs
+    changed-hunks-only) keyed off file-vs-tree URI scope; bro owns the change
+    highlighting/presentation — producers must not decide presentation.
+ -  No new diff engine — reuse graf's existing file diff (`graf/DIFFREF.c`,
+    `graf/WEAVE.c`); emit unchanged context lines tagged so bro highlights.
+ -  `abc/` untouched; read-only `dog/HUNK` stream; all four URI slots compose.
+
+##  WIP
+
+### Design decisions (open — confirm in a design pass before forking)
+ -  Where full-file scope is decided: a file-scoped `diff:` URI should make
+    DIFFREF emit all file lines (change-tagged), not just hunks — confirm the
+    branch/flag, and whether the ref-vs-ref line cap must lift for one file.
+ -  Highlight encoding: which `dog/HUNK` tok tags bro already has for add/del/
+    change lines, and whether full-file context needs an "unchanged" tag.
+
+### TODOs
+ -[ ] Design pass: confirm the DIFFREF file-scope branch + bro's tok tagging.
+ -[ ] Implement full-file emit for a file-scoped `diff:`; keep tree/dir scope
+      changed-hunks-only.
+ -[ ] Honor the `#L<n>` anchor for jump/scroll in the full-file view.
+ -[ ] Tests: file-scoped `diff:<file>#L<n>` output contains an UNCHANGED line
+      far from any change AND the highlighted changed line, in Plain/Color/TLV;
+      tree-scope `diff:` still hunks-only (regression).
+
+### Blockers and bummers
+ -  Whole-file emit on a huge file ⇒ large output; the per-file line cap may
+    need a file-scope override (verify the BNOROOM-class limits).
+
+##  Outcome
+ -  (open)
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[Bro]: ../../wiki/Bro.mkd "the bro pager / shared hunk renderer"
+[DIFF-001]: DIFF-001.mkd "diff: recurse into subs + render gitlink/pin changes"

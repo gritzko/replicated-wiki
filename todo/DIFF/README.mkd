@@ -4,7 +4,11 @@
 
 ##  Active tickets
 
- -  [DIFF-001] — `be diff:?<sha>` shows NOTHING for a submodule-pin-bump commit: the gitlink change (old-pin→new-pin) isn't rendered and `diff:` never recurses into the sub, so a parent commit that advances a sub by real work looks empty. Render the gitlink line and recurse into the sub (like GET/POST/PATCH), `--nosub` to suppress.
+ -  [DIFF-003] — file-scoped `diff:<file>#L<n>` should render the WHOLE file
+    with changes highlighted in place (vs tree/dir `diff:` = changed hunks only).
 
-[DIFF-001]: DIFF-001.mkd "diff: recurse into submodules + render gitlink/pin changes"
+DIFF-001 (gitlink line + submodule content recursion) fully landed
+(`ef0430da` part-a, `018a59c4` part-b). DIFF-002 landed earlier.
+
+[DIFF-003]: DIFF-003.mkd "file-scoped diff: shows the whole file, changes hili'd"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
