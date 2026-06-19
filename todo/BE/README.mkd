@@ -4,13 +4,19 @@
 
 ##  Active tickets
 
- -  [BE-001] — red leaks into non-conflict code render and ulog status rows; restrict red to the `conf`/`modl` conflict statuses ([DIS-018]), default everything else.
- -  [BE-002] — cryptic errors for mistyped verbs/projectors (`be difff` → `bro: cannot open difff: FILENONE`, exit 0); add a `DOGSuggestCommand` "did you mean" suggester + own the diagnostic in `be` with a non-zero exit.
  -  [BE-003] — every dog must print **name + verb + URI + error code** on an error exit (one uniform line, single-sourced) — today error exits are contextless (`Error: SNIFFFAIL`, `bro: cannot open …: FILENONE`); general form of BE-002.
+ -  [BE-005] — **umbrella**: unify verb output through the shared ROWS/HUNK *state banner*. SUPERSEDED by [BE-007] — the one-hunk-per-module output model stays, but ROWS (the typed subsystem) is the wrong vehicle.
+ -  [BE-007] — root out ROWS ENTIRELY (195 refs/18 files): it is just ULOG→HUNK token serialization and needs no data types. Replace with one utility fn in HUNK/ULOG, delete `dog/ROWS.{h,c}`, repoint every caller. Reverses [BE-005], subsumes [[POST-022]].
+ -  [BE-006] — one unreachable-remote `be post` prints FIVE lines for one failure (raw `ssh:` leak + `be: remote unreachable` + `Error: WIREUNRCH` + `Error: BEDOGEXIT` ×2, one per spawned `be` level); collapse to a single uniform error line. Concrete instance of [BE-003].
 
 [Plan]: ../../wiki/Plan.mkd "the live planning page"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
-[BE-001]: BE-001.mkd "red over-applied outside conflict statuses"
-[BE-002]: BE-002.mkd "did-you-mean for mistyped verbs/projectors"
 [BE-003]: BE-003.mkd "uniform dog error exit: name + verb + URI + code"
+[BE-004]: BE-004.mkd "home as a process singleton"
+[BE-005]: BE-005.mkd "umbrella: unify verb output via the shared ROWS state banner (SUPERSEDED by BE-007)"
+[BE-007]: BE-007.mkd "root out ROWS; serialize ULOG→HUNK via a plain utility fn"
+[POST-022]: ../POST/POST-022.mkd "sub-push wrecked output (subsumed by BE-007)"
+[BE-006]: BE-006.mkd "one failed push stacks 5 Error/raw lines → one uniform line"
+[STATUS-001]: ../STATUS/STATUS-001.mkd "be status! extended + status:<path>/ scope"
+[POST-018]: ../POST/POST-018.mkd "post/put confirmations via the banner"
 [DIS-018]: ../done/DIS-018.mkd "PATCH conf/modl are red"

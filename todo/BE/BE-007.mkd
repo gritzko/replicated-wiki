@@ -1,0 +1,65 @@
+#   BE-007: root out ROWS; serialize ULOG→HUNK via a plain utility fn
+
+ROWS (`dog/ROWS.{h,c}`) is an unnecessary typed subsystem — 195 refs across 18 files
+(`rows`, `rows_row`, `ROWSnav`, `ROWSdiscipline`, `ROWSOpen/Close/FeedRow/FeedRec`)
+— for what is just serializing a ULOG event sequence into ONE `H` hunk as a token
+stream. Replace it with a single utility FUNCTION in HUNK or ULOG, with NO new data
+types (operate on existing `ulogrec`/`hunk`/`u8b`/`u8cs`). Delete ROWS entirely,
+repoint every caller, and restore correct verb output. It is also currently BROKEN
+(bannerless hunks get rebased into per-row labels — the POST-022 wreckage). This
+REVERSES and supersedes [BE-005] (and the ROWS wiring its children [POST-018]/
+[GET-026]/[STATUS-001] landed); it subsumes [POST-022].
+
+##  Input
+
+### Context
+ROWS adds types and a builder for a job that is one serialization function.
+
+ -  Real job: a ULOG row `(ts, verb, uri)` → tokens appended to ONE hunk (the
+    `<date> <verb> <path>` table with per-column toks + a hidden nav URI per row),
+    flushed via `HUNKu8sFeedOut`. No state object is needed.
+ -  Callers (18): sniff/{LS,GET,PATCH,PUT,POST,DEL,SNIFF.exe}, dog/{ULOG,HUNK},
+    keeper/{WALK,KEEP.exe}, beagle/BE.cli, + their tests.
+ -  Currently broken: ROWS rows emitted with no active table become empty-URI hunks
+    that `HUNKu8sRelay` rebases to the mount path → a bare label per row ([POST-022]).
+
+### Goals
+Delete ROWS; one utility fn; identical (correct) output.
+
+ -  Add `HUNK`/`ULOG` utility that serializes a ULOG event (or a slice of them) into a
+    hunk token sequence — NO new types; nav scheme passed as a plain param/`ron60`,
+    not a `ROWSnav` enum or `rows_row` struct.
+ -  Remove `dog/ROWS.{h,c}`; repoint all 18 callers to the utility fn.
+ -  Verb output (status/post/put/get/diff/ls banners) byte-correct; the [POST-022]
+    per-row-label / full-history wreckage fixed by construction.
+
+### Constraints
+ -  ABC idioms; NO new data types. Keep the per-column toks + hidden per-row nav URI
+    behavior via fn params, not a struct. The tty-stream vs one-hunk `--tlv` modes
+    come from `HUNKMode`, already global.
+
+##  WIP
+
+### Design decisions
+(pending)
+
+### TODOs
+ -[ ] Inventory the 18 callers + the 195 refs; classify each ROWS call's intent.
+ -[ ] Design the utility fn signature in HUNK or ULOG (input: ulogrec(s) + nav param;
+      output: `u8b`/hunk). No `rows`/`rows_row`/`ROWSnav`/`ROWSdiscipline`.
+ -[ ] Repoint callers; delete `dog/ROWS.{h,c}` + its tests; update INDEX.md, CMake.
+ -[ ] Repro-first: keep the verb-output tests green AND fix the POST-022 wrecked
+      output (assert bounded, prefixed sub-push output) — confirm failing pre-change.
+
+### Blockers and bummers
+ -  Large surface (195 refs/18 files). Coordinate with in-flight [POST-021] (narrow
+    BASS-carve fix in keeper/WALK.c) — leave its walk/BASS logic alone, only remove
+    ROWS from the output path; expect a reconcile.
+
+##  Outcome
+ -  (open)
+
+[BE-005]: BE-005.mkd "unify verb output via the shared ROWS/HUNK banner (SUPERSEDED)"
+[POST-022]: ../POST/POST-022.mkd "sub-push wrecked output (subsumed here)"
+[POST-021]: ../POST/POST-021.mkd "git-scheme push BNOROOM"
+[POST-018]: ../POST/POST-018.mkd "post/put banner through ROWS (to be reworked)"

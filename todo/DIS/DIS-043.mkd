@@ -1,0 +1,33 @@
+#   DIS-043: dog/WEAVE merge — concurrent-insert order is path-dependent
+
+The new identity-keyed `dog/WEAVE` `WEAVEMerge` (the [DIS-003] robust fix, built in [DOG-003]) recovers every revision correctly for linear and simple-fork histories, but a criss-cross / repeated merge still duplicates tokens: recovering an ancestor yields extra, doubled tokens (e.g. `aae` → `a/aa/e`, root `r` → `rr`). The DWEAVE fuzzer (below) finds these in seconds. Root cause is the ordering of *concurrent* inserts, not identity matching — two sibling tokens get ordered oppositely on two merge paths, so a later merge of those weaves desyncs the two-pointer and cascades into duplication. The real fix is a stable, path-independent order key per token (causal position + commit-id tiebreak, CRDT/RGA-style), not a counter recomputed in weave order. Links: [DIS-003] (parent), [DOG-003] (engine).
+
+##  Issues
+One root cause — concurrent-insert order has no total, path-independent definition.
+
+ -  Tooling: `dog/fuzz/WEAVE.c` (`DWEAVEfuzz`) ports graf/WEAVE2's DAG content-recovery property to the new API; corpus + minimized repros in `$HOME/Corpus/DWEAVE` (`crashes/min-crisscross-recovery`, `crashes/crash-*`).
+ -  Criss-cross duplication: `merge(merge(1,2), merge(2,3))` — a token reaching the final merge via two paths is emitted twice; the identity hashes are equal but the two parents hold the shared tokens in different relative order, so the merge-join can't pair them.
+ -  The swap is in concurrent siblings: `merge(1,2)` orders `b(c1),b(c2)`; `merge(2,3)` orders `b(c2),b(c1)`. A per-token positional ordinal (recomputed by counting in weave order) then drifts once a token is duplicated, cascading to all later same-commit tokens.
+
+##  Blockers
+A local fix is not enough.
+
+ -  "a-only before b-only" makes sibling order depend on which parent is left/right (non-associative) → swaps on re-merge.
+ -  A commit-id tiebreak on the two-pointer *heads* still fails: a parent's one-sided run interleaves several commits causally (`c3` wraps `c1`), so head-comparison is not a global commit-id sort — fixes some criss-cross cases, regresses others.
+ -  Correct order needs each token's place to be intrinsic (causal where causally related, commit-id-tiebroken only where truly concurrent), independent of merge path/order.
+
+##  Planned
+Give tokens a stable order key, then merge by it.
+
+ -  Assign each token a stable order key at insert (parent-anchor + commit-id tiebreak; a sequence-CRDT identifier), stored or losslessly recomputable, so identity AND position are immutable under any merge path.
+ -  Replace the head-comparison interleave with a deterministic merge over that key; keep the merge-JOIN (match every shared identity, union removers).
+ -  Add the criss-cross repro as a `dog/test/WEAVE01` property case; keep `DWEAVEfuzz` green over the corpus, then re-fuzz for fresh holdouts.
+
+##  Landed
+Two sub-bugs fixed on beagle.new (pending the DOG-003 gate), both pinned by tests.
+
+ -  `NOROOM`: `wnext_diff`/`WEAVEMerge` sized the `rms` column at 8 B/token (one remover), but a token carried through a merge holds `count + N` removers; folding a third revision onto a merge overflowed. Capacities now budget existing remover bytes + one fresh remover/token. Pinned by `dog/test/WEAVE01` `merge_fold_multirm`.
+ -  LCS → identity merge-JOIN: `WEAVEMerge` matched shared tokens with an LCS (`BRAMu64s`) over identity hashes, which pairs only a subsequence and dropped matches whose context diverged — the original `abac`/`aabc` class. Now pairs every equal-identity token. (Concurrent ordering remains open — this ticket.)
+
+[DIS-003]: DIS-003.mkd "WEAVEMerge token identity is positional, not total"
+[DOG-003]: ../DOG/DOG-003.mkd "dog/WEAVE core — format + Parse/Next/Merge/Produce"

@@ -1,0 +1,60 @@
+#   GIT-009: push to a fresh git remote omits the `.be` blob → fsck fails
+
+Pushing a beagle history to a BRAND-NEW / empty git remote produces an inconsistent
+pack: the committed root trees carry a `.be` entry (the store anchor — gitignored yet
+recorded in the tree object), but the pack walk (`keeper/WALK.c` `DPATHVerify`)
+deliberately SKIPS `.be`, so the blob the tree entry points at is never written.
+A fresh remote has no copy, so `git fsck` / `git-receive-pack` rejects the push with
+`missing blob object`. Against any remote that already holds the blob (every
+incremental fast-forward — the normal path) it is harmless, so it only bites a fresh
+or empty remote. Found while fixing [POST-021] (the push BNOROOM); isolated there by
+using a `.be`-free synthetic history for the regression test, so it is unrelated to
+that fix and gets its own ticket.
+
+##  Input
+
+### Context
+The tree references a blob the pack refuses to ship.
+
+ -  Root trees contain a `.be` entry (store anchor). It is gitignored but present in
+    the committed tree object, so the tree has a dangling reference once the walk drops it.
+ -  The pack-build walk (`keeper/WALK.c` `DPATHVerify`) skips `.be`, so its blob is
+    omitted from the generated pack.
+ -  Fresh remote → `git fsck`/`git-receive-pack`: `missing blob object`. Existing
+    remote (already has the blob) → harmless; hence only fresh/empty remotes fail.
+
+### Goals
+A fresh-remote push yields an fsck-clean pack — no dangling tree references.
+
+ -  Either DON'T record `.be` in the committed tree (it is the gitignored store
+    anchor; arguably never belongs in a tree), OR include its blob in the pack when
+    the tree references it. Pick one and make tree-vs-pack consistent.
+ -  Repro test: push a `.be`-bearing history to a FRESH bare git remote, assert
+    exit 0 + `git fsck` clean + remote advances.
+
+### Constraints
+ -  ABC idioms. Must NOT regress the incremental fast-forward push path nor the
+    gitignore semantics for `.be` in the working tree. Couples to the store-anchor
+    layout ([SUBS] `.be`/`.dogs` handling).
+
+##  WIP
+
+### Design decisions
+(pending — decide: drop `.be` from trees vs ship its blob)
+
+### TODOs
+ -[ ] Find where `.be` becomes a tree entry (the commit/tree builder; keeper POST /
+      DPATH) and why `DPATHVerify` skips it on the pack walk.
+ -[ ] Decide the consistent rule (no `.be` tree entry, OR pack-include it) and apply.
+ -[ ] Repro-first (CLAUDE.md §17): fresh-bare-remote push + `git fsck` test, confirm
+      failing pre-fix.
+
+### Blockers and bummers
+ -  Couples to [SUBS] store-anchor layout; confirm the chosen rule doesn't break sub
+    mounts. Independent of [POST-021]'s BASS/BNOROOM fix.
+
+##  Outcome
+ -  (open)
+
+[POST-021]: ../POST/POST-021.mkd "git-scheme push BNOROOM (BASS exhaustion)"
+[SUBS]: ../SUBS/README.mkd "submodule-recursion + store-anchor layout"

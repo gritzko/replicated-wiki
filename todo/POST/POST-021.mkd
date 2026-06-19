@@ -1,0 +1,63 @@
+#   POST-021: git-scheme push (`be post`/`be put ssh://`) fails with BNOROOM
+
+`be post ssh://localhost/src/dogs` and `be put --nosub ssh://localhost/src/dogs?/main`
+from a tree AHEAD of the git upstream fail the push outright: after recursing the abc
+submodule the parent push dies `fatal: the remote end hung up unexpectedly` + `Error:
+BNOROOM` + `Error: BEDOGEXIT`, and the upstream is NOT advanced. `be head` against the
+same remote fetches fine, so the read side is healthy — only the send/receive (push)
+path is broken. Locally-committed work is stranded: it cannot be published, which
+blocks the fix-and-land loop (isolated agents can't clone a base that includes it).
+Distinct from [POST-020] (cosmetic stderr on this same path, already landed).
+
+##  Input
+
+### Context
+A tree N commits ahead of its git remote cannot push; the wire dies mid-send.
+
+ -  Repro: in `/home/gritzko/beagle.new` (cur `25fb62bd` DOG-003, a clean ff 8 commits
+    ahead of `ssh://localhost/src/dogs?/main`), run `be post ssh://localhost/src/dogs`
+    or `be put --nosub ssh://localhost/src/dogs?/main`.
+ -  Output: the abc submodule push runs (synthetic `?.dogs/` → git default branch,
+    lists ABC-004/PTR-009 + `add abc/BIT.h` …), then `post: 0 change(s)`, then
+    `fatal: the remote end hung up unexpectedly` / `Error: BNOROOM` / `BEDOGEXIT`.
+ -  Contrast: `be head ssh://localhost/src/dogs?/main` fetches OK (`Total 0 (delta 0)…`)
+    and correctly lists the 9 ahead commits — the READ path is healthy.
+
+### Goals
+`be post` / `be put` to an ssh/git remote must complete the ff-push without BNOROOM.
+
+ -  The remote ref advances to the local tip; a re-run `be head` shows 0 ahead.
+ -  Repro test: push a tree a few commits ahead of a git remote, assert it advances
+    (mirror the `git-receive-pack` drop-in harness, `keeper/KEEP.cli.c`).
+
+### Constraints
+ -  ABC idioms; ssh/git remotes use `--nosub` (submodules manual). ff-only, never forced.
+
+##  WIP
+
+### Design decisions
+(pending root-cause)
+
+### TODOs
+ -[ ] Find the BNOROOM raiser on the SEND path. Leads: `keeper/KEEP.c:742`
+      (`if (u8bIdleLen(out) < outsz) return BNOROOM` — a fixed-cap out buffer), the
+      git push send in `keeper/WIRE.c` / `keeper/KEEP.exe.c` (receive-pack peer) /
+      `keeper/KEEP.cli.c`. BNOROOM is an abc buffer overflow → a send/pkt buffer is
+      likely undersized for the pack stream (cf. the `dog/WEAVE.c` rms `NOROOM` fixed
+      in DOG-003 — same undersized-buffer class).
+ -[ ] Check whether the MULTI-LINE commit message on `25fb62bd` trips the wire encoder
+      (work.mkd: wire messages "may be multi-line once the parser allows"); if so fix
+      the encoder, or enforce the 1-line/≤64-char commit rule and re-test.
+ -[ ] Check the submodule-recursion interaction (the abc sub-push precedes the failing
+      parent push; does the parent inherit a spent buffer / bad state?).
+ -[ ] Repro-first (CLAUDE.md §17): a failing push test, then fix.
+
+### Blockers and bummers
+ -  Complete breakage of git-scheme publishing. The DOG line is stranded local-only on
+    `beagle.new`; DIS-043 and onward can't land via the shared remote until fixed.
+
+##  Outcome
+ -  (open)
+
+[POST-020]: POST-020.mkd "git-push post path emitted raw stderr printfs (LANDED 8c7f5f3a)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

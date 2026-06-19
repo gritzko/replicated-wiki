@@ -1,0 +1,59 @@
+#   POST-022: submodule-recursive post dumps whole sub history, per-line label
+
+`be post be://localhost/beagle` (and `be post ssh://…`) recursing into the `abc`
+submodule prints the submodule's ENTIRE commit history — ~150 `post abc/?<sha>#<msg>`
+rows — each preceded by a bare `abc` label line on its own, producing pages of
+unreadable, wrecked output. It should emit only the commits actually being
+posted/pushed (the delta vs the remote), through the shared ROWS banner, with a
+compact per-row `abc/` prefix — not a standalone `abc` line per entry, and not a
+full-history replay. Distinct from [POST-021] (the BNOROOM push *failure*); follows
+[POST-020]/[POST-019] (git-push output via ROWS / gitlink banner).
+
+##  Input
+
+### Context
+Two faults in the submodule-recursion output of `be post <remote>`.
+
+ -  Repro: `be post be://localhost/beagle` from `/home/gritzko/beagle.new` (the `abc`
+    submodule is behind its remote) → ~150 lines, alternating a bare `abc` label line
+    and a `post abc/?<sha>#<msg>` row, back to `02 Mar bf378f3a be round-trip fixes`.
+ -  Fault A — every row is preceded by a STANDALONE `abc` line (the submodule label
+    leaking per-row instead of one compact prefix / ROWS scope).
+ -  Fault B — the FULL history is enumerated, not the delta: `post: 0 change(s)` is
+    printed yet every historical commit is listed, so it replays history it is not
+    committing. Likely the same sub history walk as [POST-021].
+
+### Goals
+Submodule-recursive post shows only the posted/pushed delta, compactly.
+
+ -  Route sub rows through dog/ROWS with a compact `abc/` prefix; no bare `abc` line
+    per row ([BE-005], like [POST-018]/[POST-020]).
+ -  Emit only the delta being pushed, not the whole sub history.
+ -  Repro test: a post recursing a behind submodule asserts bounded, prefixed output
+    (no full-history dump, no per-line label).
+
+### Constraints
+ -  ABC idioms; route status through ROWS; errors stay (BE-003). ssh/git uses `--nosub`.
+
+##  WIP
+
+### Design decisions
+(pending)
+
+### TODOs
+ -[ ] Locate the per-row `abc` label emitter (the submodule-recursion output wrapper;
+      cf. POST-020's keeper notice routing through dog/ROWS).
+ -[ ] Locate why the FULL sub history is enumerated vs the delta (couples to the
+      `wpush_walk_commit` history walk in keeper, [POST-021]).
+ -[ ] Repro-first (CLAUDE.md §17): a test asserting bounded, prefixed sub output.
+
+### Blockers and bummers
+ -  Couples to [POST-021] (same submodule commit-history walk); coordinate the fixes.
+
+##  Outcome
+ -  (open)
+
+[POST-021]: POST-021.mkd "git-scheme push fails with BNOROOM (complete breakage)"
+[POST-020]: POST-020.mkd "git-push post path raw stderr (LANDED 8c7f5f3a)"
+[POST-019]: POST-019.mkd "internal gitlink-bump put: banner leaks mid-post"
+[BE-005]: ../BE/BE-005.mkd "umbrella: shared ROWS state banner"

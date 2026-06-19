@@ -4,9 +4,24 @@
 
 ##  Active tickets
 
- -  [POST-016] — **CRITICAL.** `be post` sweeps stray/unstaged worktree files into the commit: a `be put <one-file>` + `be post` committed the staged file PLUS unrelated dirty files (`sniff/*`, `test/patch/*`) left over from a prior failed `be patch`, contaminating `?main` (the test dirs land as `mis`). Commit scope must be EXACTLY the staged set (selective) or the genuinely-dirty set — never tree entries with no on-disk file, never partial-patch leftovers.
  -  [POST-006] — `POSTCFLCT` false-fires on conflict-marker strings in tracked source comments/literals (e.g. `sniff/PATCH.c:339`), forcing a blunt `--force`. Recognize only the real WEAVE output shape, not any inline `<<<<…||||…>>>>` occurrence.
+ -  [POST-019] — an internal gitlink-bump `put:` banner (`staged 1 put row(s)`) leaks into the MIDDLE of `be post` when a submodule advanced; the bump already shows as `mod <sub>` in the parent post rows. Suppress the standalone put banner for the internal path. Surfaced by [[POST-018]]/[[BE-005]].
+ -  [POST-021] — git-scheme push (`be post`/`be put ssh://localhost/src/dogs`) fails outright with `BNOROOM` + `the remote end hung up` after the submodule recursion; `be head` fetches fine, so only the send path is broken. Strands locally-committed work (the DOG line). Complete breakage.
+ -  [POST-022] — submodule-recursive `be post <remote>` dumps the `abc` sub's WHOLE history (~150 rows) each preceded by a bare `abc` label line, despite `post: 0 change(s)` — wrecked output. Show only the pushed delta via ROWS with a compact `abc/` prefix.
+POST-020 (git-push post path raw-printf'd `sniff: N change(s)` + the keeper
+synthetic-coordinate notice → both now ride `post:` ROWS) landed `8c7f5f3a`; repro
+`test/post/25-dot-branch-no-git-wire`, `post/13` grep repointed.
+POST-018 (`be post`/`be put` confirmations bypassed the shared ROWS banner) landed
+`95252ffd` + `0ac49e6a` (put:/post: banner on stdout). POST-017 (refused `be post` was non-atomic — POSTCFLCT scan ran mid-pack-feed, so
+`KEEPPackClose` persisted orphan objects + a rewritten idx before refusing; hoisted all
+validation to a pre-flight before any store write) landed `f5b41282`; `test/post/42`.
+Follow-up still open: `be`-level scan-before-sub-recursion ordering (`DISPATCH.c:446`).
 
-[POST-016]: POST-016.mkd "be post sweeps stray/unstaged files into the commit"
 [POST-006]: POST-006.mkd "POSTCFLCT false-fires on marker strings in source"
+[POST-019]: POST-019.mkd "internal gitlink-bump put: banner leaks mid-post"
+[POST-021]: POST-021.mkd "git-scheme push fails with BNOROOM (complete breakage)"
+[POST-022]: POST-022.mkd "sub-recursive post dumps whole sub history, per-line label"
+[POST-017]: POST-017.mkd "refused post non-atomic: leaked orphan objects+idx (LANDED f5b41282)"
+[POST-018]: POST-018.mkd "post/put confirmations through the shared banner"
+[BE-005]: ../BE/BE-005.mkd "umbrella: shared ROWS state banner"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

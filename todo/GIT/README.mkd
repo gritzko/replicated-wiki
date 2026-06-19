@@ -1,0 +1,36 @@
+#   GIT — pack-log format & sync tickets
+
+The git-format storage floor: pack-log encoding, delta scheme, ingest normalization, and the upload/receive wire. Tickets here migrate the keeper pack log to a single-stream, OFS-only, offset-addressed store (one growing pack per shard, deltas reference earlier objects by offset only, REF_DELTA quarantined at the ingest boundary). The native format core (writer, OFS resolver, OFS varint) lands in dog/git so keeper and the js/JABC binding share one implementation — no pack-log logic in either consumer. [Plan]-shaped, cleared via the [Issues] loop. Concept page: [PackLog] (rewritten by [GIT-001]).
+
+##  Active tickets
+
+ -  [GIT-001] — UMBRELLA: migrate to a single-stream OFS-only pack log; all impl children below now landed (GIT-006 dropped) — only the [PackLog] wiki reconcile remains.
+ -  [GIT-009] — push to a FRESH/empty git remote omits the `.be` store-anchor blob (trees reference it, the pack walk `DPATHVerify` skips it) → `git fsck` `missing blob object`. Harmless on incremental FF; only bites fresh remotes. Found mid-[[POST-021]].
+
+GIT-007 (js/pack.hpp reduced to pure marshalling over dog/git `PACKu8sFeedObj`/
+`PACKResolveOfs` + new `PACKRecordEnd`; `JABCPackFeedOfs` + inline encode/resolve dup
+deleted, double-header bug gone, keeper↔binding cross-impl vector) landed `d8fec51a`.
+GIT-002 (object-by-object OFS-only writer) landed `e59a1c91`; GIT-003 (ingest
+re-encoder to OFS-only + per-object dedup) landed `fa52117d`; GIT-005 (verbatim
+full-clone blast + thin-pack serve builder) landed `71a31179`; GIT-008 (OFS writer
+chains delta-of-delta, depth cap 50 — fixes 38% fresh-clone bloat) landed `b01496da`;
+GIT-004 (OFS-only native resolver via the shared dog/git `PACKResolveOfs`; REF arm +
+cross-file recursion + MEM-022 hardening deleted, assert-backstopped) landed `cd1e8a00`.
+GIT-006 (migration + crash recovery) DROPPED — not needed: beagle.new is born OFS-only
+(GIT-003 re-encodes every object on clone-in), so there is no mixed store to migrate.
+
+##  Sessions
+
+ -  GIT-0?? range booked for the one-stream migration (this topic).
+
+[Plan]: ../../wiki/Plan.mkd "the live planning page"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[PackLog]: ../../wiki/PackLog.mkd "pack-log concept page"
+[GIT-001]: GIT-001.mkd "umbrella: single-stream OFS-only migration"
+[GIT-002]: GIT-002.mkd "object-by-object OFS-only writer"
+[GIT-003]: GIT-003.mkd "ingest re-encoder / normalizer"
+[GIT-004]: GIT-004.mkd "OFS-only native resolver"
+[GIT-005]: GIT-005.mkd "single-stream serving + thin-pack builder"
+[GIT-006]: GIT-006.mkd "migration + crash recovery"
+[GIT-007]: GIT-007.mkd "JABC pack-log binding reconcile"
+[GIT-008]: GIT-008.mkd "OFS writer delta chains"

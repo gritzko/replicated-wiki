@@ -1,0 +1,53 @@
+#   DIS tickets: cross-cutting spec/impl discrepancies
+
+DIS collects spec↔implementation discrepancies that cut across verbs; a gap found mid-fix gets its own DIS ticket, linked both ways. Each entry below is one open ticket with its live state; a landed one (verify with `be log | grep DIS-NNN`) drops off. The 21 below remain open. The fix-and-land method is [Issues].
+
+##  Active tickets
+
+ -  [DIS-001] — sha-bearing wtlog row-0 anchor; correctness landed, only the optional clone-path cleanup remains.
+ -  [DIS-002] — `be patch` over a transport drops freshly-fetched commits; routing landed, still loses the added file.
+ -  [DIS-003] — WEAVEMerge token identity is positional, not total; one sub-bug fixed, a clean diff-key fix stays constrained.
+ -  [DIS-004] — delete's dirty gate is mtime-only, with no `--force` content double-check bypass.
+ -  [DIS-005] — sha1/projector single-scheme URI grammar: document the two-step `be head` then `be sha1://` remote read.
+ -  [DIS-006] — `be get file:` from a legacy elided store: migrate-in-place vs materialize-on-clone undecided.
+ -  [DIS-007] — magic refs `?null` / `?back` are unimplemented.
+ -  [DIS-008] — GET `#~N` commit-ancestor rewind operator is unimplemented.
+ -  [DIS-011] — `be put ssh://host/path` without `?ref` force-pushes instead of logging.
+ -  [DIS-019] — direct `be post ssh://…/<sub>` forges a funny `refs/heads/.beagle/` ref.
+ -  [DIS-021] — wpush debug spew is on by default; a pack is built on error; the have-set is unused.
+ -  [DIS-022] — `be log` is empty in a detached or submodule worktree.
+ -  [DIS-023] — `be` status is non-idempotent: a re-run hides real modifications.
+ -  [DIS-024] — flat→sharded store-layout migration; retire the top-level `.be/refs`.
+ -  [DIS-025] — `be patch` squash bases on the target's PARENT (silent data loss); Stage 1 landed, resolver redesign open.
+ -  [DIS-029] — MARK renders bare-indent divs as raw `<p>` text and merges across the depth boundary.
+ -  [DIS-031] — POST provenance from a trailing `!` (refer/forget); `post!` = --force; ban messages ending in `!`.
+ -  [DIS-032] — bring the PATCH/POST/URI/Verbs specs in line with the bang model.
+ -  [DIS-039] — bare `be get` is a status no-op per GET.mkd but the Issues loop assumes it FFs; the specs contradict.
+ -  [DIS-040] — POSTCFLCT can't be de-falsed at the byte level; needs a provenance check, couples to POST-016.
+ -  [DIS-042] — cur's divergent commit: `be patch <peer>` + `be post` replays onto peer, drops cur's bytes (Invariant 2).
+ -  [DIS-043] — dog/WEAVE merge: concurrent-insert order is path-dependent (criss-cross duplication); NOROOM + LCS→join landed, stable order-key open ([DOG-003]).
+
+[DIS-001]: DIS-001.mkd
+[DIS-002]: DIS-002.mkd
+[DIS-003]: DIS-003.mkd
+[DIS-004]: DIS-004.mkd
+[DIS-005]: DIS-005.mkd
+[DIS-006]: DIS-006.mkd
+[DIS-007]: DIS-007.mkd
+[DIS-008]: DIS-008.mkd
+[DIS-011]: DIS-011.mkd
+[DIS-019]: DIS-019.mkd
+[DIS-021]: DIS-021.mkd
+[DIS-022]: DIS-022.mkd
+[DIS-023]: DIS-023.mkd
+[DIS-024]: DIS-024.mkd
+[DIS-025]: DIS-025.mkd
+[DIS-029]: DIS-029.mkd
+[DIS-031]: DIS-031.mkd
+[DIS-032]: DIS-032.mkd
+[DIS-039]: DIS-039.mkd
+[DIS-040]: DIS-040.mkd
+[DIS-042]: DIS-042.mkd
+[DIS-043]: DIS-043.mkd
+[DOG-003]: ../DOG/DOG-003.mkd "dog/WEAVE core"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

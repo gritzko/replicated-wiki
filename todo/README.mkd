@@ -4,24 +4,34 @@ Index of Beagle's open work: one topic per dir, each holding numbered [Plan]-sha
 
 ##  Active topics
 
- -  [BE] — dispatcher CLI front-end; open: BE-001 (red over-applied), BE-003 (uniform error line, needs a ruling).
- -  [URI] — branch/commit naming; URI-001 St.4-5 open (retire the guessers, remote delegation).
- -  [DIS] — cross-cutting spec/impl discrepancies; 22 open (store layout, bang-model specs, weave/patch base-position bugs).
- -  [MEM] — memory-safety audit (digest `MEM/MEM.mkd`); 16 open, several `js` ones blocked on a JSC build.
- -  [KEEP] — keeper object pool / walks / wire; open: KEEP-001 (converge the 3 tree-walkers), KEEP-002 (torn-index publish).
- -  [SUBS] — submodule recursion; open: SUBS-013 (`git submodule add` parity), SUBS-014/015 (put/blob edge cases).
- -  [POST] — commit-path gaps; open: POST-006 (POSTCFLCT false-fires on marker strings → [[DIS-040]]).
- -  [GET] — checkout / fetch / sync; open: GET-009 (be:// sync umbrella), GET-017 (→ [[DIS-039]]), GET-018 (atomic wt GET), GET-020 (incomplete checkout + SNIFFFAIL).
- -  [BLAME] — blame perf + output; open: BLAME-001, BLAME-003 (needs a ruling). BLAME-005 (per-commit hunks) landed `d2a7219c`.
+ -  [BE] — dispatcher CLI front-end; open: BE-003 (uniform error line, needs a ruling), BE-007 (root out ROWS entirely — 195 refs/18 files; it is just ULOG→HUNK serialization, no types needed; reverses BE-005, subsumes [[POST-022]]), BE-006 (one failed push prints 5 stacked Error/raw lines → collapse to one → [[BE-003]]). BE-005 (ROWS banner umbrella) SUPERSEDED by BE-007.
+ -  [DIS] — cross-cutting spec/impl discrepancies; 21 open (store layout, bang-model specs, weave/patch base-position bugs).
+ -  [MEM] — memory-safety audit (digest `MEM/MEM.mkd`); 10 open (6 JSC-blocked `js` ones dropped as stale — superseded by the landed JS work).
+ -  [KEEP] — keeper object pool / walks / wire; KEEP-001 (converge 4 tree-walkers → `KEEPWalkTree`) landed `0eb0afab`, KEEP-002 landed `8f7233c3`.
+ -  [GIT] — pack-log format & sync; open: GIT-001 (umbrella — all impl children landed; only the PackLog wiki reconcile remains). GIT-002/003/004/005/007/008 landed; GIT-006 dropped (beagle.new born OFS-only, no migration needed).
+ -  [SUBS] — submodule recursion; open: SUBS-013 (`git submodule add` parity), SUBS-025 (sub GET recursion leaks raw fetch progress to stderr instead of relaying it as hunks). SUBS-024 landed `b09b09bf`.
+ -  [POST] — commit-path gaps; open: POST-006 (POSTCFLCT false-fires on marker strings → [[DIS-040]]), POST-019 (internal gitlink-bump `put:` banner leaks mid-post), POST-021 (git-scheme push BNOROOMs — complete breakage, strands the DOG line), POST-022 (sub-recursive post dumps whole sub history + per-line `abc` label). POST-020 (git-push post status → `post:` ROWS) landed `8c7f5f3a`.
+ -  [GET] — checkout / fetch / sync; open: GET-009 (be:// sync umbrella), GET-017 (→ [[DIS-039]]), GET-018 (atomic wt GET), GET-022 (no per-file checkout-from-rev — `be get path?rev` drops the path).
+ -  [BLAME] — blame perf + output; open: BLAME-001, BLAME-003 (needs a ruling).
+ -  [PTR] — pointer-discipline / slice-safety audit; open (all gated): PTR-001 (abc), PTR-007 (woof). PTR-009 (URI API → `u8s out`) landed `b0455595`. The blockquote/list HasPrefix + `MKDTLineMarker` out-ptr rework was DISCARDED (stale PTR-005-reverting tangle) — needs fresh rework if wanted; PTR-006 CLOSED (won't fix).
+ -  [DIFF] — the `diff:` view; open: DIFF-005 (single-file whole-file context — needs a UX ruling), DIFF-007 (`diff:<largefile>` silently empty — outtoks overflow).
+ -  [DOG] — shared dog-layer reworks; open: DOG-001 (umbrella — move WEAVE into a columnar HUNK-compliant `dog/WEAVE`), DOG-002 (prereq: relocate BRAM+NEIL down), DOG-003/004/005 (core / emit / graf cut-over). Retires GET-001, DIS-003, DIFF-007 on land.
+ -  [ABC] — core library primitives; open: ABC-004 (add `abc/BIT.h` — `u1` bit type + bitmap slice/buffer + word-parallel set algebra; fixes the broken `BitUnset`, backs DOG-001's `weavescope`). ABC-001/002/003 landed.
+ -  [STATUS] — the `be status` view (reopened); open: STATUS-002 (`be status` lists `.gitignore`d build artifacts as `unk` intermittently, inside a submodule subtree). STATUS-001 landed.
 
 [Plan]: ../wiki/Plan.mkd "the live planning page"
 [Issues]: ../skill/Issues.mkd "the parallel fix-and-land loop"
 [BE]: BE/README.mkd "dispatcher CLI front-end tickets"
-[URI]: URI/README.mkd "branch/commit naming tickets"
 [DIS]: DIS/README.mkd "cross-cutting spec/impl discrepancy tickets"
 [MEM]: MEM/README.mkd "memory-safety audit tickets"
 [KEEP]: KEEP/README.mkd "keeper object-pool / walks / wire tickets"
+[GIT]: GIT/README.mkd "pack-log format & sync tickets"
 [SUBS]: SUBS/README.mkd "submodule-recursion tickets"
 [POST]: POST/README.mkd "commit / fast-forward / push tickets"
 [GET]: GET/README.mkd "checkout / fetch / view / search tickets"
 [BLAME]: BLAME/README.mkd "blame-performance tickets"
+[PTR]: PTR/README.mkd "pointer-discipline / slice-safety audit tickets"
+[DIFF]: DIFF/README.mkd "the diff: view tickets"
+[DOG]: DOG/README.mkd "shared dog-layer rework tickets"
+[ABC]: ABC/README.mkd "core library primitive tickets"
+[STATUS]: STATUS/README.mkd "the be status view tickets"
