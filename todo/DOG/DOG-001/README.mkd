@@ -54,11 +54,11 @@
     next), not as parallel isolated clones.
 
 ### TODOs
- -[ ] [DOG-002] relocate `BRAM`+`NEIL` to `dog/` (prereq: dog/ can't dep up).
- -[ ] [DOG-003] core: format + `Parse/Next/Merge/Produce` + cursor + tests.
- -[ ] [DOG-004] emit: `Emit{Diff,Full,Merged}`+`Alive`/`Produce` + cap fallback.
- -[ ] [DOG-005] graf cut-over; delete `graf/WEAVE`; update both INDEX.md.
- -[ ] Retire-on-land: [GET-001] (decode-per-call), [DIS-003] (positional merge),
+-[ ] [DOG-002] relocate `BRAM`+`NEIL` to `dog/` (prereq: dog/ can't dep up).
+-[ ] [DOG-003] core: format + `Parse/Next/Merge/Produce` + cursor + tests.
+-[ ] [DOG-004] emit: `Emit{Diff,Full,Merged}`+`Alive`/`Produce` + cap fallback.
+-[ ] [DOG-005] graf cut-over; delete `graf/WEAVE`; update both INDEX.md.
+-[ ] Retire-on-land: [GET-001] (decode-per-call), [DIS-003] (positional merge),
       [DIFF-007] (outtoks overflow), [MEM-036]/[MEM-040] (TLV-builder OOB/leak).
 
 ### Blockers and bummers

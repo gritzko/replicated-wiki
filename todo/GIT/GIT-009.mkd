@@ -43,10 +43,10 @@ A fresh-remote push yields an fsck-clean pack — no dangling tree references.
 (pending — decide: drop `.be` from trees vs ship its blob)
 
 ### TODOs
- -[ ] Find where `.be` becomes a tree entry (the commit/tree builder; keeper POST /
+-[ ] Find where `.be` becomes a tree entry (the commit/tree builder; keeper POST /
       DPATH) and why `DPATHVerify` skips it on the pack walk.
- -[ ] Decide the consistent rule (no `.be` tree entry, OR pack-include it) and apply.
- -[ ] Repro-first (CLAUDE.md §17): fresh-bare-remote push + `git fsck` test, confirm
+-[ ] Decide the consistent rule (no `.be` tree entry, OR pack-include it) and apply.
+-[ ] Repro-first (CLAUDE.md §17): fresh-bare-remote push + `git fsck` test, confirm
       failing pre-fix.
 
 ### Blockers and bummers

@@ -31,15 +31,15 @@ mis-routes NaN/Inf; `POLAddTime((int)ms)` is float→int UB. Convert path is DEA
     check `ms` before the cast.
 
 ### TODOs
- -[ ] Repro-first (once convert is wired or via a unit harness): a value > 2^53,
+-[ ] Repro-first (once convert is wired or via a unit harness): a value > 2^53,
       NaN, +Inf, -Inf, and `setTimeout(NaN)` each marshal/route correctly.
- -[ ] Apply the BigInt + `isfinite` + range guards.
+-[ ] Apply the BigInt + `isfinite` + range guards.
 
 ### Blockers
  -  Convert/rdx chain currently unwired — pair with the JS-014 gate-or-remove call.
 
 ##  Outcome
- -  **LANDED `71e5aaf8`** (2026-06-16): live `io.cpp` `JABCioWakeIn` now guards
+ -  *LANDED `71e5aaf8`* (2026-06-16): live `io.cpp` `JABCioWakeIn` now guards
     the `double`->`int` timer delay (`isfinite(ms) && 0 <= ms <= INT32_MAX`)
     before `POLAddTime((int)ms)`, throwing a clean exception on NaN/±Inf/
     negative/`>INT_MAX` and scheduling no timer; the dead `(JSObjectRef)args[0]`

@@ -35,16 +35,16 @@ confidence). Method: [Issues].
     assumption.
 
 ### TODOs
- -[ ] Repro-first: `file.write("hello")` into a pipe; assert the fd receives exactly
+-[ ] Repro-first: `file.write("hello")` into a pipe; assert the fd receives exactly
       `hello` (5 bytes), no trailing garbage; run under ASAN to catch the bad free.
- -[ ] Fix the copy helper to leave a base-anchored data slice; drop the NUL from len.
- -[ ] Re-check `JABCioFileWrite` / `JABCioLog` write + free pair.
+-[ ] Fix the copy helper to leave a base-anchored data slice; drop the NUL from len.
+-[ ] Re-check `JABCioFileWrite` / `JABCioLog` write + free pair.
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `5ee417eb`** (2026-06-16): `JABCutf8CopyStringValue` now keeps the
+ -  *LANDED `5ee417eb`* (2026-06-16): `JABCutf8CopyStringValue` now keeps the
     slice HEAD at the malloc base and sets TERM to `base+fact-1` (drops the NUL,
     `fact==0`-guarded), so `file.write(string)` writes the real `[base,len)` and
     `$u8free`s the real base; C++ pipe repro in `jabc_test.cpp` (red→green, ASAN).

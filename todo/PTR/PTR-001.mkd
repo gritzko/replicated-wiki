@@ -1,6 +1,6 @@
 #   PTR-001: abc/ pointer-arith teardown — BSD/URI/TLV/ANSI (GATED)
 
-`abc/` is core and just-touched by URI-002/003/004, so this ticket is a behavior-preserving refactor whose diff is **surfaced for human review — never autoland** (CLAUDE.md "abc changes need review"). The 2026-06-15 audit found four hot spots where typed slices are ripped into raw cursors or bytes are hand-parsed, both forbidden by CLAUDE.md §1/§10 and [ABC].
+`abc/` is core and just-touched by URI-002/003/004, so this ticket is a behavior-preserving refactor whose diff is *surfaced for human review — never autoland* (CLAUDE.md "abc changes need review"). The 2026-06-15 audit found four hot spots where typed slices are ripped into raw cursors or bytes are hand-parsed, both forbidden by CLAUDE.md §1/§10 and [ABC].
 
 ##  Input
 
@@ -28,12 +28,12 @@
  -  Prefer a ragel/PATH walk for `URIMergePath` over a cursor rewrite ([ABC] "never manual parsing in C").
 
 ### TODOs
- -[x] Repro-first: BSD round-trip test (Diff→Patch == orig) + ANSI differential repro lock outputs; no BSD/TLV/ANSI fuzzer or corpus exists to replay.
- -[x] `BSD.c` slice-ify the data path; `u8csc` helper signatures (BSDi64sFeedOff/BSDi64Off, u8csAtP indexing, a_rest suffixes).
- -[ ] `URIMergePath` → segment walk; drop the two static buffers — SPLIT OUT to PTR-009 (real public-API design fork, not mechanical).
- -[x] TLV unaligned cast-writes → `u8sFeed32`/`u8sFeed64` (field is genuinely 64-bit at `:238`, not 16).
- -[x] ANSI OSC parse → `u8cs` + `u8sUsed`/`u8sFind`; helper drops consumed-ptr+end out-param.
- -[ ] Surface the diff for review; do not land — pending human review.
+-[x] Repro-first: BSD round-trip test (Diff→Patch == orig) + ANSI differential repro lock outputs; no BSD/TLV/ANSI fuzzer or corpus exists to replay.
+-[x] `BSD.c` slice-ify the data path; `u8csc` helper signatures (BSDi64sFeedOff/BSDi64Off, u8csAtP indexing, a_rest suffixes).
+-[ ] `URIMergePath` → segment walk; drop the two static buffers — SPLIT OUT to PTR-009 (real public-API design fork, not mechanical).
+-[x] TLV unaligned cast-writes → `u8sFeed32`/`u8sFeed64` (field is genuinely 64-bit at `:238`, not 16).
+-[x] ANSI OSC parse → `u8cs` + `u8sUsed`/`u8sFind`; helper drops consumed-ptr+end out-param.
+-[ ] Surface the diff for review; do not land — pending human review.
 
 ### Blockers and bummers
  -  Coordinate with open URI-001 work so this does not collide on `abc/URI.c`.

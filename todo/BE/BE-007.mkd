@@ -44,11 +44,11 @@ Delete ROWS; one utility fn; identical (correct) output.
 (pending)
 
 ### TODOs
- -[ ] Inventory the 18 callers + the 195 refs; classify each ROWS call's intent.
- -[ ] Design the utility fn signature in HUNK or ULOG (input: ulogrec(s) + nav param;
+-[ ] Inventory the 18 callers + the 195 refs; classify each ROWS call's intent.
+-[ ] Design the utility fn signature in HUNK or ULOG (input: ulogrec(s) + nav param;
       output: `u8b`/hunk). No `rows`/`rows_row`/`ROWSnav`/`ROWSdiscipline`.
- -[ ] Repoint callers; delete `dog/ROWS.{h,c}` + its tests; update INDEX.md, CMake.
- -[ ] Repro-first: keep the verb-output tests green AND fix the POST-022 wrecked
+-[ ] Repoint callers; delete `dog/ROWS.{h,c}` + its tests; update INDEX.md, CMake.
+-[ ] Repro-first: keep the verb-output tests green AND fix the POST-022 wrecked
       output (assert bounded, prefixed sub-push output) — confirm failing pre-change.
 
 ### Blockers and bummers

@@ -1,25 +1,25 @@
 #   POST-005: commit-all POST sweeps an untracked file whose mtime aliases a stamp (LANDED)
 
-**LANDED `eec94934` (2026-06-06).**  Fixed via the absorbed-tree (theirs)
+*LANDED `eec94934` (2026-06-06).*  Fixed via the absorbed-tree (theirs)
 ULOG cursor described in §"Root cause / fix"; repro `test/post/28` green and
 off `WILL_FAIL`; full `ctest` 298/298.
 
-**HIGH — silent data inclusion.**  In commit-all (implicit) mode, `be post`
-commits an **untracked** file the user never staged, purely because the file's
+*HIGH — silent data inclusion.*  In commit-all (implicit) mode, `be post`
+commits an *untracked* file the user never staged, purely because the file's
 mtime collides with an in-scope `put` / `patch` row's timestamp.  `be post`
 classifies each on-disk file by looking its mtime up in the wtlog via
-`SNIFFAtRowAtTs` (`sniff/AT.c`), which resolves a row **by timestamp alone and
-never checks the row's path**.  An untracked sibling whose mtime aliases a
+`SNIFFAtRowAtTs` (`sniff/AT.c`), which resolves a row *by timestamp alone and
+never checks the row's path*.  An untracked sibling whose mtime aliases a
 `put`/`patch`/`mod` stamp is therefore misattributed as that row's work and
 ADDed to the commit (`sniff/POST.c` `post_classify_step`, the
 `SNIFFAtKnown` → `SNIFFAtRowAtTs` → `POST_V_ADD` branch).
 
 Two variants, one root cause:
 
- -  **patch-alias** (pre-existing): absorb a child branch that adds `feature.c`
+ -  *patch-alias* (pre-existing): absorb a child branch that adds `feature.c`
     (PATCH stamps it with the patch row's ts); an untracked `junk.txt` whose
     mtime equals that ts is swept into the same commit.
- -  **put-alias** (exposed by SUBS-001): an only-sub-dirty `be post` is now
+ -  *put-alias* (exposed by SUBS-001): an only-sub-dirty `be post` is now
     commit-all (SUBS-001); the recursion's `be put <sub>` writes a sub-bump
     `put <sub>#<40-hex>` row.  Any untracked file actively written during the
     post (e.g. a `2> file-in-the-wt` stderr redirect) aliases that put stamp
@@ -48,12 +48,12 @@ trusts the ts→row lookup without verifying the row pertains to this path.
 ##  Root cause / fix
 `SNIFFAtRowAtTs` is a ts-keyed lookup; the stamp model assumes mtime uniquely
 identifies the owning row, but ms-granularity mtimes alias (same DIS-023
-class).  The clean fix procures the absorbed (theirs) tree(s) **as a ULOG from
-keeper** — `KEEPCommitTreeSha` on each in-scope `SNIFFAtPatchEntries` sha, then
+class).  The clean fix procures the absorbed (theirs) tree(s) *as a ULOG from
+keeper* — `KEEPCommitTreeSha` on each in-scope `SNIFFAtPatchEntries` sha, then
 `KEEPTreeULog` — and feeds it into the existing N-way classify merge as a 5th
 cursor (a `thr` verb, exactly like the baseline `base` cursor `bu`).  An
 untracked file (`!src_base`) reaching the stamp-owned ADD branch is then
-committed **only if it carries a `src_thr` record** (i.e. it is genuinely in an
+committed *only if it carries a `src_thr` record* (i.e. it is genuinely in an
 absorbed tree); otherwise it is an alias and is ignored.  No separate
 lookups, no parallel path-set — membership rides the merge.  Covers both
 variants: the put-alias post has no `patch` rows, so the theirs cursor is

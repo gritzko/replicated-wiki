@@ -2,7 +2,7 @@
 
 Blame today prepends a fixed-width gutter to every source line (`graf/BLAME.c`
 ~line 757: `BLAME_HW` chars + an `L`-tok before each line), so the commit
-metadata **shares the line with the code**. That is the root of the bro
+metadata *shares the line with the code*. That is the root of the bro
 breakage: the gutter is counted in the wrap width (wraps early), soft-wrap
 mangles the table, and the line can't be syntax-highlighted. Restructure the
 output into `dog/HUNK` hunks — one per commit-run — moving the metadata off the
@@ -21,7 +21,7 @@ code line entirely. See [Projector], [Bro], [BLAME-004].
 
 ### Goals
  -  Emit blame as a HUNK stream: each maximal run of consecutive lines sharing
-    one commit = **one content hunk** carrying `ts` = commit time, `verb`,
+    one commit = *one content hunk* carrying `ts` = commit time, `verb`,
     `uri` = the commit ref (`commit:?<sha>`, clickable via the existing
     renderer), and the run's verbatim source as the hunk text + `tok32`
     syntax tags.
@@ -41,14 +41,14 @@ code line entirely. See [Projector], [Bro], [BLAME-004].
     colors are the shared renderer's presentation, not blame's. Blame emits
     `{ts, verb, uri}`+body; the renderer draws it.
  -  Streaming: emit each run-hunk as produced (don't accumulate the whole
-    file) — this also removes the fixed-`outbuf` overflow, so it **subsumes**
+    file) — this also removes the fixed-`outbuf` overflow, so it *subsumes*
     [BLAME-004] once landed (BLAME-004 is the minimal crash fix meanwhile).
 
 ### TODOs
- -[ ] Regroup graf's blame emit into per-commit-run content hunks
+-[ ] Regroup graf's blame emit into per-commit-run content hunks
       (`ts`/`verb`/`uri`=`commit:?<sha>` + source text + syntax `tok32`),
       replacing the per-line `BLAME_HW`+`L`-tok gutter; stream per run.
- -[ ] Test: `blame:` output is a hunk-per-run stream, each hunk's `uri`
+-[ ] Test: `blame:` output is a hunk-per-run stream, each hunk's `uri`
       resolving to its commit; large file (cf. [BLAME-004]) streams without
       overflow.
 

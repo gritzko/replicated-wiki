@@ -110,6 +110,22 @@ h1 + div p{
   background: transparent;
 }
 
+/*  TODO lists from the `-[·]` markers. A native checkbox is only two-state, so
+    the four states are drawn as ballot-box glyphs that mirror the markers:
+    ☐ open, ☑ done (-[v]), ⊟ blocked (-[-]), ☒ wontfix (-[x]) — so `-` and `x`
+    are plainly distinct. The disabled <input> stays in the markup (hidden here)
+    so a CSS-less view still degrades to a native box for open/done. */
+ul.todo                  { list-style: none; padding-left: .2rem }
+ul.todo li               { text-align: left; hyphens: none }
+ul.todo input            { display: none }
+ul.todo li::before       { content: "\2610\00a0" }   /* ☐ open    */
+ul.todo .done::before    { content: "\2611\00a0" }   /* ☑ done    */
+ul.todo .blocked::before { content: "\229f\00a0" }   /* ⊟ blocked */
+ul.todo .wontfix::before { content: "\2612\00a0" }   /* ☒ wontfix */
+ul.todo .done            { color: #6a737d }
+ul.todo .blocked         { color: #b34700 }
+ul.todo .wontfix         { color: #8a8a8a }   /* content also wrapped in <del> */
+
 /*  On narrow screens, stop floating: a 40% float is unreadable on a phone. */
 @media (max-width: 32rem) {
     img[src*="#left"], img[src*="#right"] {

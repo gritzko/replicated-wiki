@@ -10,7 +10,7 @@
     maintainer UX ruling (bound-large-files / pager-vs-text / document-only).
  -  [DIFF-007] — `be diff:<largefile>` silently EMPTY: `WEAVEEmitFull`'s 65536-token
     `outtoks` carve overflows on big files, NOROOM swallowed (`WEAVE.c:1030/1099`). Real
-    bug. (Scan: [[DIFF-005]].)
+    bug. (Scan: [DIFF-005].)
 
 DIFF-008 (tree-diff silently truncated tail files — per-file `GRAFDiff2Layer` BASS never
 rewound; now `call()`-wrapped) landed `b9ef44b2`. DIFF-006 (multi-hunk diff repeats the

@@ -4,7 +4,7 @@
 RE-ADDED, because the blame weave SKIPS the delete instead of folding an empty
 (delete) layer — so the old tokens never die and the readd's structurally-equal
 tokens (titles, blank lines) inherit the root commit's seq. Split from
-[[BLAME-006]] (the correctness half). Method: [Issues].
+[BLAME-006] (the correctness half). Method: [Issues].
 
 ##  Input
 
@@ -38,14 +38,14 @@ tokens (titles, blank lines) inherit the root commit's seq. Split from
     deleted) rather than `continue`.
 
 ### TODOs
- -[v] Repro-first: a hermetic delete-then-readd file; assert blame attributes the
+-[v] Repro-first: a hermetic delete-then-readd file; assert blame attributes the
       readd commit, not root (RED pre-fix). → `graf/test/blame-readd.sh`.
- -[v] Fix the skip-on-absent to fold an empty layer.
- -[v] `ctest` green incl. `GRAFblameident` (unaffected attributions byte-identical).
- -[ ] Gate + land.
+-[v] Fix the skip-on-absent to fold an empty layer.
+-[v] `ctest` green incl. `GRAFblameident` (unaffected attributions byte-identical).
+-[ ] Gate + land.
 
 ### Blockers and bummers
- -  Pairs with [[BLAME-006b]] (the perf half) — independent; land separately.
+ -  Pairs with [BLAME-006b] (the perf half) — independent; land separately.
 
 ##  Outcome
  -  FIX-READY (`$HOME/todo/BLAME-006a`, stopped at commit boundary). Both absent
@@ -59,6 +59,6 @@ tokens (titles, blank lines) inherit the root commit's seq. Split from
     file was never present. Both descent paths (index-served + `GRAF_BLAME_NOINDEX`
     keeper-inflate) give identical correct output. New `graf/test/blame-readd.sh`
     (`GRAFblamereadd`, table-driven top-level + subdir, RED→GREEN). Full `ctest`
-    **300/300** (+1), `GRAFblameident` byte-identical. Awaiting gate to land.
+    *300/300* (+1), `GRAFblameident` byte-identical. Awaiting gate to land.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

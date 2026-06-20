@@ -3,7 +3,7 @@
 ##  Input
 
 ### Context
-Today a keeper log is many git packs back-to-back with a *mixed* delta scheme: OFS_DELTA pack-local, REF_DELTA resolved by hashlet anywhere in the pool (`KEEPPackFeed` picks REF whenever the base isn't raw in the same pack — `keeper/KEEP.c:1724`). That mix is the root of the store's hardest code: cross-file REF_DELTA recursion in the resolver (`rdepth`, `KEEP_XFILE_RECUR_MAX`, buf3 aliasing, the [[MEM-022]] stack-DoS hardening), the `KEEPDIRTY` "descendant references via REF_DELTA" branch-drop guard, and the bookmark-tiling wire serve whose count math caused [[GET-019]] truncation. This umbrella moves the store to ONE growing append-only pack per shard where every delta is OFS_DELTA against an earlier object **by offset only**; REF_DELTA / thin / arbitrary foreign packs are normalized away at the ingest boundary (the same quarantine philosophy as `GITParseRef` for refnames). See [Store], [PackLog], [Keeper], [CLAUDE].
+Today a keeper log is many git packs back-to-back with a *mixed* delta scheme: OFS_DELTA pack-local, REF_DELTA resolved by hashlet anywhere in the pool (`KEEPPackFeed` picks REF whenever the base isn't raw in the same pack — `keeper/KEEP.c:1724`). That mix is the root of the store's hardest code: cross-file REF_DELTA recursion in the resolver (`rdepth`, `KEEP_XFILE_RECUR_MAX`, buf3 aliasing, the [MEM-022] stack-DoS hardening), the `KEEPDIRTY` "descendant references via REF_DELTA" branch-drop guard, and the bookmark-tiling wire serve whose count math caused [GET-019] truncation. This umbrella moves the store to ONE growing append-only pack per shard where every delta is OFS_DELTA against an earlier object *by offset only*; REF_DELTA / thin / arbitrary foreign packs are normalized away at the ingest boundary (the same quarantine philosophy as `GITParseRef` for refnames). See [Store], [PackLog], [Keeper], [CLAUDE].
 
 ### Goals
  -  Move the store to ONE growing append-only pack per shard, every delta OFS_DELTA against an earlier object by offset only.
@@ -29,24 +29,24 @@ The "object-by-object, not pack-by-pack" append (the chat ruling) commits us to 
 ### TODOs
 Order matters: the writer is foundational; the resolver deletion and the wiki reconcile wait on migration so no native log still holds REF_DELTA.
 
- -[v] [[GIT-002]] object-by-object OFS-only writer in dog/git (unify `KEEPPackFeed` + ingest target; one log per shard; keeper + JABC consume it). FIRST. — landed `e59a1c91`.
- -[v] [[GIT-003]] ingest re-encoder + per-object dedup (depends on GIT-002). — landed `fa52117d`.
- -[v] [[GIT-005]] single-stream serve: verbatim full clone + thin-pack builder (depends on GIT-002; testable after the writer). — landed `71a31179`.
- -[v] [[GIT-008]] OFS writer delta chains: drop the raw-base-only filter so deltas chain (fresh OFS clone is 38% bloated — 54 MB vs old 39 MB — without it). — landed `b01496da`.
- -[ ] [[GIT-006]] migration / epoch recompaction into one OFS-only stream + truncate-and-reindex crash recovery (depends on GIT-002/003).
- -[ ] [[GIT-004]] OFS-only resolver: extract the offset chase into dog/git (keeper + JABC share it), delete keeper's REF arm + cross-file recursion (LAST — gated on GIT-006 so on-disk logs are migrated).
- -[ ] [[GIT-007]] JABC pack-log binding reconcile: reduce `js/pack.hpp` to marshalling over the dog/git core, delete the duplicated OFS encoder + feed/resolve logic (depends on GIT-002/004).
- -[ ] Reconcile [PackLog] to the one-stream OFS-only model: §"Many packs per log" → one stream, §"Delta-dependency rules" → OFS-only, §"Pack bookmarks" → whole-log extent + thin-build note.
+-[v] [GIT-002] object-by-object OFS-only writer in dog/git (unify `KEEPPackFeed` + ingest target; one log per shard; keeper + JABC consume it). FIRST. — landed `e59a1c91`.
+-[v] [GIT-003] ingest re-encoder + per-object dedup (depends on GIT-002). — landed `fa52117d`.
+-[v] [GIT-005] single-stream serve: verbatim full clone + thin-pack builder (depends on GIT-002; testable after the writer). — landed `71a31179`.
+-[v] [GIT-008] OFS writer delta chains: drop the raw-base-only filter so deltas chain (fresh OFS clone is 38% bloated — 54 MB vs old 39 MB — without it). — landed `b01496da`.
+-[ ] [GIT-006] migration / epoch recompaction into one OFS-only stream + truncate-and-reindex crash recovery (depends on GIT-002/003).
+-[ ] [GIT-004] OFS-only resolver: extract the offset chase into dog/git (keeper + JABC share it), delete keeper's REF arm + cross-file recursion (LAST — gated on GIT-006 so on-disk logs are migrated).
+-[ ] [GIT-007] JABC pack-log binding reconcile: reduce `js/pack.hpp` to marshalling over the dog/git core, delete the duplicated OFS encoder + feed/resolve logic (depends on GIT-002/004).
+-[ ] Reconcile [PackLog] to the one-stream OFS-only model: §"Many packs per log" → one stream, §"Delta-dependency rules" → OFS-only, §"Pack bookmarks" → whole-log extent + thin-build note.
 
 ### Blockers and bummers
  -  Branch model — RESOLVED, no fork: [Store] and [PackLog] both spec one flat object pool per project (branches are REFS rows, no per-branch object dirs), and the impl ALREADY does this — `dog/HOME.c` `HOMEBranchDir` discards the branch arg and resolves every consumer (keeper packs/idx, graf idx, refs) to `<root>/.be/<project>/`, and `KEEPCreateBranch` is a no-op ("a branch is a REFS row, not a dir — nothing to materialise on disk"). `KEEP.h`'s "Phase 2 multi-branch layout" + PAST/DATA prose is STALE documentation of an abandoned design. So GIT-002 targets the one flat pool unconditionally; OFS bases cannot cross branch dirs because there are none, and the only droppability rule is the existing "no cross-PROJECT bases" ([Store] §GC). Residue: a doc/code cleanup of the stale `KEEP.h` comments + any vestigial PAST/DATA scaffolding (which now scans the single shard dir) — file a DIS cross-ref.
  -  REF read path cannot be deleted until every store is migrated; GIT-004 lands only after GIT-006 has rewritten on-disk logs (and after any long-lived `~/.be` real stores are recompacted).
 
 ##  Outcome
- -  [[GIT-002]] landed `e59a1c91` on `dogs` trunk: OFS-only object-by-object writer (`dog/git/PACK.PACKu8sFeedObj` + `PACKu8sFeedOfs`), `KEEPPackFeed` OFS-always, REF emit gone from the write path (read-side resolver intact). Branch-model fork resolved (flat pool).
- -  [[GIT-003]] landed `fa52117d` on `dogs` trunk: ingest re-encodes foreign packs to OFS-only via a UNPK `reemit` sink + `KEEPHas` dedup; verbatim append removed; build-ssh 394/394.
- -  [[GIT-005]] landed `71a31179` on `dogs` trunk: serve ships verbatim full clones (per-`.keeper` `PSTRWrite` segments) + real thin packs (`WIREBuildThinPack` + `keeper/CLOSE`); 1-line-change thin pack 278 B vs 8984 raw; build-ssh 395/395.
- -  [[GIT-008]] landed `b01496da` on `dogs` trunk: OFS writer chains delta-of-delta (cap 50, MEM-022-safe); fixes the fresh-clone bloat — bytes/object 2853→792, raw blobs 6230→2157, OFS-only. Remaining: GIT-006/004/007.
+ -  [GIT-002] landed `e59a1c91` on `dogs` trunk: OFS-only object-by-object writer (`dog/git/PACK.PACKu8sFeedObj` + `PACKu8sFeedOfs`), `KEEPPackFeed` OFS-always, REF emit gone from the write path (read-side resolver intact). Branch-model fork resolved (flat pool).
+ -  [GIT-003] landed `fa52117d` on `dogs` trunk: ingest re-encodes foreign packs to OFS-only via a UNPK `reemit` sink + `KEEPHas` dedup; verbatim append removed; build-ssh 394/394.
+ -  [GIT-005] landed `71a31179` on `dogs` trunk: serve ships verbatim full clones (per-`.keeper` `PSTRWrite` segments) + real thin packs (`WIREBuildThinPack` + `keeper/CLOSE`); 1-line-change thin pack 278 B vs 8984 raw; build-ssh 395/395.
+ -  [GIT-008] landed `b01496da` on `dogs` trunk: OFS writer chains delta-of-delta (cap 50, MEM-022-safe); fixes the fresh-clone bloat — bytes/object 2853→792, raw blobs 6230→2157, OFS-only. Remaining: GIT-006/004/007.
 
 [Store]: ../../wiki/Store.mkd "repo layout: one flat object pool per project"
 [PackLog]: ../../wiki/PackLog.mkd "pack-log concept page (to be rewritten)"

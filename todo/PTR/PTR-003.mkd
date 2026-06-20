@@ -30,13 +30,13 @@ The 2026-06-15 audit found keeper/ casts typed `wh128cs` runs back to raw elemen
  -  The three buffer `[2]` pokes are the priority (they directly break the "never poke buffer internals" rule); then consolidate WIRE's triple-dup run-scan onto the existing typed accessor.
 
 ### TODOs
- -[ ] Repro-first: lock outputs on the keeper test tables (wire/proj/resolve).
- -[ ] Buffer `[2]` pokes (UNPK/KEEP ×3) → `u8bFed`/`u8bShed`/typed remove-at.
- -[ ] WIRE 3× raw run-scan → shared typed `wh128cs` accessor + `wh128csBSearch`.
- -[ ] `keep_read_full` → slice full-read.
- -[ ] SUBS/REFADV separator scans → `u8csFind`.
- -[ ] sha-hex 40-slices → `sha1FromHex`+`a_head`/`a_rest`; `PROJ.c:466`→`u8csLast`.
- -[ ] Build + ctest; report done vs skipped.
+-[ ] Repro-first: lock outputs on the keeper test tables (wire/proj/resolve).
+-[ ] Buffer `[2]` pokes (UNPK/KEEP ×3) → `u8bFed`/`u8bShed`/typed remove-at.
+-[ ] WIRE 3× raw run-scan → shared typed `wh128cs` accessor + `wh128csBSearch`.
+-[ ] `keep_read_full` → slice full-read.
+-[ ] SUBS/REFADV separator scans → `u8csFind`.
+-[ ] sha-hex 40-slices → `sha1FromHex`+`a_head`/`a_rest`; `PROJ.c:466`→`u8csLast`.
+-[ ] Build + ctest; report done vs skipped.
 
 ### Blockers and bummers
  -  WIRE/KEEP/RESOLVE share the byte-sorted-run search — land the shared helper once; touches three files, keep them in one commit.

@@ -6,7 +6,7 @@
 The OFS-only writer never builds delta CHAINS: `keep_find_raw_in_pack` (`keeper/KEEP.c:1642`) accepts a base only when its stored record is RAW (`type 1..4`), skipping any base that is itself an OFS_DELTA. So when an object's natural base is itself a delta (the common case in a file's revision history — v₃'s base v₂ is stored as a delta), the writer cannot get the base bytes from a single inflate and stores the object RAW (a full blob, no delta). The format and reader already support OFS chains (`keep_get_packed_rec` subtracts `ofs_delta` and loops). This is purely a writer shortcut.
 
  -  Measured (`beagle.new`, a fresh OFS-only clone, vs old `~/beagle`): 54 MB vs 39 MB despite 2.7× FEWER objects (19043 vs 50873 — the clone GC'd ~31k unreachable objects); 6230 raw blobs vs 2156; ~2853 vs ~767 bytes/object. The lost chain compression more than offsets the GC win, so migration grew the store.
- -  Compounded by [[GIT-003]] ingest re-deltifying (correctness floor, not deflate-passthrough): git hands beagle a well-chained pack on clone-back, then ingest re-stores it chain-broken.
+ -  Compounded by [GIT-003] ingest re-deltifying (correctness floor, not deflate-passthrough): git hands beagle a well-chained pack on clone-back, then ingest re-stores it chain-broken.
 
 ### Goals
  -  Let the OFS writer delta against a base that is itself a delta, forming bounded-depth chains.
@@ -14,8 +14,8 @@ The OFS-only writer never builds delta CHAINS: `keep_find_raw_in_pack` (`keeper/
 
 ### Constraints
  -  Resolve the delta base's bytes via the existing chain resolver (`KEEPGet` chases OFS/REF) — no re-roll; emit OFS_DELTA pointing at the base's offset in the open log.
- -  Cap chain depth (git uses ~50) writer-side to bound read-resolution cost; keep the [[MEM-022]]-class hardening intact.
- -  Base precedes dependent (forward-reference free); OFS bases stay within the one shard's open log (flat pool, [[GIT-001]]).
+ -  Cap chain depth (git uses ~50) writer-side to bound read-resolution cost; keep the [MEM-022]-class hardening intact.
+ -  Base precedes dependent (forward-reference free); OFS bases stay within the one shard's open log (flat pool, [GIT-001]).
  -  No pointer arithmetic, BASS/caller scratch not `malloc`, ABC style; do NOT edit `abc/`.
 
 ##  WIP
@@ -24,18 +24,18 @@ The OFS-only writer never builds delta CHAINS: `keep_find_raw_in_pack` (`keeper/
  —
 
 ### TODOs
- -[v] In `KEEPPackFeed`/`keep_find_raw_in_pack`: when the base is found at an offset but is a delta record, resolve its bytes (`KEEPGet`) and emit OFS_DELTA at that offset instead of falling back to raw. Drop the `type 1..4` raw-only filter; keep the offset/precedence/corruption checks.
- -[v] Bound the resulting chain depth (writer-side cap); measure read cost on the deepest chain.
- -[v] Apply to the [[GIT-003]] ingest reemit path (shares `KEEPPackFeed`) so clone-back chains too.
- -[v] Repro-first ([CLAUDE] §17): extend `test/DELTA_ROUND.c` — feed a deep revision chain, assert OFS chains form (delta-of-delta), `KEEPGet` byte-matches every version, and the log is smaller than the all-raw fallback.
- -[v] Re-measure: build a fresh clone with the new writer (scratch dir, NOT the user's repos), assert the `.keeper` is smaller than the old 39 MB store; report sizes + type histogram.
+-[v] In `KEEPPackFeed`/`keep_find_raw_in_pack`: when the base is found at an offset but is a delta record, resolve its bytes (`KEEPGet`) and emit OFS_DELTA at that offset instead of falling back to raw. Drop the `type 1..4` raw-only filter; keep the offset/precedence/corruption checks.
+-[v] Bound the resulting chain depth (writer-side cap); measure read cost on the deepest chain.
+-[v] Apply to the [GIT-003] ingest reemit path (shares `KEEPPackFeed`) so clone-back chains too.
+-[v] Repro-first ([CLAUDE] §17): extend `test/DELTA_ROUND.c` — feed a deep revision chain, assert OFS chains form (delta-of-delta), `KEEPGet` byte-matches every version, and the log is smaller than the all-raw fallback.
+-[v] Re-measure: build a fresh clone with the new writer (scratch dir, NOT the user's repos), assert the `.keeper` is smaller than the old 39 MB store; report sizes + type histogram.
 
 ### Blockers and bummers
- -  Builds on [[GIT-002]] (the OFS writer); independent of GIT-004/006.
+ -  Builds on [GIT-002] (the OFS writer); independent of GIT-004/006.
 
 ##  Outcome
  -  Landed `b01496da` on `dogs` trunk: `keep_find_raw_in_pack` accepts OFS_DELTA bases (rejects REF); `KEEPPackFeed` resolves a delta base's bytes via `keep_get_packed_rec` and emits OFS chaining at its offset; new `keep_chain_depth_at` caps depth at `KEEP_WRITE_CHAIN_MAX=50` (iterative, strictly-backward, MEM-022-safe — a base at the cap starts a fresh raw root). DELTA_ROUND: 12-version chain → 11 OFS deep (575 B vs 1568 all-raw), 60-version → cap honored at 50; `KEEPGet` + `git cat-file` byte-match every version. build-ssh `ctest` 395/395.
- -  Re-measure (50876-object `be:` clone): bytes/object 2853 → 792, raw blobs 6230 → 2157, OFS-only (zero REF_DELTA), 10574 delta-of-delta objects (max depth 41). The GIT-008 regression is eliminated. Honest caveat: at equal object count the OFS-only store is 40.3 MB vs the old REF store's 39.3 MB (+2.5%); dipping below the old size needs [[GIT-006]] recompaction's better base selection, not clone-back.
+ -  Re-measure (50876-object `be:` clone): bytes/object 2853 → 792, raw blobs 6230 → 2157, OFS-only (zero REF_DELTA), 10574 delta-of-delta objects (max depth 41). The GIT-008 regression is eliminated. Honest caveat: at equal object count the OFS-only store is 40.3 MB vs the old REF store's 39.3 MB (+2.5%); dipping below the old size needs [GIT-006] recompaction's better base selection, not clone-back.
 
 [CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"
 [GIT-001]: GIT-001.mkd "umbrella: single-stream OFS-only migration"

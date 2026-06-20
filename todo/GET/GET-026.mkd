@@ -1,6 +1,6 @@
 #   GET-026: bare `be get` = default GET + resulting-state banner
 
-Make bare `be get` (no URI) the **default GET** — update the wt to the
+Make bare `be get` (no URI) the *default GET* — update the wt to the
 current branch tip (FF when the wt lags) — instead of printing a raw
 branches/remotes summary. Route its report through the shared ROWS
 state banner ([BE-005]) whose uri is the *resulting state*:
@@ -10,7 +10,7 @@ submodule. The branch/remote overview moves to [STATUS-001].
 ##  Input
 
 ### Context
- -  `be` (no verb) → `BEDefault` → `sniff` no-verb = file **status**; the
+ -  `be` (no verb) → `BEDefault` → `sniff` no-verb = file *status*; the
     branch/remote overview is NOT shown there.
  -  Bare `be get` wrongly calls `SNIFFGetSummary` (`SNIFF.exe.c:1127`; raw
     `fprintf`, `GET.c:1697`) — its ONLY caller; spec `GET.mkd:23` "no-op".
@@ -28,7 +28,7 @@ submodule. The branch/remote overview moves to [STATUS-001].
 
 ### Constraints
  -  Depends on the [BE-005] ROWS banner-once core; no per-site banner.
- -  `sniff/` only; no `abc/` ([[abc-changes-need-review]]).
+ -  `sniff/` only; no `abc/` ([abc-changes-need-review]).
 
 ##  WIP
 
@@ -39,12 +39,12 @@ submodule. The branch/remote overview moves to [STATUS-001].
     rehomed by [STATUS-001], not deleted yet.
 
 ### TODOs
- -[ ] Repro: `be get` / `be get ?` on up-to-date AND lagging wt asserts a
+-[ ] Repro: `be get` / `be get ?` on up-to-date AND lagging wt asserts a
       `?branch#hashlet` banner hunk + rows (table-driven, color & --tlv).
- -[ ] `SNIFF.exe.c:1127`: bare `be get` → default GET (cur branch).
- -[ ] `SNIFFGet`: ROWS uri = resulting state, `verb=get`, `ts=now`.
- -[ ] Submodule banner `<path>#<hashlet>`; verify parent relay.
- -[ ] `GET.mkd:23` updated; `ctest -j16` green.
+-[ ] `SNIFF.exe.c:1127`: bare `be get` → default GET (cur branch).
+-[ ] `SNIFFGet`: ROWS uri = resulting state, `verb=get`, `ts=now`.
+-[ ] Submodule banner `<path>#<hashlet>`; verify parent relay.
+-[ ] `GET.mkd:23` updated; `ctest -j16` green.
 
 ### Blockers and bummers
  -  None yet.

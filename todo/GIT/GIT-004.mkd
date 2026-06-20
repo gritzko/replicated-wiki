@@ -4,21 +4,21 @@
 
 ### Context
 
-Child of [[GIT-001]]; lands LAST, gated on [[GIT-006]] migration (no on-disk native log may still hold REF_DELTA). Once storage is OFS-only, `keep_get_packed_rec` (`keeper/KEEP.c:692`) simplifies to a pure offset chase: read header, if base type inflate, if OFS_DELTA subtract `ofs_delta` and loop, apply chain bottom-up. The whole REF_DELTA arm — index lookup per hop, cross-file recursion (`keep_get_rec` `rdepth`, `KEEP_XFILE_RECUR_MAX`), the buf3 aliasing dance, and the [[MEM-022]] stack-DoS hardening that exists only because REF bases can ping-pong across file_ids — is deletable. The surviving chase — read header, OFS→subtract offset and loop, apply bottom-up — is pure bytes + offsets, so it lands as a dog/git resolver shared by keeper's native get AND the js/JABC binding (which drops its hand-composed seek+`delt.apply` chain). This is net removal of the store's most fragile, security-sensitive code. See [Keeper], [CLAUDE].
+Child of [GIT-001]; lands LAST, gated on [GIT-006] migration (no on-disk native log may still hold REF_DELTA). Once storage is OFS-only, `keep_get_packed_rec` (`keeper/KEEP.c:692`) simplifies to a pure offset chase: read header, if base type inflate, if OFS_DELTA subtract `ofs_delta` and loop, apply chain bottom-up. The whole REF_DELTA arm — index lookup per hop, cross-file recursion (`keep_get_rec` `rdepth`, `KEEP_XFILE_RECUR_MAX`), the buf3 aliasing dance, and the [MEM-022] stack-DoS hardening that exists only because REF bases can ping-pong across file_ids — is deletable. The surviving chase — read header, OFS→subtract offset and loop, apply bottom-up — is pure bytes + offsets, so it lands as a dog/git resolver shared by keeper's native get AND the js/JABC binding (which drops its hand-composed seek+`delt.apply` chain). This is net removal of the store's most fragile, security-sensitive code. See [Keeper], [CLAUDE].
 
- -  REF arm cost + risk: `:763-806` does an LSM lookup per REF hop and recurses across files with hand-rolled depth caps and scratch-buffer aliasing comments — exactly the shape that breeds memory CVEs ([[MEM-022]]).
+ -  REF arm cost + risk: `:763-806` does an LSM lookup per REF hop and recurses across files with hand-rolled depth caps and scratch-buffer aliasing comments — exactly the shape that breeds memory CVEs ([MEM-022]).
  -  `KEEPDIRTY` branch-drop guard (`KEEP.h:48`) refuses dropping a branch with descendants referencing it via REF_DELTA; with OFS-only file-local deltas there are no cross-file delta deps, so the guard's REF clause is moot.
  -  The native resolver and the foreign reader are conflated: `KEEPGet` must read REF today; after migration only `UNPK` (the ingest boundary) needs REF/thin reading.
 
 ### Goals
  -  Extract the OFS-only delta chase into a dog/git resolver shared by keeper's native get and the JABC binding.
- -  Delete the REF_DELTA arm, cross-file recursion, and the [[MEM-022]] stack-DoS hardening from the native store resolver.
+ -  Delete the REF_DELTA arm, cross-file recursion, and the [MEM-022] stack-DoS hardening from the native store resolver.
  -  Simplify `KEEPDIRTY` by dropping its now-moot REF-descendant guard clause.
 
 ### Constraints
  -  Keep `UNPK`'s REF/OFS/thin reader intact — it reads foreign packs at ingest; only the NATIVE store resolver (`keep_get_packed_rec` / `keep_get_rec`) loses the REF arm.
  -  Resolver home: extract the OFS-only chase into dog/git (byte range + start offset → inflated object + type); keeper's `keep_get_packed_rec` and the JABC binding both call it. The sha→(file,offset) lookup stays in keeper — it is the entry boundary, not the chase.
- -  Do NOT land before [[GIT-006]]: any real long-lived store (`~/.be`) must be recompacted to OFS-only first, else a still-REF object resolves to KEEPNONE. Keep a one-release overlap where the REF reader is dead code behind an assert, not yet removed, if any unmigrated store may exist.
+ -  Do NOT land before [GIT-006]: any real long-lived store (`~/.be`) must be recompacted to OFS-only first, else a still-REF object resolves to KEEPNONE. Keep a one-release overlap where the REF reader is dead code behind an assert, not yet removed, if any unmigrated store may exist.
  -  Preserve all corruption bounds (the loop-top `cur < packlen` recheck, `ofs_delta == 0 || > cur` rejection at `:759`) — OFS-only does not relax adversarial-input hardening.
 
 ##  WIP
@@ -27,23 +27,23 @@ Child of [[GIT-001]]; lands LAST, gated on [[GIT-006]] migration (no on-disk nat
  —
 
 ### TODOs
- -[ ] Extract the OFS chase into a dog/git resolver, then strip the REF_DELTA case from `keep_get_packed_rec`; delete `keep_get_rec`'s cross-file recursion, `rdepth`, `KEEP_XFILE_RECUR_MAX`, and the buf3 reset/aliasing logic; collapse the cross-file copy comments. keeper's native get becomes a thin call into the dog/git resolver.
- -[ ] Simplify `KEEPDIRTY`: drop the REF-descendant clause (keep the open-leaf / live-staging-pack refusals).
- -[ ] Repro-first ([CLAUDE] §17): keep `test/DELTA_ROUND.c` round-trips green on OFS-only logs; add a corrupt-OFS case (self-ref, underflow, past-tail base) asserting bounded KEEPFAIL, proving the hardening survived the simplification. Confirm via a fuzz pass over $HOME/Corpus (libFuzzer, `nice`, 16 jobs).
+-[ ] Extract the OFS chase into a dog/git resolver, then strip the REF_DELTA case from `keep_get_packed_rec`; delete `keep_get_rec`'s cross-file recursion, `rdepth`, `KEEP_XFILE_RECUR_MAX`, and the buf3 reset/aliasing logic; collapse the cross-file copy comments. keeper's native get becomes a thin call into the dog/git resolver.
+-[ ] Simplify `KEEPDIRTY`: drop the REF-descendant clause (keep the open-leaf / live-staging-pack refusals).
+-[ ] Repro-first ([CLAUDE] §17): keep `test/DELTA_ROUND.c` round-trips green on OFS-only logs; add a corrupt-OFS case (self-ref, underflow, past-tail base) asserting bounded KEEPFAIL, proving the hardening survived the simplification. Confirm via a fuzz pass over $HOME/Corpus (libFuzzer, `nice`, 16 jobs).
 
 ### Blockers and bummers
- -  [[GIT-006]] migration must complete first.
+ -  [GIT-006] migration must complete first.
 
 ##  Outcome
  -  Landed `cd1e8a00` on beagle.new: shared `PACKResolveOfs` (`dog/git/PACK.c:184`,
     decl `PACK.h:121`) — pure OFS chase, caller-owned scratch; `keep_get_packed_rec`
     is now a thin lookup→resolve. Deleted the REF_DELTA arm, cross-file recursion,
-    `rdepth`/`KEEP_XFILE_RECUR_MAX`, buf3 aliasing, and the [[MEM-022]] stack-DoS
+    `rdepth`/`KEEP_XFILE_RECUR_MAX`, buf3 aliasing, and the [MEM-022] stack-DoS
     hardening; any stray native REF → bounded `KEEPFAIL` (new `PACKREF`), never silent
     `KEEPNONE`. `UNPK` foreign reader intact; corruption bounds preserved; `KEEPDIRTY`
     REF clause dropped. New `dog/test/PACKRESOLVE.c` + `dog/fuzz/PACKRESOLVEfuzz`
     (120s/16-job, 0 crashes); 397/397, ASan/LSan clean. GIT-006 gate moot — store
-    born OFS-only. js binding rewrite deferred to [[GIT-007]].
+    born OFS-only. js binding rewrite deferred to [GIT-007].
 
 [Keeper]: ../../wiki/Keeper.mkd "the keeper dog"
 [CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"

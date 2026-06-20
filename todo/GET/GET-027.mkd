@@ -30,7 +30,7 @@ independent clones; relates to [GET-009].
 
 ### Constraints
  -  `be://` here tunnels over ssh (no daemon; only `:22` listens) — test
-    with `WITH_SSH=ON`, `WITH_INET=OFF` ([[build-with-ssh-not-inet]]).
+    with `WITH_SSH=ON`, `WITH_INET=OFF` ([build-with-ssh-not-inet]).
 
 ##  WIP
 
@@ -41,11 +41,11 @@ independent clones; relates to [GET-009].
     the recently-added `SHA1u8sFeedHashlet` (GET-026) if it feeds either path.
 
 ### TODOs
- -[ ] Repro (hermetic, WITH_SSH=ON): `be get be://` against a store whose
+-[ ] Repro (hermetic, WITH_SSH=ON): `be get be://` against a store whose
       tip is a freshly-posted commit → WIRECRPT + mangled hashlet.
- -[ ] Trace the off-by-one to its encoder; check the `be put` `?#?<sha>` path.
- -[ ] Fix; full closure clones clean; `be put '?#<sha>'` records `?#<sha>`.
- -[ ] Land + ctest WITH_SSH=ON green.
+-[ ] Trace the off-by-one to its encoder; check the `be put` `?#?<sha>` path.
+-[ ] Fix; full closure clones clean; `be put '?#<sha>'` records `?#<sha>`.
+-[ ] Land + ctest WITH_SSH=ON green.
 
 ### Blockers and bummers
  -  None — the live store is intact; this is a transport-side defect.
@@ -54,7 +54,7 @@ independent clones; relates to [GET-009].
  -  LANDED `a8fa2e87`. The "off-by-one hashlet" hypothesis was WRONG —
     `0cb94e64e…` is a correct `%016llx`-padded value, not mangled. TWO
     independent bugs, both fixed: (1) server `keeper/WIRE.c` tripped on a
-    degenerate **zero-length pack bookmark** (GET-025-era re-index) → shipped
+    degenerate *zero-length pack bookmark* (GET-025-era re-index) → shipped
     a 12-byte empty pack → `WIRECRPT`; now skips zero-len bookmarks. (2)
     `sniff/PUT.c` `PUTSetBranch` prepended a stray `?` → the `?#?<sha>`
     reset-row malformation; now records bare `?#<sha>`. +2 tests; 391/391.

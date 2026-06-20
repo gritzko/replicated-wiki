@@ -31,12 +31,12 @@ The 2026-06-15 audit found beagle/ does execvp argv assembly with hand-rolled of
  -  The 3× duplicated argv offset-math is the priority (one `BEArgvPack` deletes two re-inlined copies); the js typed-array/string helpers are lower value and may not build in CI.
 
 ### TODOs
- -[ ] Repro-first: lock outputs on the beagle/mark test tables.
- -[ ] `BEArgvPack` shared helper; fold the 3 sites.
- -[ ] beagle Fork/Join → `u8sFork`/`u8sJoin`; `_qpad`/literal/`=`-split/`BEGetDrainSubs` → slice idioms.
- -[ ] mark: `MKDTLineMarker` rest-slice; `refs` typed buffer; `a_cstr`.
- -[ ] js (if it builds): typed-array slice wrapper, `len-1` underflow fix, JSString→buffer helper.
- -[ ] Build + ctest; report done vs skipped (incl. js skipped-for-JSC).
+-[ ] Repro-first: lock outputs on the beagle/mark test tables.
+-[ ] `BEArgvPack` shared helper; fold the 3 sites.
+-[ ] beagle Fork/Join → `u8sFork`/`u8sJoin`; `_qpad`/literal/`=`-split/`BEGetDrainSubs` → slice idioms.
+-[ ] mark: `MKDTLineMarker` rest-slice; `refs` typed buffer; `a_cstr`.
+-[ ] js (if it builds): typed-array slice wrapper, `len-1` underflow fix, JSString→buffer helper.
+-[ ] Build + ctest; report done vs skipped (incl. js skipped-for-JSC).
 
 ### Blockers and bummers
  -  js/ likely unbuildable in CI (JSC) — do beagle/mark regardless and list js as deferred, mirroring the MEM js tickets.

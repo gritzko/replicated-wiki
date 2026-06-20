@@ -44,10 +44,10 @@ banner inside a `post` stream.
 its row into the parent post table rather than open a separate `put:` banner.)
 
 ### TODOs
- -[ ] Trace `be post` with an advanced sub (`strace -f` / ABC_TRACE) to confirm the
+-[ ] Trace `be post` with an advanced sub (`strace -f` / ABC_TRACE) to confirm the
       put call site + why it prints non-quiet.
- -[ ] Add a failing repro in `test/post/` (advanced-sub parent post, assert no put banner).
- -[ ] Gate the `put:` banner off for the internal gitlink-bump path; re-run `ctest`.
+-[ ] Add a failing repro in `test/post/` (advanced-sub parent post, assert no put banner).
+-[ ] Gate the `put:` banner off for the internal gitlink-bump path; re-run `ctest`.
 
 ### Blockers and bummers
 (none yet)

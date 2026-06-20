@@ -33,16 +33,16 @@ parent.  `diff:` should render the gitlink change AND recurse, the way
 ##  WIP
 
 ### Design decisions
- -  **Part-b: option B chosen (be-driven relay, 2026-06-15).** `be` already
+ -  *Part-b: option B chosen (be-driven relay, 2026-06-15).* `be` already
     owns submodule mount discovery + child dispatch (`BEProjectorSubs` →
     `BESubsHere` → `BERelaySub`); it merely replays the parent URI verbatim
-    per sub. The fix is **diff-specific** logic in `be`'s fan-out: for `diff:`,
+    per sub. The fix is *diff-specific* logic in `be`'s fan-out: for `diff:`,
     rewrite each sub's child URI to `diff:?<old-pin>#<new-pin>` from the pin
     pair graf already computes for the gitlink line (part-a). The relay stays
     generic for every other projector.
- -  **Why not A (graf-driven):** graf would need submodule mount discovery,
+ -  *Why not A (graf-driven):* graf would need submodule mount discovery,
     breaking its per-store boundary — discovery is `be`'s job. Rejected.
- -  **Pin source: route #3 — structural via keeper (2026-06-15).**
+ -  *Pin source: route #3 — structural via keeper (2026-06-15).*
     SUPERSEDES the first impl's route #1 (scraping graf's rendered
     `<sub> <old40>..<new40>` diff text — fragile, couples to render output).
     Pins come from `keeper/SUBS.h KEEPSubsAt(tree)` (per-tree gitlink+path
@@ -53,13 +53,13 @@ parent.  `diff:` should render the gitlink change AND recurse, the way
     graf's diff base (single sha → vs first-parent; `?a#b` → a vs b).
 
 ### TODOs
- -[v] **Part-a:** render the gitlink change (old-pin → new-pin) —
+-[v] *Part-a:* render the gitlink change (old-pin → new-pin) —
       `diffref_collect_visit` collects `WALK_KIND_SUB` (`is_sub`) and emits
       `<path> <old40>..<new40>`; test `test/diff/08-sub-pin-bump-gitlink`.
- -[v] **Part-b (route #3):** `be`'s diff fan-out builds the per-sub pin map
+-[v] *Part-b (route #3):* `be`'s diff fan-out builds the per-sub pin map
       from `KEEPSubsAt` over both endpoint trees and rewrites each bumped
       sub's child URI to `diff:?<old>#<new>`; relay + path-prefix; `--nosub`.
- -[v] Part-b test: `be diff:` on a pin-bump shows the sub's content diff
+-[v] Part-b test: `be diff:` on a pin-bump shows the sub's content diff
       (`test/diff/08`); added-sub range (`test/diff/10`).
 
 ### Blockers and bummers

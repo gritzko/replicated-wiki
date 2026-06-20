@@ -29,15 +29,15 @@ generated `.js.c` aren't regenerated at build. Method: [Issues].
     regen step.
 
 ### TODOs
- -[ ] Repro-first: feed a `.js` containing `\d` and a digit-leading name; assert the
+-[ ] Repro-first: feed a `.js` containing `\d` and a digit-leading name; assert the
       emitted `.js.c` compiles and round-trips.
- -[ ] Fix escaping order + identifier sanitising; wire build-time regen.
+-[ ] Fix escaping order + identifier sanitising; wire build-time regen.
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `23d71efc`** (2026-06-16): js2c.js now escapes `\` FIRST, then `"`,
+ -  *LANDED `23d71efc`* (2026-06-16): js2c.js now escapes `\` FIRST, then `"`,
     then `\t`/`\r`/other C0 controls (`\xNN`), preserving the `\n"\n"` line-split;
     the C identifier is sanitised (`[^A-Za-z0-9_]`→`_`, digit-leading gets a `_`
     prefix). Verified by jabc-eval round-trip (backslash/regex/tab/CR/control/

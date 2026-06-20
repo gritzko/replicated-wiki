@@ -1,6 +1,6 @@
 #   DIS-031: POST provenance from trailing-`!` (refer/forget), `post!` = --force, ban messages ending in `!`
 
-Per [blog/uris.mkd] (authoritative), **POST** — not PATCH (see [[DIS-030]]) — decides the message (reuse vs new) and refer-back vs forget, via a trailing `!` on the fragment; and `post!` on the verb means `--force`. Today POST (`sniff/POST.c:2710-2784`) chooses the provenance header purely from the patch row's `shape` field (MERGE→`parent`, SQUASH/REBASE1→`foster`, CHERRY→`picked`) and takes the message from the arg. The target rule set: a **branch-sourced** row + `#msg` (no `!`) → `parent` (refer back / merge); + `#msg!` or `#!` (trailing `!`) → `foster` (forget / squash + rebase); a **named-sha** row → `picked` (cherry) regardless. An empty fragment reuses the original message, text supplies a new one, so `#!` = reuse + forget, `#msg` = new + refer, `#msg!` = new + forget, bare `be post` = reuse + refer. To keep the trailing `!` unambiguous **commit messages may not end in `!`** — POST refuses one that does (bash-history-expansion ruled out a prefix form). `be post!` = `--force`, an alias of the existing verb flag (the conflict-marker override hit during the [[DIS-029 patch squash fork]] landing). See [POST], [PATCH], [CLAUDE].
+Per [blog/uris.mkd] (authoritative), *POST* — not PATCH (see [DIS-030]) — decides the message (reuse vs new) and refer-back vs forget, via a trailing `!` on the fragment; and `post!` on the verb means `--force`. Today POST (`sniff/POST.c:2710-2784`) chooses the provenance header purely from the patch row's `shape` field (MERGE→`parent`, SQUASH/REBASE1→`foster`, CHERRY→`picked`) and takes the message from the arg. The target rule set: a *branch-sourced* row + `#msg` (no `!`) → `parent` (refer back / merge); + `#msg!` or `#!` (trailing `!`) → `foster` (forget / squash + rebase); a *named-sha* row → `picked` (cherry) regardless. An empty fragment reuses the original message, text supplies a new one, so `#!` = reuse + forget, `#msg` = new + refer, `#msg!` = new + forget, bare `be post` = reuse + refer. To keep the trailing `!` unambiguous *commit messages may not end in `!`* — POST refuses one that does (bash-history-expansion ruled out a prefix form). `be post!` = `--force`, an alias of the existing verb flag (the conflict-marker override hit during the [DIS-029 patch squash fork] landing). See [POST], [PATCH], [CLAUDE].
 
 ##  Issues
 Provenance and message handling move from the patch-row shape onto POST's own `!`/fragment.
@@ -8,11 +8,11 @@ Provenance and message handling move from the patch-row shape onto POST's own `!
  -  Today the header is chosen from `pent[i].shape` (`sniff/POST.c:2712-2758`); target keys on (a) the row's named-sha flag → `picked`, else (b) the post fragment's trailing `!` → `foster`, else `parent`.
  -  `#msg` vs `#msg!`: the trailing `!` is the forget modifier. Needs a fragment-tail parse in POST's arg classification, distinct from the verb-token `!`.
  -  Message reuse: an empty/absent fragment reuses the absorbed commit's message; text is a new message. Confirm the reuse path still sources author/subject correctly (`sniff/POST.c:2273-2299`).
- -  **Ban**: a commit message ending in `!` must be refused with a dedicated error (ron60, ≤10 chars, e.g. `POSTBANG`) — else a literal `fix it!` silently becomes a forget. Add to the message-validation path.
+ -  *Ban*: a commit message ending in `!` must be refused with a dedicated error (ron60, ≤10 chars, e.g. `POSTBANG`) — else a literal `fix it!` silently becomes a forget. Add to the message-validation path.
  -  `post!` verb-token → `--force` (commit through conflict markers); wire the trailing `!` on argv verb to the existing force flag. Compose: `be post! '#msg!'` = force + new-msg + forget.
 
 ##  Blockers
-Coupled with [[DIS-030]] (the wtlog row must carry the named-sha flag and scope). Land together. Spec rewrite is [[DIS-032]].
+Coupled with [DIS-030] (the wtlog row must carry the named-sha flag and scope). Land together. Spec rewrite is [DIS-032].
 
 ##  Planned
 Move the provenance/message decision onto POST's `!` and fragment; add the message-`!` ban and `post!` alias.
@@ -20,7 +20,7 @@ Move the provenance/message decision onto POST's `!` and fragment; add the messa
  -  Repro first ([CLAUDE] §17): `test/post/*` cases — branch row + `#msg`→`parent` header; + `#msg!`→`foster`; + `#!`→`foster` + reused message; named-sha row→`picked`; a message ending in `!` is refused; `be post!` commits past a conflict marker. FAIL pre-change.
  -  Parse the fragment trailing `!` and the verb-token `!`; rewrite header emission to key on row-named-flag + post-`!` instead of `pent[].shape`.
  -  Add the message-ending-`!` refusal + error code; reject before pack write.
- -  Migrate `test/post/*` and `beagle/test/*.sh` to the new forms; update `sniff/INDEX.md`; cross-link [[DIS-030]]/[[DIS-032]].
+ -  Migrate `test/post/*` and `beagle/test/*.sh` to the new forms; update `sniff/INDEX.md`; cross-link [DIS-030]/[DIS-032].
 
 [blog/uris.mkd]: ../../blog/uris.mkd "Beagle: git objects and URIs (authoritative)"
 [POST]: ../../wiki/POST.mkd "POST verb"

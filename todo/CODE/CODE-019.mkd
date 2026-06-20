@@ -50,10 +50,10 @@ a 40-hex feed helper). `sha1hex` belongs there. TIGHT, behaviour-preserving move
     cross-header dependency rather than adding one.
 
 ### TODOs
- -[ ] Move the `sha1hex` block from `dog/WHIFF.h` to `dog/git/SHA1.h` (beside `sha1`);
+-[ ] Move the `sha1hex` block from `dog/WHIFF.h` to `dog/git/SHA1.h` (beside `sha1`);
       add any abc includes `sha1hex` needs.
- -[ ] Fix the ~27 consumer `#include`s (WHIFF.h→git/SHA1.h where pulled only for sha1hex).
- -[ ] `rg`-verify: zero `sha1hex` in `dog/WHIFF.h`, present in `dog/git/SHA1.h`, every
+-[ ] Fix the ~27 consumer `#include`s (WHIFF.h→git/SHA1.h where pulled only for sha1hex).
+-[ ] `rg`-verify: zero `sha1hex` in `dog/WHIFF.h`, present in `dog/git/SHA1.h`, every
       former use resolves. Full ctest green, behaviour byte-identical.
 
 ### Blockers and bummers
@@ -61,13 +61,13 @@ a 40-hex feed helper). `sha1hex` belongs there. TIGHT, behaviour-preserving move
     `dog/WHIFF.h` index pass; sequence such code-org fixes BEFORE documenting that header.
 
 ##  Outcome
- -  **LANDED `addd5a9c`** (FF child of `b9ef44b2`; 308/308; byte-identical move verified by
+ -  *LANDED `addd5a9c`* (FF child of `b9ef44b2`; 308/308; byte-identical move verified by
     an empty removed-vs-added diff): the full `sha1hex` block
     moved `dog/WHIFF.h` (was `:149-197`) → `dog/git/SHA1.h` (beside `sha1`), byte-identical.
     `WHIFF.h` already `#include`d `dog/git/SHA1.h` (`:105`, for `sha1cp`), so the move is
-    fully include-TRANSPARENT — **zero consumer include edits**; only 2 files changed
+    fully include-TRANSPARENT — *zero consumer include edits*; only 2 files changed
     (`dog/WHIFF.h`, `dog/git/SHA1.h`). No new include needed (SHA1.h already pulled
-    HEX/slice deps), no cycle. Fresh build clean, `ctest` **308/308**. Awaiting gate.
+    HEX/slice deps), no cycle. Fresh build clean, `ctest` *308/308*. Awaiting gate.
     Msg: `CODE-019: move sha1hex to dog/git/SHA1.h beside sha1`.
 
 [CODE-016]: CODE-016.mkd "centralize sha1↔hex through dog/git/SHA1.h (LANDED 0a43dec5)"

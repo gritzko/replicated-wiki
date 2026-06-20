@@ -29,7 +29,7 @@
     partial tail word in `Count`/`Or`/`And` so junk bits never count.
  -  v1 is an OFFSET-0 bitmap (a set of small ints); arbitrary-offset bit-slices
     (needing shifts) are out of scope until a real use appears.
- -  `abc/` change — review-gated ([[abc-changes-need-review]]); keep it additive,
+ -  `abc/` change — review-gated ([abc-changes-need-review]); keep it additive,
     don't break `BitAt`/`BitSet` until callers migrate.
 
 ##  WIP
@@ -43,11 +43,11 @@
     (BUF.h shims, the 4 `FILE_RW` sites; NFA optional, defer if it widens scope).
 
 ### TODOs
- -[ ] `abc/BIT.h` + impl: `u1`/`u1s`/`u1cs`/`u1b`, element + buffer family.
- -[ ] Algebra `Or`/`And`/`AndNot`/`Xor`/`Count`/`Next`/`Eq`/`Any`, tail-masked.
- -[ ] Table-driven test + fuzz vs a reference set; `abc/INDEX.md` entry.
- -[ ] Migrate `FILE_RW` (`abc/FILE.c`) to `u1sSet`/`u1sClr`; drop `BitUnset`.
- -[ ] (opt) migrate `abc/NFA.h` class bitmaps; leave if it widens scope.
+-[ ] `abc/BIT.h` + impl: `u1`/`u1s`/`u1cs`/`u1b`, element + buffer family.
+-[ ] Algebra `Or`/`And`/`AndNot`/`Xor`/`Count`/`Next`/`Eq`/`Any`, tail-masked.
+-[ ] Table-driven test + fuzz vs a reference set; `abc/INDEX.md` entry.
+-[ ] Migrate `FILE_RW` (`abc/FILE.c`) to `u1sSet`/`u1sClr`; drop `BitUnset`.
+-[ ] (opt) migrate `abc/NFA.h` class bitmaps; leave if it widens scope.
 
 ### Blockers and bummers
  -  Review-gated `abc/` change; coordinate with the `abc/` owner. Independent of

@@ -27,7 +27,7 @@ relinks the `keeper` exe, so iterating on `be` runs a NEW `be` against an OLD
  -  Clone `be get ssh://localhost/src/dogs?/main` lands a full worktree, exit 0.
 
 ### Constraints
- -  Build/verify WITH_SSH=ON, WITH_INET=OFF ([[build-with-ssh-not-inet]]); the
+ -  Build/verify WITH_SSH=ON, WITH_INET=OFF ([build-with-ssh-not-inet]); the
     clone uses ssh-localhost upload-pack.
  -  CMake-only change; do NOT touch the (already-correct) ingest code.
 
@@ -42,10 +42,10 @@ relinks the `keeper` exe, so iterating on `be` runs a NEW `be` against an OLD
     own libs, so co-building keeps them current.
 
 ### TODOs
- -[v] Add the `add_dependencies` line to `beagle/CMakeLists.txt`.
- -[v] Verify: touch `keeper/KEEP.c`, `ninja be` → relinks `bin/keeper` + `bin/be`.
- -[v] Verify clone green: `be get ssh://localhost/src/dogs?/main` exit 0, wt full.
- -[ ] Land; full ctest WITH_SSH=ON (change is build-ordering-only, no code path).
+-[v] Add the `add_dependencies` line to `beagle/CMakeLists.txt`.
+-[v] Verify: touch `keeper/KEEP.c`, `ninja be` → relinks `bin/keeper` + `bin/be`.
+-[v] Verify clone green: `be get ssh://localhost/src/dogs?/main` exit 0, wt full.
+-[ ] Land; full ctest WITH_SSH=ON (change is build-ordering-only, no code path).
 
 ### Blockers and bummers
  -  None — the remote store/pack are intact and the ingest fix already landed;

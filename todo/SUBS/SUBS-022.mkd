@@ -52,21 +52,21 @@ Method: [Issues].
     endpoints only, no ptr-arith.
 
 ### TODOs
- -[ ] Repro-first: a hermetic submodule tree; run a recursing verb via `./rel/path/be`;
+-[ ] Repro-first: a hermetic submodule tree; run a recursing verb via `./rel/path/be`;
       assert the sub child runs (no `BEDOGEXIT`) — RED today.
- -[ ] Absolutize a relative argv[0] before any chdir; fix the three spawn sites.
- -[ ] Test: relative, absolute, and bare-name invocations all recurse into the sub.
+-[ ] Absolutize a relative argv[0] before any chdir; fix the three spawn sites.
+-[ ] Test: relative, absolute, and bare-name invocations all recurse into the sub.
 
 ### Blockers and bummers
  -  Surfaced by the worker flow (relative `build-debug/bin/be`); independent of the
     submodule MODEL — it's a self-path-resolution bug at the recursion spawn.
 
 ##  Outcome
- -  **LANDED `453c55c2`** (FF child of `3eba8e76`; 306/306; no `--force`): one-point fix in
+ -  *LANDED `453c55c2`* (FF child of `3eba8e76`; 306/306; no `--force`): one-point fix in
     `dog/HOME.c:1027-1053` (`HOMEResolveSibling` realpaths a relative argv0 before
     dirname) — covers every chdir'd sub-spawn (post/get/sniff/woof) uniformly; `beagle/SUBS.c`
     gets a 3-line doc comment only, no abc/ change. New `beagle/test/be-post-relpath.sh`
     (rel/abs/bare invocation forms, RED→GREEN: rel hit the exact BEDOGEXIT, all 3 green
-    after). **306/306**. Awaiting gate. Msg: `SUBS-022: realpath relative argv[0] before sub-recursion chdir`.
+    after). *306/306*. Awaiting gate. Msg: `SUBS-022: realpath relative argv[0] before sub-recursion chdir`.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

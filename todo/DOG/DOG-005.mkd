@@ -39,12 +39,12 @@ Repoint graf at `dog/WEAVE` and delete `graf/WEAVE.{c,h}`. GET, REBASE, BLAME, D
  -  Land file-disjoint where possible; cut over one caller at a time if needed.
 
 ### TODOs
- -[ ] Repro `be-patch-15` step 2 5/5 fail through the graf glue (the dog
+-[ ] Repro `be-patch-15` step 2 5/5 fail through the graf glue (the dog
       engine is already pinned by WEAVE03 — isolate the closure→fold model).
- -[ ] Repoint GET/REBASE/BLAME/DIFFREF/LOG; closure→scope at the DAG boundary,
+-[ ] Repoint GET/REBASE/BLAME/DIFFREF/LOG; closure→scope at the DAG boundary,
       shared-base 3-way at ancestor-skip merges (per WEAVE03).
- -[ ] Delete `graf/WEAVE.{c,h}`; update `graf/INDEX.md` + `dog/INDEX.md`.
- -[ ] Full ctest + blame/diff/merge ident; close [GET-001]/[DIS-003]/[DIFF-007]
+-[ ] Delete `graf/WEAVE.{c,h}`; update `graf/INDEX.md` + `dog/INDEX.md`.
+-[ ] Full ctest + blame/diff/merge ident; close [GET-001]/[DIS-003]/[DIFF-007]
       and re-confirm [MEM-036]/[MEM-040] are moot.
 
 ### Blockers and bummers

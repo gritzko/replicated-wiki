@@ -2,13 +2,13 @@
 
 Loading the parentless ROOT commit (`commit:?c7184818`) takes ~4.4s because it
 token-level weave-diffs the ENTIRE initial-import tree as all-INS, where a
-one-sided (vs-empty) diff should be a cheap raw all-add. Split from [[BLAME-006]]
+one-sided (vs-empty) diff should be a cheap raw all-add. Split from [BLAME-006]
 (the perf half). Method: [Issues].
 
 ##  Input
 
 ### Context
- -  Timing: root commit **4.35s / 3853 lines**; a typical commit **0.16s / 183**.
+ -  Timing: root commit *4.35s / 3853 lines*; a typical commit *0.16s / 183*.
  -  Path: `be commit:?<sha>` (`beagle/BE.cli.c:332` + relay `:453-459`) runs graf
     `diff:?<sha>`; `graf_first_parent_hex` returns GRAFNONE for the parentless root
     (`GRAF.exe.c:75`), so it falls to `GRAF.exe.c:505` → `GRAFDiffTreeRefs`
@@ -33,16 +33,16 @@ one-sided (vs-empty) diff should be a cheap raw all-add. Split from [[BLAME-006]
     diff and short-circuit to a raw all-INS emit (skip tokenize+LCS) for each file.
 
 ### TODOs
- -[ ] Repro: time `be commit:?<root>` vs a normal commit; confirm O(repo) hot path
+-[ ] Repro: time `be commit:?<root>` vs a normal commit; confirm O(repo) hot path
       in `GRAFDiffTreeRefs`.
- -[ ] Fix: empty-side short-circuit (raw all-add) in the tree-diff/weave path.
- -[ ] Test: root/whole-tree commit-show is bounded; output byte-identical to before.
+-[ ] Fix: empty-side short-circuit (raw all-add) in the tree-diff/weave path.
+-[ ] Test: root/whole-tree commit-show is bounded; output byte-identical to before.
 
 ### Blockers and bummers
- -  Pairs with [[BLAME-006a]] (the correctness half) — independent; land separately.
+ -  Pairs with [BLAME-006a] (the correctness half) — independent; land separately.
 
 ##  Outcome
- -  **LANDED `8d66369c`** (FF child of `3dc19b0a`; msg `BLAME-006b: skip token-diff of
+ -  *LANDED `8d66369c`* (FF child of `3dc19b0a`; msg `BLAME-006b: skip token-diff of
     binary blobs`). Scan's "291-file all-INS" premise was wrong — the 4.35s was one
     9.5 MB binary (`dog/dogs.png`) tokenized in 3.17s. Fix (graf): `WEAVEFromBlobRm`
     (one-sided/vs-empty short-circuit to raw all-add) + `diffref_is_binary` (git's
@@ -50,6 +50,6 @@ one-sided (vs-empty) diff should be a cheap raw all-add. Split from [[BLAME-006]
     4.35s→1.52s, text output byte-identical. Test: Case I in `beagle/test/be-diff-projector.sh`.
     302/302. NB landing: reconciled a `graf/DIFFREF.c` overlap with DIFF-002 (both survive,
     verified on trunk); the POSTCFLCT marker false-positive on `graf/WEAVE.c` required the
-    documented `--force` conflict-scan bypass (see [[POST-006]]/[[POST-017]]).
+    documented `--force` conflict-scan bypass (see [POST-006]/[POST-017]).
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

@@ -2,7 +2,7 @@
 
 `be`'s verb reports must all speak ONE output model: stream color to a
 tty, compose ONE `H` hunk per (sub)module for `--tlv`, each headed by a
-pale-yellow **state banner** — built through ROWS, never per-site
+pale-yellow *state banner* — built through ROWS, never per-site
 `fprintf` or a pasted `THEME_BANNER`. Today only the per-file tables
 comply; the summaries / confirmations (`be get`, post/put, `status!`)
 still print raw. This is the umbrella; per-verb wiring lands as the
@@ -30,7 +30,7 @@ child tickets [GET-026], [STATUS-001], [POST-018].
 
 ### Constraints
  -  No copy-pasted banner code at call sites — only the ROWS module-hunk
-    header. `dog/ROWS` + `sniff/` only; no `abc/` ([[abc-changes-need-review]]).
+    header. `dog/ROWS` + `sniff/` only; no `abc/` ([abc-changes-need-review]).
  -  Preserve live streaming for big clones (KEYED); do NOT force BATCH.
 
 ##  WIP
@@ -43,10 +43,10 @@ child tickets [GET-026], [STATUS-001], [POST-018].
     and `--tlv` relay stay in ROWS/HUNK.
 
 ### TODOs
- -[ ] `dog/ROWS.c`: streaming banner-once + emit-on-empty (the shared core).
- -[ ] [GET-026]: bare `be get` = default GET + resulting-state banner.
- -[ ] [STATUS-001]: `be status!` extended + `be status:<path>/` sub-scope.
- -[ ] [POST-018]: post/put confirmations through the banner.
+-[ ] `dog/ROWS.c`: streaming banner-once + emit-on-empty (the shared core).
+-[ ] [GET-026]: bare `be get` = default GET + resulting-state banner.
+-[ ] [STATUS-001]: `be status!` extended + `be status:<path>/` sub-scope.
+-[ ] [POST-018]: post/put confirmations through the banner.
 
 ### Blockers and bummers
  -  None yet.

@@ -11,7 +11,7 @@ Discrepancies in `abc/` — the foundational slice/buffer/net/poll/curl layer ev
 
 ABC-003 (`UTF8_LEN[byte>>4]` byte-length table shifted; multibyte lead bytes
 over-count) landed into the abc sub — `02a23dc3` (`?/abc/.dogs`) + pin `cb71e65b`.
-(BRO-004's incoherence was a separate bro bug, not this table — see [[ABC-003]].)
+(BRO-004's incoherence was a separate bro bug, not this table — see [ABC-003].)
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
 [MEM]: ../MEM/README.mkd "memory-safety audit tickets"

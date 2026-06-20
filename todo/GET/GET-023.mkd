@@ -25,7 +25,7 @@ ref must resolve to `<sha>` or fail loudly — never silently pick the parent. M
     (a wrong cur with no warning).
 
 ### Goals
- -  **SAFEGUARD (the core fix):** the ref resolver CLASSIFIES the target as (valid
+ -  *SAFEGUARD (the core fix):* the ref resolver CLASSIFIES the target as (valid
     sha | valid hashlet-prefix | known branch). If it matches NONE of those, it
     REFUSES with a clear error — it MUST NEVER silently fall through to a parent /
     merge-base / nearest-prefix / no-op resolution. `?#<sha>...` is one instance: the
@@ -67,17 +67,17 @@ ref must resolve to `<sha>` or fail loudly — never silently pick the parent. M
     path (`graf_head_msg_search`), counts still resolve+cap.
 
 ### TODOs
- -[ ] Repro-first: `be get '?#<sha>...'` lands on the parent (RED); table over
+-[ ] Repro-first: `be get '?#<sha>...'` lands on the parent (RED); table over
       `?#<sha>` / `.` / `..` / `...`.
- -[ ] Root-cause the range/ellipsis interpretation in `REFSResolve`/`RESOLVE.c`.
- -[ ] Fix: resolve to `<sha>` or error; never silent-parent. Test green.
+-[ ] Root-cause the range/ellipsis interpretation in `REFSResolve`/`RESOLVE.c`.
+-[ ] Fix: resolve to `<sha>` or error; never silent-parent. Test green.
 
 ### Blockers and bummers
  -  Shared resolver — verify all verbs (get/head/diff/blame) get the corrected
     behaviour, not just get.
 
 ##  Outcome
- -  **LANDED `d6f35358`** (FF child of `453c55c2`; 307/307): the classify-or-reject
+ -  *LANDED `d6f35358`* (FF child of `453c55c2`; 307/307): the classify-or-reject
     safeguard + the `frag_is_spoilt_hex` removal + the source URI now built via the
     composer (`URIutf8Feed` off a query-only `uri`, `call()`-checked at `sniff/GET.c:2095`,
     replacing the hand-rolled `?`+feed). Reconciled clean onto trunk (disjoint from
@@ -88,6 +88,6 @@ ref must resolve to `<sha>` or fail loudly — never silently pick the parent. M
     a trunk-only `sniff` binary (`SNIFFfragref`: `?#<sha>` was silently landing on the trunk
     tip). Reused `SNIFFFAIL`/`KEEPFAIL`. Files: `sniff/GET.c`, `graf/LOG.c`, `keeper/KEEP.c`,
     new `sniff/test/fragref.sh` (+ CMake), `keeper/test/RESOLVEURI.c` (regression doc).
-    **305/305**; no regression in valid sha/hashlet/branch resolution. Awaiting gate.
+    *305/305*; no regression in valid sha/hashlet/branch resolution. Awaiting gate.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

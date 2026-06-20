@@ -30,17 +30,17 @@ Method: [Issues].
     validating `Decode`. Fix the `test.js:66` expectation to 5.
 
 ### TODOs
- -[ ] Repro-first: `Encode("hello").byteLength === 5`; `Decode` rejects each bad
+-[ ] Repro-first: `Encode("hello").byteLength === 5`; `Decode` rejects each bad
       sequence below.
- -[ ] Trim the NUL; implement validating `Decode`.
- -[ ] Fuzz seeds: `C0 80` (overlong NUL), `ED A0 80` (lone surrogate), `E2 82`
+-[ ] Trim the NUL; implement validating `Decode`.
+-[ ] Fuzz seeds: `C0 80` (overlong NUL), `ED A0 80` (lone surrogate), `E2 82`
       (truncated 3-byte), `F4 90 80 80` (> U+10FFFF).
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `041e4bd5`** (2026-06-16): `JABCutf8Decode` now validates inbound
+ -  *LANDED `041e4bd5`* (2026-06-16): `JABCutf8Decode` now validates inbound
     UTF-8 via abc's `utf8sValid`/`utf8sDrain32` (rejects overlong forms, lone
     surrogates, truncated multibyte, bad continuation, > U+10FFFF) and decodes
     valid bytes to a UTF-16 JS string; `JABCutf8Encode` trims the trailing NUL

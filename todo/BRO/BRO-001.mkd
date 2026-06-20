@@ -17,11 +17,11 @@ fix lands once and benefits all. Prerequisite for [BLAME-005].
     easy to miss between content bodies.
 
 ### Goals
- -  The status/header line displays the **time in abbreviated format**
-    (`Fri12`-style, the same formatter `be head`/`log:` already use) **and the
-    URI**.
- -  Style: **pale-yellow background, spanning the FULL line width** (not just
-    the text), **black text**.
+ -  The status/header line displays the *time in abbreviated format*
+    (`Fri12`-style, the same formatter `be head`/`log:` already use) *and the
+    URI*.
+ -  Style: *pale-yellow background, spanning the FULL line width* (not just
+    the text), *black text*.
 
 ### Constraints
  -  Shared renderer (`dog/HUNK.c` `HUNKu8sFeedColor` for the TTY path; keep
@@ -39,10 +39,10 @@ fix lands once and benefits all. Prerequisite for [BLAME-005].
     pale-yellow row, already close per the `ulog` div) or leave Text plain.
 
 ### TODOs
- -[v] Banner in `HUNKu8sFeedColor` (`hunk_feed_status_color`) + bro's
+-[v] Banner in `HUNKu8sFeedColor` (`hunk_feed_status_color`) + bro's
       `bro_render_ulog_title`, via shared `THEME_BANNER` (`dog/THEME.h`).
- -[v] Reused `DOGutf8sFeedDate` (the `Fri12`-style formatter).
- -[v] bro (width-aware) pads the band to the terminal edge; verb kept; Text
+-[v] Reused `DOGutf8sFeedDate` (the `Fri12`-style formatter).
+-[v] bro (width-aware) pads the band to the terminal edge; verb kept; Text
       stays plain machine-grep; Html `.ulog` CSS made coherent.
 
 ### Blockers and bummers

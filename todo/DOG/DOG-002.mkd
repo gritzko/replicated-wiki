@@ -32,9 +32,9 @@
     rewrite include paths repo-wide via spot.
 
 ### TODOs
- -[ ] Confirm BRAM/NEIL include sets are abc-only (no graf/keeper symbols).
- -[ ] Move headers+impl+tests to `dog/`; fix include paths repo-wide (spot).
- -[ ] ctest green; `graf blame/diff/merge` byte-identical to pre-move.
+-[ ] Confirm BRAM/NEIL include sets are abc-only (no graf/keeper symbols).
+-[ ] Move headers+impl+tests to `dog/`; fix include paths repo-wide (spot).
+-[ ] ctest green; `graf blame/diff/merge` byte-identical to pre-move.
 
 ### Blockers and bummers
  -  None expected; pure relocation. A hidden graf dep becomes its own ticket

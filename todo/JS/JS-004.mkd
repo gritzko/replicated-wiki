@@ -29,15 +29,15 @@ confidence). Method: [Issues].
  -  (open) Apply the `fact<1 → BADARG`/early-return guard at each listed `-1` site.
 
 ### TODOs
- -[ ] Repro-first: push an empty string through each path (`Encode`, `JABC.hpp` arg
+-[ ] Repro-first: push an empty string through each path (`Encode`, `JABC.hpp` arg
       marshal, `io.cpp:430`, `main.cpp` page write); assert no crash under ASAN.
- -[ ] Add the length guard at every site.
+-[ ] Add the length guard at every site.
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `bd3a9c67`** (2026-06-16): guarded `len >= 1` before `len - 1` at the
+ -  *LANDED `bd3a9c67`* (2026-06-16): guarded `len >= 1` before `len - 1` at the
     two LIVE sites — `io.cpp` `JABCioFileMap` (extracted `JABCioMapBuildPath`, now
     returns SNOROOM on `len == 0` instead of feeding a SIZE_MAX-underflowed,
     silently-discarded `u8sFeedn`) and `main.cpp` `JABCReport` `page[len - 1]`

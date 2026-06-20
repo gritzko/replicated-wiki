@@ -39,10 +39,10 @@ job ([Hunk-producer-renderer-split]); HEAD must not ship pre-flattened plain.
     on a TTY — at the parent's final emit, after sub TLV is merged.
 
 ### TODOs
- -[ ] Repro on a TTY; capture plain output and the `HUNKMode` value at emit.
- -[ ] Trace HEAD's emit path; find where color is dropped (parent vs sub).
- -[ ] Fix so TTY HEAD is colored; `--plain`/`--tlv`/`NO_COLOR`/pipe unchanged.
- -[ ] Land + test (a tty-forced or `--color` golden compare).
+-[ ] Repro on a TTY; capture plain output and the `HUNKMode` value at emit.
+-[ ] Trace HEAD's emit path; find where color is dropped (parent vs sub).
+-[ ] Fix so TTY HEAD is colored; `--plain`/`--tlv`/`NO_COLOR`/pipe unchanged.
+-[ ] Land + test (a tty-forced or `--color` golden compare).
 
 ### Blockers and bummers
  -  None known; isolated to HEAD's render path.

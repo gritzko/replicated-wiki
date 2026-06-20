@@ -1,6 +1,6 @@
 #   PTR-007: bro/+woof/ raw pool arena, manual fragment parse
 
-The 2026-06-15 audit found woof/ backs its connection pool with a raw `u8 *` from mmap, forcing per-slot pointer arithmetic and four-cell buffer writes throughout CONN.c; bro/ hand-parses the prompt/URI path with `char[]`+`strlen`/`atoi`/`sscanf`. Behavior-preserving; **woof is a load-bearing spawn/serve path — gate the diff before landing.**
+The 2026-06-15 audit found woof/ backs its connection pool with a raw `u8 *` from mmap, forcing per-slot pointer arithmetic and four-cell buffer writes throughout CONN.c; bro/ hand-parses the prompt/URI path with `char[]`+`strlen`/`atoi`/`sscanf`. Behavior-preserving; *woof is a load-bearing spawn/serve path — gate the diff before landing.*
 
 ##  Input
 
@@ -30,12 +30,12 @@ The 2026-06-15 audit found woof/ backs its connection pool with a raw `u8 *` fro
  -  Convert `WOOF.pool` to an arena first — it is the root cause; most of CONN.c's pointer arithmetic disappears once slots are typed buffer views. `woof/ROUTE.c` is already clean (uses `u8slit`/`u8csEq`) — model after it.
 
 ### TODOs
- -[ ] Repro-first: lock woof serve + bro render outputs on existing tables.
- -[ ] `WOOF.pool` → `u8a`/`u8b` arena; slots via `u8bMap`/`u8bAcquire`.
- -[ ] woof: `LIT`→`u8slit`, cell-pokes→`u8bUsed`, Fork→`u8sFork`/`u8sJoin`, envelopes→`u8csc`.
- -[ ] bro: `BRODispatchFragment`/`BROReadURI` → slice + ragel URI lexer.
- -[ ] bro: `bro_lineinfo` typed buffer; completion `u8b`; `scr_emit_char`/`MAUS` → `u8csc`.
- -[ ] Build + ctest; gate woof diff; report done vs skipped.
+-[ ] Repro-first: lock woof serve + bro render outputs on existing tables.
+-[ ] `WOOF.pool` → `u8a`/`u8b` arena; slots via `u8bMap`/`u8bAcquire`.
+-[ ] woof: `LIT`→`u8slit`, cell-pokes→`u8bUsed`, Fork→`u8sFork`/`u8sJoin`, envelopes→`u8csc`.
+-[ ] bro: `BRODispatchFragment`/`BROReadURI` → slice + ragel URI lexer.
+-[ ] bro: `bro_lineinfo` typed buffer; completion `u8b`; `scr_emit_char`/`MAUS` → `u8csc`.
+-[ ] Build + ctest; gate woof diff; report done vs skipped.
 
 ### Blockers and bummers
  -  woof gates on review (spawn/serve path); the pool-arena conversion is the largest single change — keep it isolated and well-tested.

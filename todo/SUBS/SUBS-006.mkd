@@ -1,6 +1,6 @@
 #   SUBS-006: POST git-remote push aborts NOBRANCH on a clean nested sub (LANDED)
 
-**MEDIUM — LANDED `414d9f96` (2026-06-06).**  A clean detached nested sub
+*MEDIUM — LANDED `414d9f96` (2026-06-06).*  A clean detached nested sub
 forwarded `be post -q ?/<sub>/.<parent>/<branch>` with no msg/patch rows, hitting
 `POSTPromote`'s missing-target arm which unconditionally returned `NOBRANCH`,
 aborting the whole git-peer push (157).  A *dirty* detached sub instead routes
@@ -10,13 +10,13 @@ clean sub with nothing to promote.  Fix `sniff/POST.c`: detached wt → `POSTNON
 (no-op, `-q`-swallowed); an attached wt still refuses `NOBRANCH` (DIS-020
 preserved).  Added `test/post/29` repro.
 
-**MEDIUM.**  A `be post ssh://<host>/<parent>.git?master` (git-peer remote)
+*MEDIUM.*  A `be post ssh://<host>/<parent>.git?master` (git-peer remote)
 recurses the local-commit step into mounted subs, but when it reaches a
-**clean, detached** nested sub whose synthetic branch
+*clean, detached* nested sub whose synthetic branch
 (`?/<sub>/.<parent>/<branch>`) does not yet exist, sniff fails
 `?/<sub>/.<parent>/<branch> does not exist — be put ?<branch> first`
 (`NOBRANCH`), which propagates as `be post: aborting parent commit — sub
-recursion failed` (exit 157).  A clean nested sub should be a **no-op**, not
+recursion failed` (exit 157).  A clean nested sub should be a *no-op*, not
 abort the whole push.
 
 ##  Repro

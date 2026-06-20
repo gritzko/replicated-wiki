@@ -1,6 +1,6 @@
 #   SUBS-002: PATCH is unusable on any submodule (gitlink-bearing) parent (LANDED)
 
-**HIGH — LANDED `a31bdfcf` (2026-06-06).**  The sniff gitlink-skip was already
+*HIGH — LANDED `a31bdfcf` (2026-06-06).*  The sniff gitlink-skip was already
 in place; the live bug was that `BE_PLAN_PATCH` registered `BEActSubsPatch` with
 `exclude_mask = URI_AUTHORITY`, and `BEExecute` computes the slot mask *before*
 `BEActResolveRemote` rewrites a transport URI to a local `?<sha>` — so the
@@ -11,9 +11,9 @@ suppressing the spurious `bad ref ''` print on the empty parent-probe query in
 (Committed with `--force`: `sniff/PATCH.c` POSTCFLCT false-positive — the marker
 strings are in comments documenting the conflict-marker grammar, no real conflict.)
 
-**HIGH — verb effectively dead for submodule users.**  `be patch ?<branch>`
+*HIGH — verb effectively dead for submodule users.*  `be patch ?<branch>`
 aborts with `PATCHCFLCT` (exit 157) on ANY parent whose tree contains a
-`160000` gitlink, **even when the gitlink is unchanged by the patch**.  sniff
+`160000` gitlink, *even when the gitlink is unchanged by the patch*.  sniff
 PATCH chokes on the gitlink entry (`sniff: patch: bad ref ''`,
 `patch\tfailed\tvendor/sub`).  Because `BE_PLAN_PATCH` runs `BEActSniffPatch`
 *before* `BEActSubsPatch`, and `BEExecute` returns on the first non-NONE error,
@@ -28,9 +28,9 @@ PATCH chokes on the gitlink entry (`sniff: patch: bad ref ''`,
  4. Observe exit 157 / PATCHCFLCT; `vendor/sub/core.c` stays at the C2 bytes.
 
 Scope nuance (verified by `test/patch/28` vs `29`): the failure reproduces
-when the absorbed tree **carries the gitlink as a diff entry**.  A patch that
+when the absorbed tree *carries the gitlink as a diff entry*.  A patch that
 *bumps* the gitlink (patch/28) reliably aborts.  A regular-file-only patch from
-a **be-internal child branch** that shares the gitlink (patch/29) succeeds —
+a *be-internal child branch* that shares the gitlink (patch/29) succeeds —
 the minimal squash never feeds the gitlink to sniff.  The audit's original
 "even an unchanged gitlink fails" observation used a *fetched* branch whose
 full tree (gitlink included) was re-applied; that construction still trips.
@@ -63,7 +63,7 @@ likely also un-blocks (2).  See `beagle/DISPATCH.c` `BE_PLAN_PATCH` /
 ##  Tests
 `test/patch/28-sub-gitlink-bump-reget` — changed pin must re-get the sub;
 `WILL_FAIL` until fixed.  `test/patch/29-sub-unchanged-gitlink-ok` is a
-**passing** positive control (be-internal regular-file patch over a shared
+*passing* positive control (be-internal regular-file patch over a shared
 gitlink works).  Also blocks `test/all/01-subs-all-verbs`.
 
 [Submodules]: ../wiki/Submodules.mkd "submodule model"

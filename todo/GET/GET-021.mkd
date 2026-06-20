@@ -47,8 +47,8 @@ when that produced-from rev ≠ the branch tip. Method: [Issues].
  -  Don't regress the legitimate `mod`/`mis` reporting of real working-set edits.
  -  Prefer not to widen every post/get into a full re-checkout if a cheaper
     detect-and-warn (compare cur's tree-of-changed-paths vs disk) suffices; but a
-    complete materialization on cur-advance is the alternative (cousin of [[GET-018]]
-    atomic checkout / [[GET-020]] incomplete checkout, and [[GET-017]] ref-advance).
+    complete materialization on cur-advance is the alternative (cousin of [GET-018]
+    atomic checkout / [GET-020] incomplete checkout, and [GET-017] ref-advance).
 
 ##  WIP
 
@@ -64,24 +64,24 @@ when that produced-from rev ≠ the branch tip. Method: [Issues].
     unimplemented. This is a spec/impl gap as much as a feature.
  -  Materialization (the stale-FILE half) is secondary/optional here: showing the
     `miss` commits already warns the user to `be get`; fully re-checking-out on
-    cur-advance is the heavier alternative (cousin of [[GET-018]]/[[GET-020]]).
+    cur-advance is the heavier alternative (cousin of [GET-018]/[GET-020]).
 
 ### TODOs
- -[ ] Repro-first: a hermetic two-worktree store — wt-B lands a commit, wt-A is left
+-[ ] Repro-first: a hermetic two-worktree store — wt-B lands a commit, wt-A is left
       behind; assert `be status` in wt-A prepends a `miss <sha> …` row (and a `post`
       row when wt-A is also ahead), and that the row count clears after `be get`.
- -[ ] Wire `be head`'s local ahead/behind commit sets (`BE.cli.c:1538`/`GRAFHead`)
+-[ ] Wire `be head`'s local ahead/behind commit sets (`BE.cli.c:1538`/`GRAFHead`)
       into `be status` output as `post`/`miss` `commit:?<sha>` hunk rows above the
       file rows; keep file-status reporting unchanged.
- -[ ] (optional/secondary) re-materialize stale cur-delta files so `be diff` stops
+-[ ] (optional/secondary) re-materialize stale cur-delta files so `be diff` stops
       showing phantom reverse-diffs — or document that `miss` rows + `be get` cover it.
 
 ### Blockers and bummers
  -  Needs the worktree's true materialization base tracked/derivable separately from
-    the cur pointer (or a tree-vs-disk compare). Pairs with [[GET-017]]/[[GET-018]].
+    the cur pointer (or a tree-vs-disk compare). Pairs with [GET-017]/[GET-018].
 
 ##  Outcome
- -  **LANDED `ef8901fa`** (FF child of `addd5a9c`; 309/309; 6 files): `be status` PREPENDS the
+ -  *LANDED `ef8901fa`* (FF child of `addd5a9c`; 309/309; 6 files): `be status` PREPENDS the
     cur-vs-tip commit block — `post` rows (ahead) / `miss` rows (behind), newest-first,
     clickable `commit:?<sha>` — above the file rows, with `(behind N, ahead M)` in the
     summary; cleared after `be get`, up-to-date output byte-identical. Reused SNIFF's OWN
@@ -89,7 +89,7 @@ when that produced-from rev ≠ the branch tip. Method: [Issues].
     `GETLocalBranchTip` (empty branch → trunk `?` REFS row, the fix that makes trunk
     worktrees work) in `sniff/GET.c`; `status_emit_commit_diff` in `sniff/SNIFF.exe.c:386`;
     `miss` verb palette slot in `dog/ULOG.c`. New `beagle/test/be-status-ahead-behind.sh`
-    (RED→GREEN). **309/309**. Awaiting gate. Msg: `GET-021: be status shows ahead/behind commit rows`.
+    (RED→GREEN). *309/309*. Awaiting gate. Msg: `GET-021: be status shows ahead/behind commit rows`.
     (This is the detect-and-show half; per-file stale-materialization is the secondary,
     left to a follow-up — the `miss` rows already warn the user to `be get`.)
 

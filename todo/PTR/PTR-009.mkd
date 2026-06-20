@@ -26,12 +26,12 @@ PTR-001 split out the two `abc/URI.c` static `u8 Buf[4096]` because deleting the
  -  Either way remove_dot_segments becomes a PATH-segment walk into a gauge, not the `out++`/`out[-1]` cursor.
 
 ### TODOs
- -[ ] Agree the API shape (A vs B) with the maintainer BEFORE coding.
- -[ ] Repro-first: lock abc/test/URI + RESOLVEURItest outputs.
- -[ ] `URIMergePath` → PATH-segment remove_dot_segments into caller storage; drop `URIMergePathBuf`.
- -[ ] `URIRelativePath` → caller storage; drop `URIRelPathBuf`.
- -[ ] Thread the storage through `URIAbsolute`/`URIRelative` + update `sniff/SUBS.c` + tests.
- -[ ] Build + ctest + URI fuzz; surface diff for review.
+-[ ] Agree the API shape (A vs B) with the maintainer BEFORE coding.
+-[ ] Repro-first: lock abc/test/URI + RESOLVEURItest outputs.
+-[ ] `URIMergePath` → PATH-segment remove_dot_segments into caller storage; drop `URIMergePathBuf`.
+-[ ] `URIRelativePath` → caller storage; drop `URIRelPathBuf`.
+-[ ] Thread the storage through `URIAbsolute`/`URIRelative` + update `sniff/SUBS.c` + tests.
+-[ ] Build + ctest + URI fuzz; surface diff for review.
 
 ### Blockers and bummers
  -  Public-signature change collides with any open URI-00x work on `abc/URI.c`; coordinate before forking.

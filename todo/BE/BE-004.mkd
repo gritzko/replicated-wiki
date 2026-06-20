@@ -1,6 +1,6 @@
 #   BE-004: unify `home` into a process singleton (stop threading `home *`)
 
-`home` is per-invocation ambient state derived purely from **cwd** (store /
+`home` is per-invocation ambient state derived purely from *cwd* (store /
 worktree discovery) — a process property, like `&KEEP` and `&GRAF` already are.
 Yet the codebase threads `home *` through every API and embeds a borrowed
 `home *h` in every dog's state struct, and reopens a fresh local `home` at
@@ -16,7 +16,7 @@ Yet the codebase threads `home *` through every API and embeds a borrowed
     `sniff/SNIFF.h:89`. Every `*Open`/`*OpenBranch` takes `home *`.
  -  ~16 sites declare a local `home X = {}; HOMEOpen(&X,…); … HOMEClose(&X)`
     (e.g. `beagle/BE.cli.c` ×8, `bediff_build_pins`, the get/head/patch paths).
- -  **Precedent:** `KEEP`/`GRAF` are ALREADY process singletons (`&KEEP`,
+ -  *Precedent:* `KEEP`/`GRAF` are ALREADY process singletons (`&KEEP`,
     `&GRAF`, with `KEEPOPEN`/`GRAFOPEN` "already open, use the global, do not
     close" statuses). `home` is the odd one still passed by pointer.
  -  `home` already assumes process scope: one 4 GB `arena`, one `config` mmap,
@@ -30,12 +30,12 @@ Yet the codebase threads `home *` through every API and embeds a borrowed
  -  Delete the ~16 local `home X = {}` reopens; callers just use `&HOME`.
 
 ### Constraints
- -  Submodule recursion **forks child processes** (each child's cwd → its own
+ -  Submodule recursion *forks child processes* (each child's cwd → its own
     `&HOME`), so a single process never needs two homes — the singleton holds.
  -  `home` carries a mutable `project` selector + two branch slots
     (writable cur + one ro aux); the singleton must keep supporting
     project/branch swap for cross-branch and sibling-shard reads.
- -  `dog/HOME` is dog-layer, not `abc/` — no abc changes ([[abc-changes-need-review]]).
+ -  `dog/HOME` is dog-layer, not `abc/` — no abc changes ([abc-changes-need-review]).
 
 ##  WIP
 
@@ -54,13 +54,13 @@ Yet the codebase threads `home *` through every API and embeds a borrowed
     one process) exists anywhere, so the singleton thesis holds.
 
 ### TODOs
- -[v] `&HOME` singleton (`dog/HOME.c`, `extern home HOME`), open/close on it,
+-[v] `&HOME` singleton (`dog/HOME.c`, `extern home HOME`), open/close on it,
       `HOMEOPEN`/`HOMEROBR` on compatible re-open (mirrors `&KEEP`/`&GRAF`).
- -[v] Dropped `home *h` from all six dog structs + the `home *` first arg
+-[v] Dropped `home *h` from all six dog structs + the `home *` first arg
       across HOME/KEEP/GRAF/SNIFF/SPOT/WOOF/BRO/REFSResolveURI/KEEPResolveURI;
       `k->h->` → `HOME.`.
- -[v] `&HOME` opened once in `becli_inner`; reopen sites removed.
- -[v] Sibling-shard read save/restores `HOME.project` (no dual home).
+-[v] `&HOME` opened once in `becli_inner`; reopen sites removed.
+-[v] Sibling-shard read save/restores `HOME.project` (no dual home).
 
 ### Blockers and bummers
  -  None. (The first land's FF-weave hit [DIS-041]; that's fixed, so the

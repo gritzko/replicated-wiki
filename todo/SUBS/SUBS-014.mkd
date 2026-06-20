@@ -1,11 +1,11 @@
 #   SUBS-014: misleading "does not exist — skipped" for a plain untracked dir
 
-**LOW (UX — found mid-fix in [SUBS-009]).**  `be put <dir>` where `<dir>` is a
-plain on-disk **untracked directory** named *without* a trailing slash returns
+*LOW (UX — found mid-fix in [SUBS-009]).*  `be put <dir>` where `<dir>` is a
+plain on-disk *untracked directory* named *without* a trailing slash returns
 `put: <dir> does not exist — skipped` / PUTNONE — misleading, because the dir is
 right there.  The cause is the same `SNIFFClassify` file-iteration gap SUBS-009
 fixed for the sub-add case: a bare dir arg is never matched (only `<dir>/`
-dir-form is).  This is **not** sub-specific — it fires for any ordinary
+dir-form is).  This is *not* sub-specific — it fires for any ordinary
 untracked dir.
 
 ##  Repro

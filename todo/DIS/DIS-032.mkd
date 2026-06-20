@@ -1,6 +1,6 @@
 #   DIS-032: bring PATCH/POST/URI/Verbs specs in line with the bang model
 
-[blog/uris.mkd] is now the authoritative design for the patch/post shape language; the wiki specs still document the old `?`/`#`-presence-and-emptiness model and must be rewritten once [[DIS-030]] (PATCH scope) and [[DIS-031]] (POST provenance) land. The shape language changes shape: PATCH carries scope via `!` (bare `?br` one commit, `?br!` whole branch, `#sha` named), POST carries message + refer/forget via a trailing `!` (`#msg` refer/`parent`, `#msg!` forget/`foster`, `#!` reuse+forget, named-sha→`picked`), `post!` = `--force`, and **commit messages may not end in `!`**. Every page that states the old mapping is now wrong. See [PATCH], [POST], [URI], [Verbs], [Invariants], [CLAUDE].
+[blog/uris.mkd] is now the authoritative design for the patch/post shape language; the wiki specs still document the old `?`/`#`-presence-and-emptiness model and must be rewritten once [DIS-030] (PATCH scope) and [DIS-031] (POST provenance) land. The shape language changes shape: PATCH carries scope via `!` (bare `?br` one commit, `?br!` whole branch, `#sha` named), POST carries message + refer/forget via a trailing `!` (`#msg` refer/`parent`, `#msg!` forget/`foster`, `#!` reuse+forget, named-sha→`picked`), `post!` = `--force`, and *commit messages may not end in `!`*. Every page that states the old mapping is now wrong. See [PATCH], [POST], [URI], [Verbs], [Invariants], [CLAUDE].
 
 ##  Issues
 Multiple spec pages assert the superseded `?`/`#` op-mapping or omit the new rules.
@@ -12,7 +12,7 @@ Multiple spec pages assert the superseded `?`/`#` op-mapping or omit the new rul
  -  [Invariants] — add the message-`!` ban and the row-named-flag → `picked` rule as stated invariants.
 
 ##  Blockers
-Follows [[DIS-030]] + [[DIS-031]] — specs must describe shipped behavior, not aspiration. Keep [blog/uris.mkd] and these pages in sync at land time (the blog is the source, the wiki is the normative spec). Per [[strictmark-wiki-reorg]] respect the StrictMark budgets.
+Follows [DIS-030] + [DIS-031] — specs must describe shipped behavior, not aspiration. Keep [blog/uris.mkd] and these pages in sync at land time (the blog is the source, the wiki is the normative spec). Per [strictmark-wiki-reorg] respect the StrictMark budgets.
 
 ##  Planned
 Rewrite the five pages to the bang model in lockstep with the impl land.

@@ -44,11 +44,11 @@ showing only changed hunks.  Method: [Issues].
     change lines, and whether full-file context needs an "unchanged" tag.
 
 ### TODOs
- -[ ] Design pass: confirm the DIFFREF file-scope branch + bro's tok tagging.
- -[ ] Implement full-file emit for a file-scoped `diff:`; keep tree/dir scope
+-[ ] Design pass: confirm the DIFFREF file-scope branch + bro's tok tagging.
+-[ ] Implement full-file emit for a file-scoped `diff:`; keep tree/dir scope
       changed-hunks-only.
- -[ ] Honor the `#L<n>` anchor for jump/scroll in the full-file view.
- -[ ] Tests: file-scoped `diff:<file>#L<n>` output contains an UNCHANGED line
+-[ ] Honor the `#L<n>` anchor for jump/scroll in the full-file view.
+-[ ] Tests: file-scoped `diff:<file>#L<n>` output contains an UNCHANGED line
       far from any change AND the highlighted changed line, in Plain/Color/TLV;
       tree-scope `diff:` still hunks-only (regression).
 

@@ -1,34 +1,34 @@
 #   SUBS-012: diff / object / history projectors do not cross submodule boundaries (LANDED)
 
-**MEDIUM — LANDED `7d37f90f` (2026-06-06).**  Reused SUBS-011's machinery in
-two shapes (`beagle/BE.cli.c`): **whole-tree fan-out** (`diff:`/`tree:`/`refs:`
+*MEDIUM — LANDED `7d37f90f` (2026-06-06).*  Reused SUBS-011's machinery in
+two shapes (`beagle/BE.cli.c`): *whole-tree fan-out* (`diff:`/`tree:`/`refs:`
 added to `be_projector_recurses` — `diff:` aggregates each sub's path-prefixed
-working-tree changes) and **path-in-mount routing** (`BEProjectorRouteToMount` +
+working-tree changes) and *path-in-mount routing* (`BEProjectorRouteToMount` +
 `be_path_in_mount` — a path-bearing projector whose path lands inside a mount is
-rewritten mount-relative and relayed into the sub shard).  **Covered:** `diff:`
+rewritten mount-relative and relayed into the sub shard).  *Covered:* `diff:`
 (aggregate), `tree:<gitlink>` (descends), `blob:<subpath>?ref`, `log:`/`blame:`
-on a sub path.  **Deferred:** `refs:?**` sub-shard inclusion — `refs:` itself
+on a sub path.  *Deferred:* `refs:?**` sub-shard inclusion — `refs:` itself
 returns "projector not implemented" in keeper (pre-existing gap), so the
 fan-out hook is wired but has nothing to fan into yet.  Repros `test/diff/06`,
 `test/tree/01` added.  (Separate pre-existing parent-side bug found here:
 `blob:<path>` without `?ref` → KEEPNONE, filed as [SUBS-015].)
 
-**MEDIUM (feature gap).**  Beyond search (SUBS-011), the remaining read-only
+*MEDIUM (feature gap).*  Beyond search (SUBS-011), the remaining read-only
 projectors are all parent-only at a gitlink boundary — same root cause
 (`BEProjector` never enumerates subs, and a sub path resolves only in the
 parent shard, which holds a `160000` gitlink, not the sub's objects).
 
 ##  Observed (fixture: parent + `vendor/sub`)
- -  **`diff:`** — a dirty *parent* file shows (`+// DIRTYPARENT` on `main.c`),
+ -  *`diff:`* — a dirty *parent* file shows (`+// DIRTYPARENT` on `main.c`),
     but a dirty *sub* file (`vendor/sub/core.c`) never appears.  `be diff:`
     does not aggregate sub working-tree changes.
- -  **`tree:vendor/sub?master`** → `PROJFAIL` (does not list the gitlink entry
+ -  *`tree:vendor/sub?master`* → `PROJFAIL` (does not list the gitlink entry
     nor descend into the sub tree).
- -  **`blob:vendor/sub/core.c?master`** → `KEEPNONE` (the path is a gitlink in
+ -  *`blob:vendor/sub/core.c?master`* → `KEEPNONE` (the path is a gitlink in
     the parent shard; blob resolution does not hop into the sub shard).
- -  **`refs:?**`** — lists no sub refs (the sub shard's `?/<sub>/.<parent>/…`
+ -  *`refs:?**`* — lists no sub refs (the sub shard's `?/<sub>/.<parent>/…`
     branches are invisible).
- -  **`log:` / `blame:`** — operate on the parent history only; no per-sub or
+ -  *`log:` / `blame:`* — operate on the parent history only; no per-sub or
     sub-path-aware view.
 
 ##  Expected

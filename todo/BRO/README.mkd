@@ -1,6 +1,6 @@
 #   BRO — pager / hunk-renderer tickets
 
-[Bro] is the interactive pager and the **shared hunk renderer**: every
+[Bro] is the interactive pager and the *shared hunk renderer*: every
 projector (`log`/`status`/`grep`/`diff`/`commit`/`blame`…) emits `dog/HUNK`
 streams that bro renders. Tickets here improve that rendering — presentation
 is bro's job, producers only emit `{ts,verb,uri}`+body. Method: [Issues].

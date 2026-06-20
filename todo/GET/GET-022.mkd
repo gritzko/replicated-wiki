@@ -4,7 +4,7 @@ There is no way to materialize ONE file at a given rev into the worktree (git
 `checkout <rev> -- <path>` parity). `be get <path>?<rev>` silently DROPS the path
 and resolves `?<rev>` as a branch/ahead-behind target → a no-op or `KEEPNONE`. The
 `blob:`/`cat:` projection resolves the file at the rev for READING, but no VERB
-writes it back. This is the tool [[GET-021]] needs: fix a single stale working file
+writes it back. This is the tool [GET-021] needs: fix a single stale working file
 without a whole-tree `be get` that would clobber unrelated WIP. Method: [Issues].
 
 ##  Input
@@ -47,14 +47,14 @@ without a whole-tree `be get` that would clobber unrelated WIP. Method: [Issues]
     no-op + `KEEPNONE` at `sniff/GET.c:1711/1821`).
 
 ### TODOs
- -[ ] Repro-first: `be get <path>?<rev>` on a known file/rev → assert the worktree file
+-[ ] Repro-first: `be get <path>?<rev>` on a known file/rev → assert the worktree file
       becomes that rev's blob (and a clean error when the path is absent at the rev).
- -[ ] Implement the single-blob restore arm; `--force` overwrites a dirty path only.
- -[ ] Test: per-file restore changes ONLY that path; unrelated dirty WIP untouched.
+-[ ] Implement the single-blob restore arm; `--force` overwrites a dirty path only.
+-[ ] Test: per-file restore changes ONLY that path; unrelated dirty WIP untouched.
 
 ### Blockers and bummers
- -  Pairs with [[GET-021]] (this is its per-file materialization tool) and the
-    path-scope semantics of [[GET-017]]/SUBS-018.
+ -  Pairs with [GET-021] (this is its per-file materialization tool) and the
+    path-scope semantics of [GET-017]/SUBS-018.
 
 ##  Outcome
  -  (open — filed 2026-06-16 from `be get! graf/BLAME.c?f6bea1c5` → KEEPNONE)

@@ -32,13 +32,13 @@ The 2026-06-15 audit found dog/ rips typed slices into raw cursors, pokes buffer
  -  `MDT`/`MKDT` dedup is the highest-value structural win — extract shared helpers before micro-fixing either copy.
 
 ### TODOs
- -[ ] Repro-first: lock current outputs on the existing dog test tables (tok/HUNK/IGNO/DELT).
- -[ ] ULOG anon-index + scan → typed buffer API.
- -[ ] Unify MDT/MKDT block helpers (slice-based).
- -[ ] HUNK `hk_line` → `u8csc` line-iterator.
- -[ ] IGNO + DELT + DEF slice/buffer conversions.
- -[ ] `git_eat_prefix` + HOME split via `u8csFind`.
- -[ ] Build + ctest; report done vs skipped.
+-[ ] Repro-first: lock current outputs on the existing dog test tables (tok/HUNK/IGNO/DELT).
+-[ ] ULOG anon-index + scan → typed buffer API.
+-[ ] Unify MDT/MKDT block helpers (slice-based).
+-[ ] HUNK `hk_line` → `u8csc` line-iterator.
+-[ ] IGNO + DELT + DEF slice/buffer conversions.
+-[ ] `git_eat_prefix` + HOME split via `u8csFind`.
+-[ ] Build + ctest; report done vs skipped.
 
 ### Blockers and bummers
  -  None known; MDT/MKDT unification may touch shared tokenizer headers — keep dog/INDEX.md updated.

@@ -36,16 +36,16 @@ cleanup. Method: [Issues].
     trace `printf`/`fprintf` per §11.
 
 ### TODOs
- -[ ] Ratify the exact external standard in this ticket.
- -[ ] Add `.clang-format`; reformat `js/`.
- -[ ] Prune the listed dead macros/decls; gate or remove `convert.cpp`/rdx.
- -[ ] Strip the trace `printf`/`fprintf` (§11).
+-[ ] Ratify the exact external standard in this ticket.
+-[ ] Add `.clang-format`; reformat `js/`.
+-[ ] Prune the listed dead macros/decls; gate or remove `convert.cpp`/rdx.
+-[ ] Strip the trace `printf`/`fprintf` (§11).
 
 ### Blockers
  -  Pair the convert/rdx gate-or-remove with JS-008 (fix-before-wiring).
 
 ##  Outcome
- -  **LANDED `9c6118b4`** (2026-06-16): Google C++ ratified + .clang-format
+ -  *LANDED `9c6118b4`* (2026-06-16): Google C++ ratified + .clang-format
     applied + dead surface pruned; deeper rename = optional follow-up.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

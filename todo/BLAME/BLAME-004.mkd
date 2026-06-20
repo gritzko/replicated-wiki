@@ -26,12 +26,12 @@ Repro, identify the overflowing buffer, then make it grow (or stream) rather tha
  -  Likely shrinks naturally once [BLAME-001] stops folding unchanged versions, but the cap must be removed regardless.
 
 ##  Landed
-LANDED `43e90bdb`. **Root cause was NOT a size cap** (none of the three
+LANDED `43e90bdb`. *Root cause was NOT a size cap* (none of the three
 suspects fired): `GRAFFileWeave`'s fold loop (`graf/BLAME.c`) called
-`WEAVEFromBlob`/`WEAVEApply`/`WEAVEDiff` **bare**, so each fold's transient
+`WEAVEFromBlob`/`WEAVEApply`/`WEAVEDiff` *bare*, so each fold's transient
 `ABC_BASS` scratch never rewound and piled up across all versions until the
 1 GB arena exhausted mid-walk → `BNOROOM` (a missing call frame, cf.
-[[avoid-poking-abc-bass-internals]]). Fix: wrap the three per-fold calls in
+[avoid-poking-abc-bass-internals]). Fix: wrap the three per-fold calls in
 `try()` (per-iteration BASS rewind); the woven result survives in each weave's
 own mmap'd TLV. Test `graf/test/blame-bignoroom.sh` (80-commit/4000-line);
 `be blame:beagle/BE.cli.c` → exit 0, 4297 lines; 290/290 green.

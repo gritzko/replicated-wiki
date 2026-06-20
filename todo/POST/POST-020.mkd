@@ -39,9 +39,9 @@ Route the post change-count and the keeper git-push notice through ULOG/ROWS.
 (pending)
 
 ### TODOs
- -[ ] Convert `sniff: N change(s)` (POST.c:2375) to a `post:` ROWS summary; repoint post/13.
- -[ ] Convert the keeper synthetic-coordinate notice (KEEP.exe.c:939) to a ULOG row.
- -[ ] Add a git-remote post repro; re-run `ctest`.
+-[ ] Convert `sniff: N change(s)` (POST.c:2375) to a `post:` ROWS summary; repoint post/13.
+-[ ] Convert the keeper synthetic-coordinate notice (KEEP.exe.c:939) to a ULOG row.
+-[ ] Add a git-remote post repro; re-run `ctest`.
 
 ### Blockers and bummers
 (none yet)

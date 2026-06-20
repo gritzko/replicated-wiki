@@ -3,7 +3,7 @@
 Clicking a diff hunk's nav link (e.g. `diff:ast/BAST.c#L362`) gives "be: no
 results".  The hunk's click-target URI is built with an EMPTY query
 (`graf/WEAVE.c` ~861/961: `HUNKu8sMakeURI(..,name,empty,line)` → `diff:<path>#L`),
-so clicking runs **wt-vs-base** (`beagle/BE.cli.c:251`) — empty for a committed
+so clicking runs *wt-vs-base* (`beagle/BE.cli.c:251`) — empty for a committed
 file.  `diff:`'s range form `?from#to` spends the fragment on `<to>`, leaving no
 room for `#L`.  The `weave` verb already takes a `..` range in the QUERY
 (`graf/GRAF.exe.c:483-493`), freeing the fragment.  Adopt that for `diff:`:
@@ -15,7 +15,7 @@ clickable difflets become `diff:<path>?<from>..<to>#L<n>`.  Method: [Issues].
  -  Nav-URI is the per-hunk `U` click target bro renders; today it omits the
     version → wt-vs-base → "no results" on a committed file (pre-existing;
     DIFF-003 `eaa75793` made file diffs worth clicking, exposing it).
- -  `diff:` range = `?from#to` (query=from, **fragment=to**) — no room for `#L`.
+ -  `diff:` range = `?from#to` (query=from, *fragment=to*) — no room for `#L`.
     `weave file?from..to` (GRAF.exe.c:483-493) puts both refs in the query.
  -  Repro: `be diff:graf/WEAVE.c#L100` → empty; `be diff:graf/WEAVE.c?<from>..<to>`
     (range in query) leaves the fragment free for `#L`.
@@ -45,18 +45,18 @@ clickable difflets become `diff:<path>?<from>..<to>#L<n>`.  Method: [Issues].
     query has no `..` (back-compat), but `..` is the canonical range.
 
 ### TODOs
- -[ ] Repro-first: `test/diff/12-difflet-click` — assert (a)
+-[ ] Repro-first: `test/diff/12-difflet-click` — assert (a)
       `diff:<path>?<from>..<to>#L<n>` resolves to the file's range diff (whole
       file, far unchanged line + change present) and (b) a tree/commit diff's
       per-file hunk URI is the `?from..to#L` form, NOT the empty-query form, in
       Plain/TLV.  Confirm red first.
- -[ ] Parse: `diff:` query with `..` → split `from`/`to` (reuse GRAF.exe.c
+-[ ] Parse: `diff:` query with `..` → split `from`/`to` (reuse GRAF.exe.c
       483-493), route to the range diff; fragment = line anchor.  Guard `?..`.
- -[ ] Nav-URI: thread a `u8cs navver` (`<from>..<to>`) GRAFDiffTreeRefs /
+-[ ] Nav-URI: thread a `u8cs navver` (`<from>..<to>`) GRAFDiffTreeRefs /
       GRAFWeaveDiff → GRAFDiff2Layer → WEAVEEmitDiff/WEAVEEmitFull; the FLUSH
       macros build `scheme + name + "?" + navver` then `HUNKu8sMakeURI(empty
       path, sym, line)` for `#L`.  wt-vs-base callers pass empty navver.
- -[ ] Spec/usage: update `URI.mkd` (`diff:?a..b` + `#L`) and the GRAF diff
+-[ ] Spec/usage: update `URI.mkd` (`diff:?a..b` + `#L`) and the GRAF diff
       usage string.  Keep `weave` behaviour unchanged.
 
 ### Blockers and bummers

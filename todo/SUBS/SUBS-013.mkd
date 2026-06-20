@@ -1,14 +1,14 @@
 #   SUBS-013: full `git submodule add` parity from `be put`
 
-**LOW (feature gap — design needed).**  Escalated from [SUBS-009].  There is no
+*LOW (feature gap — design needed).*  Escalated from [SUBS-009].  There is no
 single-command flow that introduces a brand-new submodule the way
 `git submodule add <url> <path>` does: stage a new `160000` gitlink for the
-mounted sub **and** synthesize the `.gitmodules` section, so a subsequent POST
+mounted sub *and* synthesize the `.gitmodules` section, so a subsequent POST
 records the new sub.  SUBS-009 landed only the actionable refusal; the add
 itself is blocked on two design decisions.
 
 ##  Open decisions (must be agreed before forking)
- -  **URL source for `.gitmodules` `url =`.**  A mounted-but-untracked sub's
+ -  *URL source for `.gitmodules` `url =`.*  A mounted-but-untracked sub's
     row-0 `.be` anchor is `file:/…/.be//?/<title>#<sha>` — a *local shard
     pointer*, not a portable upstream.  Candidates:
       1. require the user to have written the `.gitmodules` `url =` first (the
@@ -16,7 +16,7 @@ itself is blocked on two design decisions.
       2. recover the upstream from the sub-shard's reflog (the URL it was
          fetched from), falling back to the declared `.gitmodules`;
       3. a new explicit arg carrying the URL.
- -  **Pin source / grammar.**  `be put <subpath>` has no pin slot, and
+ -  *Pin source / grammar.*  `be put <subpath>` has no pin slot, and
     `be put <subpath>#<sha>` is already the move-form (`PUTDSTBAD`).  Either a
     new grammar (e.g. a dedicated sub-add verb-shape) or "pin = the sub-wt's
     current tip read from its `.be` anchor" (parity with the existing

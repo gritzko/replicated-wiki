@@ -1,8 +1,8 @@
 #   DIFF-005: `be diff:<file>` emits enormous (whole-file) context
 
 `be diff:dog/INDEX.md` returns 110 lines for a 2-line edit — a single hunk
-`@@ -1,106 +1,106 @@` spanning the ENTIRE file (2 added, 2 removed, **105
-context**). For a tiny change in a large doc this is "enormous context for no
+`@@ -1,106 +1,106 @@` spanning the ENTIRE file (2 added, 2 removed, *105
+context*). For a tiny change in a large doc this is "enormous context for no
 obvious reason." Likely DIFF-003's landed file-scoped full-file diff showing for
 a single-file `diff:`; research whether that is intended/acceptable or should be
 bounded. Evidence: [evidence]. Method: [Issues].
@@ -11,7 +11,7 @@ bounded. Evidence: [evidence]. Method: [Issues].
 
 ### Context
  -  `be diff:dog/INDEX.md` (106-line file, +1 row edited) → 110 output lines, ONE
-    hunk `@@ -1,106 +1,106 @@`, 2 `+` / 2 `-` / **105 context**. The whole file is
+    hunk `@@ -1,106 +1,106 @@`, 2 `+` / 2 `-` / *105 context*. The whole file is
     emitted as context for a 2-line change. Full capture + repro: [evidence].
  -  DIFF-003 ("file-scoped diff: whole file, changes hilited") landed `eaa75793`, so
     a single-file `diff:<path>` plausibly renders the WHOLE file BY DESIGN. But the
@@ -42,8 +42,8 @@ bounded. Evidence: [evidence]. Method: [Issues].
     ticket stays a single-file-projector concern; do NOT add bare-diff handling, and
     drop the "bare diff is whole-file" framing.
  -  The re-investigation surfaced two ADJACENT defects, now their own tickets:
-    [[DIFF-006]] (cosmetic: per-hunk `--- a/`/`+++ b/` repeated, not coalesced per
-    file — the "62 headers vs 17 files" artifact, `dog/HUNK.c:1242`) and [[DIFF-007]]
+    [DIFF-006] (cosmetic: per-hunk `--- a/`/`+++ b/` repeated, not coalesced per
+    file — the "62 headers vs 17 files" artifact, `dog/HUNK.c:1242`) and [DIFF-007]
     (REAL bug: `diff:<largefile>` silently EMPTY — `WEAVEEmitFull`'s 65536-token
     `outtoks` carve overflows on big files, NOROOM swallowed; `WEAVE.c:1030/1099`).
     Note: option-a here (bound large files → `WEAVEEmitDiff`) would INCIDENTALLY mask
@@ -64,11 +64,11 @@ bounded. Evidence: [evidence]. Method: [Issues].
     dispatch sites). (c) KEEP + DOCUMENT only (it self-documents already).
 
 ### TODOs
- -[v] Scanned: full-file is DIFF-003-intended; window site `DIFFREF.c:163`; only
+-[v] Scanned: full-file is DIFF-003-intended; window site `DIFFREF.c:163`; only
       single-file `diff:<file>` unbounded; tree/weave already 3-line.
- -[ ] Maintainer picks UX (a/b/c); implement at `DIFFREF.c:163` (a) or the dispatch
+-[ ] Maintainer picks UX (a/b/c); implement at `DIFFREF.c:163` (a) or the dispatch
       sites (b), or just document (c).
- -[ ] Test: small edit in a >N-line file → bounded context (alongside WEAVE2/01).
+-[ ] Test: small edit in a >N-line file → bounded context (alongside WEAVE2/01).
 
 ### Blockers and bummers
  -  May be working-as-DIFF-003-intended — confirm before "fixing"; the deliverable

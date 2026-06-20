@@ -9,10 +9,10 @@ A 2026-06-11 per-directory redundancy review (12 reviewers, each reading ABC.md 
  -  none active.
 
 CODE-019 (relocate `sha1hex` from `dog/WHIFF.h` to `dog/git/SHA1.h` beside `sha1`,
-finishing [CODE-016]; pure byte-identical move, zero consumer edits) **LANDED `addd5a9c`**.
-CODE-018 **LANDED `a5d133f8`** (51 non-abc `ok64`→PRO.h conversions); its abc/ remainder closed as-is (marginal, review-only — `ROCKGet` free-leak hazard left manual).
+finishing [CODE-016]; pure byte-identical move, zero consumer edits) *LANDED `addd5a9c`*.
+CODE-018 *LANDED `a5d133f8`* (51 non-abc `ok64`→PRO.h conversions); its abc/ remainder closed as-is (marginal, review-only — `ROCKGet` free-leak hazard left manual).
 
-CODE-017 **LANDED `5104a855`** (the solid research-sweep findings; abc/js-FFI/marginal ones skipped or deferred); CODE-016 **LANDED `0a43dec5`**; CODE-001..015 abandoned (bullshit quality, see above).
+CODE-017 *LANDED `5104a855`* (the solid research-sweep findings; abc/js-FFI/marginal ones skipped or deferred); CODE-016 *LANDED `0a43dec5`*; CODE-001..015 abandoned (bullshit quality, see above).
 
 
 [CODE-018]: CODE-018/README.mkd "manual ok64 propagation → PRO.h call()/try()"

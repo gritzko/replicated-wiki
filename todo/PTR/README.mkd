@@ -4,16 +4,16 @@ A 2026-06-15 per-directory audit (8 investigators, each reading [ABC] + `S.md`/`
 
 ##  Active tickets
 
- -  [PTR-001] — abc/: `BSDDiff` slice→cursor teardown, `URIMergePath` manual RFC parse + static `Buf[4096]`, TLV unaligned cast-writes, ANSI OSC parse. **GATED — surface diff, never autoland.**
- -  [PTR-002] — dog/: ULOG pokes, `MDT`/`MKDT` unify, `HUNK` `hk_line`, `IGNO`/`DELT`, `DEF` bufs. **LANDED `67c65e31`**.
- -  [PTR-003] — keeper/: WIRE `wh128` run-scan → `wh128sFindGE`, buffer pokes, `keep_read_full`, sha slices (`a_rawc`). **LANDED `e918e44d`**.
- -  [PTR-004] — graf/: `DAGParents` subtraction, `weave_set_*`, sha-hex, slice ptr-arith (a$→a_pad, cell-assign→`*Mv`). **LANDED `76b87497`**.
- -  [PTR-005] — sniff/: sha-hex decode 11×, `memcmp`→`sha1Eq`/`u8csEq`, `parse_tree`/`sort_entries` raw arrays (+ enabling `dog/ULOG.h` `ulogrec`/`ulogreccs` slice family). **LANDED `b71eba2a`** (3-way-merged onto POST-017's `sniff/POST.c`; 304/304).
+ -  [PTR-001] — abc/: `BSDDiff` slice→cursor teardown, `URIMergePath` manual RFC parse + static `Buf[4096]`, TLV unaligned cast-writes, ANSI OSC parse. *GATED — surface diff, never autoland.*
+ -  [PTR-002] — dog/: ULOG pokes, `MDT`/`MKDT` unify, `HUNK` `hk_line`, `IGNO`/`DELT`, `DEF` bufs. *LANDED `67c65e31`*.
+ -  [PTR-003] — keeper/: WIRE `wh128` run-scan → `wh128sFindGE`, buffer pokes, `keep_read_full`, sha slices (`a_rawc`). *LANDED `e918e44d`*.
+ -  [PTR-004] — graf/: `DAGParents` subtraction, `weave_set_*`, sha-hex, slice ptr-arith (a$→a_pad, cell-assign→`*Mv`). *LANDED `76b87497`*.
+ -  [PTR-005] — sniff/: sha-hex decode 11×, `memcmp`→`sha1Eq`/`u8csEq`, `parse_tree`/`sort_entries` raw arrays (+ enabling `dog/ULOG.h` `ulogrec`/`ulogreccs` slice family). *LANDED `b71eba2a`* (3-way-merged onto POST-017's `sniff/POST.c`; 304/304).
 PTR-006 (spot/ void* slab, base-ptr binds, fixed bufs) CLOSED 2026-06-16 — WON'T FIX
 (no value; churn not justified on the hot search path).
- -  [PTR-007] — bro/ + woof/: raw `u8 *WOOF.pool` (root cause forcing ~6 arith sites), `BRODispatchFragment(char*)` manual parse. **woof gates before landing.**
- -  [PTR-008] — mark/ + js/ + beagle/: execvp argv offset-math (3× dup), hand Fork/Join, `MKDTLineMarker` out-ptr, js typed-array `+len`. **PARTIAL:** MKDT checkbox→`u8csHasPrefix` (bounds-safe) landed `9bfb0157`. The rest never landed — its worktree was a stale (pre-PTR-005) tangle that reverted landed work, now DISCARDED; remaining scope (blockquote/list HasPrefix still raw on trunk, `MKDTLineMarker` out-ptr→slice 4-file unit, mark/js/beagle ptr-discipline) needs a FRESH rework against trunk if pursued.
- -  [PTR-009] — abc/URI: deleting the two static `Buf[4096]`. **LANDED `b0455595`** (abc sub `5f84502a`): ruled Candidate A with a `u8s out` param — `URIAbsolute`/`URIRelative` take caller-owned `out` (callers pass `u8bIdle(buf)`), result views the written prefix via `u8gLeftC`; `remove_dot_segments` is now a `PATHu8sDrain` walk. Resolves PTR-001's URIMergePath/static-Buf item.
+ -  [PTR-007] — bro/ + woof/: raw `u8 *WOOF.pool` (root cause forcing ~6 arith sites), `BRODispatchFragment(char*)` manual parse. *woof gates before landing.*
+ -  [PTR-008] — mark/ + js/ + beagle/: execvp argv offset-math (3× dup), hand Fork/Join, `MKDTLineMarker` out-ptr, js typed-array `+len`. *PARTIAL:* MKDT checkbox→`u8csHasPrefix` (bounds-safe) landed `9bfb0157`. The rest never landed — its worktree was a stale (pre-PTR-005) tangle that reverted landed work, now DISCARDED; remaining scope (blockquote/list HasPrefix still raw on trunk, `MKDTLineMarker` out-ptr→slice 4-file unit, mark/js/beagle ptr-discipline) needs a FRESH rework against trunk if pursued.
+ -  [PTR-009] — abc/URI: deleting the two static `Buf[4096]`. *LANDED `b0455595`* (abc sub `5f84502a`): ruled Candidate A with a `u8s out` param — `URIAbsolute`/`URIRelative` take caller-owned `out` (callers pass `u8bIdle(buf)`), result views the written prefix via `u8gLeftC`; `remove_dot_segments` is now a `PATHu8sDrain` walk. Resolves PTR-001's URIMergePath/static-Buf item.
 
 ##  Cross-cutting (apply the same canonical fix in every dir)
 

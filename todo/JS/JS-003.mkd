@@ -31,15 +31,15 @@ the syscall, and a detached ArrayBuffer's NULL bytes ptr is deref'd. Flagged by
     so a detached buffer throws (or returns undefined) rather than deref'ing NULL.
 
 ### TODOs
- -[ ] Repro-first: pass a detached ArrayBuffer (transferred/neutered) and a value
+-[ ] Repro-first: pass a detached ArrayBuffer (transferred/neutered) and a value
       with a throwing `toString` into `file.write` / `file.read`; assert no crash.
- -[ ] Add the exception + NULL-ptr guards at each listed site.
+-[ ] Add the exception + NULL-ptr guards at each listed site.
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `07f858b7`** (2026-06-16): post-call `*exception` checks +
+ -  *LANDED `07f858b7`* (2026-06-16): post-call `*exception` checks +
     NULL bytes-ptr guards at file.write/read, net.connect, stdio, utf8.Encode;
     detached-buffer (`b.transfer()`) repro now throws instead of write(NULL,0).
 

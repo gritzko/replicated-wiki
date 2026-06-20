@@ -1,10 +1,10 @@
 #   SUBS-020: submodule-source resolution by parent kind (beagle / git .git / git path) — GET landed, POST mirror REOPENED
 
-`be get` must pick **where** to fetch each submodule from based on the kind of
+`be get` must pick *where* to fetch each submodule from based on the kind of
 the parent source, then validate by gitlink-pin presence and fall back.  This
 formalises and extends the resolution already shipped for beagle parents
 (see [Submodules], [submodule-parent-source-fetch]); the git-parent branch is
-split by the `.git` suffix. **REOPENED 2026-06-16:** `be post`/push must MIRROR
+split by the `.git` suffix. *REOPENED 2026-06-16:* `be post`/push must MIRROR
 this — send each sub commit to the SAME destination GET would fetch it from
 (same peer for beagle, parent-relative for git non-`.git`), so the submodule is
 tracked on the other end; only a git `.git` parent pushes the sub to its
@@ -15,16 +15,16 @@ independent official URL.
 ### Context
  -  Today beagle parents fetch subs from the same peer (resolution order 1→3),
     while git parents "behave like git" with no documented `.git` split.
- -  We always hold the gitlink **pin sha**, so every attempt is validated by
+ -  We always hold the gitlink *pin sha*, so every attempt is validated by
     whether that commit is present afterward; on miss, fall to the next.
 
 ### Goals
- 1. **Parent is a beagle repo** (`be:`/`keeper:`, or `file:`/`ssh:` at a `.be`
-    store): request the sub from the **same peer** (parent locator + project
+ 1. *Parent is a beagle repo* (`be:`/`keeper:`, or `file:`/`ssh:` at a `.be`
+    store): request the sub from the *same peer* (parent locator + project
     query); if that fails, fall back to the official `.gitmodules` URL.
- 2. **Parent is a git repo, parent URI ends in `.git`**: go straight to the
+ 2. *Parent is a git repo, parent URI ends in `.git`*: go straight to the
     official URI from `.gitmodules` (no path calculation).
- 3. **Parent is a git repo, parent URI does NOT end in `.git`**: compute the
+ 3. *Parent is a git repo, parent URI does NOT end in `.git`*: compute the
     sub URI by resolving its path relative to the parent URI, try that; if it
     fails, fall back to the official `.gitmodules` URL.
 
@@ -32,20 +32,20 @@ independent official URL.
 `be post`/push routes each recursed sub commit to the SAME destination case 1–3
 above would FETCH it from — push and fetch are symmetric so the submodule is
 tracked on the other end:
- 1. **Beagle parent** → push the sub to the **same peer** (parent locator +
+ 1. *Beagle parent* → push the sub to the *same peer* (parent locator +
     `?/<project>`), the same shard GET case 1 reads. Expect the sub project
     tracked at that peer.
- 2. **Git parent ending `.git`** → push the sub to its **official `.gitmodules`
-    URL** (independently hosted; git submodules live in their own remote).
- 3. **Git parent NOT ending `.git`** → push the sub to the **parent-relative
-    URI** (same host, path resolved off the parent), the same address GET case 3
+ 2. *Git parent ending `.git`* → push the sub to its *official `.gitmodules`
+    URL* (independently hosted; git submodules live in their own remote).
+ 3. *Git parent NOT ending `.git`* → push the sub to the *parent-relative
+    URI* (same host, path resolved off the parent), the same address GET case 3
     computes. Expect the sub tracked alongside the parent.
 Summary (user): send the sub to the same repo as the parent when beagle OR not
 `.git`; only a `.git` git parent pushes the sub to its independent official URL.
 
 ### Constraints
  -  Reuse the existing resolver (`sniff/SUBS.c` `subs_recover_locator`,
-    `subs_pin_present`, the `is_beagle` probe); do **not** re-roll locator or
+    `subs_pin_present`, the `is_beagle` probe); do *not* re-roll locator or
     pin-check logic. Recursion stays a child process per sub.
  -  No new flags; this is the default `be get` policy. `--nosub` still opts out.
 
@@ -58,13 +58,13 @@ Summary (user): send the sub to the same repo as the parent when beagle OR not
     in all three cases.
 
 ### TODOs
- -[v] Table-driven test `test/get/50-file-subs-git-relative` (3 cases:
+-[v] Table-driven test `test/get/50-file-subs-git-relative` (3 cases:
       relative-resolve hit, fallback-to-official, `.git` single-try).
- -[v] `.git`-suffix split + parent-kind branch in `sniff/SUBS.c`
+-[v] `.git`-suffix split + parent-kind branch in `sniff/SUBS.c`
       (`subs_src_ends_git`); cases 1/2 confirmed unchanged.
- -[v] Case 3 relative-URI computation (`subs_candidate_git_rel`,
+-[v] Case 3 relative-URI computation (`subs_candidate_git_rel`,
       git directory-base resolution).
- -[v] POST mirror: route the sub push destination by parent kind via the SAME
+-[v] POST mirror: route the sub push destination by parent kind via the SAME
       resolver (exported `SNIFFSubSrcEndsGit` / `SNIFFSubCandidateGitRel`).
       beagle→same peer (was already done — `bepush_recurse_cb`); git-`.git`→
       official URL, git-non-`.git`→parent-relative via a NEW
@@ -74,7 +74,7 @@ Summary (user): send the sub to the same repo as the parent when beagle OR not
       keeper/KEEP.exe.c to project-strip the cur/peer-refname branch (not just
       the explicit `?query`) so the synthetic-`.`-prefix → git default-branch
       mapping (POST-013 `git_wire_default`) fires.
- -[v] POST mirror tests: `post/43-sub-push-git-official-url` (case 2, local
+-[v] POST mirror tests: `post/43-sub-push-git-official-url` (case 2, local
       file://, RED→GREEN) asserts the sub lands on its official `.gitmodules`
       url; `post/44-sub-push-git-parent-relative` (case 3, ssh) mounts via an
       absolute url then rewrites `.gitmodules` to `../sub` and asserts the push
@@ -90,7 +90,7 @@ Summary (user): send the sub to the same repo as the parent when beagle OR not
  -  GET side LANDED `4121eaaf` — git-parent split on `.git`; case-3 parent-relative
     resolution before the official-URL fallback; beagle parents unchanged.
     Reuses the existing `sniff/SUBS.c` resolver/pin-check. 287/287 green.
- -  POST mirror **LANDED `3eba8e76`** (FF child of `9bfb0157`; clean `sniff/SUBS.c`
+ -  POST mirror *LANDED `3eba8e76`* (FF child of `9bfb0157`; clean `sniff/SUBS.c`
     weave-merge keeping both PTR-005's ptr-discipline and the resolver export; 305/305 +
     post/43&44 green WITH_SSH): the
     git-peer push arm of `BEActSubsPost` (`beagle/BE.cli.c`) was a NO-OP for cases
@@ -101,8 +101,8 @@ Summary (user): send the sub to the same repo as the parent when beagle OR not
     via `bepush_recurse_cb`); plus `keeper/KEEP.exe.c` now project-strips the
     cur/peer-refname branch (not only the explicit `?query`) so the synthetic
     `?/<sub>/.<parent>` → git default-branch mapping (POST-013 `git_wire_default`)
-    fires. Tests `post/43` (case 2) + `post/44` (case 3, ssh), RED→GREEN; **305/305
-    main + 384/384 WITH_SSH**. Awaiting gate. (Scope: GET-side case-3 over ssh is a
+    fires. Tests `post/43` (case 2) + `post/44` (case 3, ssh), RED→GREEN; *305/305
+    main + 384/384 WITH_SSH*. Awaiting gate. (Scope: GET-side case-3 over ssh is a
     pre-existing GET limitation, untouched.)
 
 [Submodules]: ../../wiki/Submodules.mkd "submodule model"

@@ -4,11 +4,11 @@
 
 ##  Active tickets
 
- -  [GET-009] — efficient beagle↔beagle (`be://`) sync umbrella: replace `WIRE.c`'s byte-offset watermark with object-level reachability serving (`closure(wants) − closure(haves)`), cross-`file_id` serving, and a redundant-pack GC/compaction for already-bloated shards. St.1 ([[GET-007]] latest-copy) landed; St.2-4 open.
+ -  [GET-009] — efficient beagle↔beagle (`be://`) sync umbrella: replace `WIRE.c`'s byte-offset watermark with object-level reachability serving (`closure(wants) − closure(haves)`), cross-`file_id` serving, and a redundant-pack GC/compaction for already-bloated shards. St.1 ([GET-007] latest-copy) landed; St.2-4 open.
 
  -  [GET-028] — `be get ssh://…` aborts `ZINFFAIL`/`WIRECLFL` mid-ingest when the spawned `keeper` helper is stale: `be-cli` had no build dep on `keeper-cli`/`spot`/`graf`/`sniff`, so `ninja be` relinks none of them. Fix: `add_dependencies` in `beagle/CMakeLists.txt`. Verified (clone exit 0); pending land.
 
- -  [GET-017] — `be get --nosub` won't advance a store-backed *switch*-worktree's ref at all (stays pinned at its base; MEM-041/042 stuck at `5104a855` while clone-shaped MEM-044 advanced), forcing fresh-clone salvage to land. Likely a `.be`-switch-shape FF gap ([[GET-012]] area); `.refs.idx` was fresh (not the stale-idx trap). Needs a deterministic repro pinning the `.be` shape.
+ -  [GET-017] — `be get --nosub` won't advance a store-backed *switch*-worktree's ref at all (stays pinned at its base; MEM-041/042 stuck at `5104a855` while clone-shaped MEM-044 advanced), forcing fresh-clone salvage to land. Likely a `.be`-switch-shape FF gap ([GET-012] area); `.refs.idx` was fresh (not the stale-idx trap). Needs a deterministic repro pinning the `.be` shape.
 
  -  [GET-018] — make `be get`'s wt update atomic (mid-write failure → ref/wtlog/tree all unchanged). Split from GET-016 Part 1: can't just reorder the commit point (breaks `test/get/09`/`10`'s documented wtlog-grows-then-`--force`-replay model); needs stage-to-temp+atomic-swap or journal+rollback, design pass first.
 
@@ -17,11 +17,11 @@ revert landmine; `be status` now PREPENDS a cur-vs-tip `post`/`miss` commit bloc
 own DAG walk) landed `ef8901fa`. Follow-up: the per-file stale re-materialize (the `miss`
 rows already warn the user to `be get`).
 
- -  [GET-022] — no per-file checkout-from-rev: `be get <path>?<rev>` DROPS the path and resolves `?<rev>` as a branch → `KEEPNONE`/no-op (`sniff/GET.c:1711`). No git `checkout <rev> -- <path>` parity; `blob:`/`cat:` resolve it for reading but no verb writes it back. Needed by [[GET-021]] to restore one stale file without a whole-tree `be get` clobbering other WIP.
+ -  [GET-022] — no per-file checkout-from-rev: `be get <path>?<rev>` DROPS the path and resolves `?<rev>` as a branch → `KEEPNONE`/no-op (`sniff/GET.c:1711`). No git `checkout <rev> -- <path>` parity; `blob:`/`cat:` resolve it for reading but no verb writes it back. Needed by [GET-021] to restore one stale file without a whole-tree `be get` clobbering other WIP.
 
 GET-020 (`be get file:<wt>` left a HALF-POPULATED tree + `SNIFFFAIL` under concurrent
 worktree creation) landed `49039f36`. GET-026 (bare `be get` = default GET + resulting-state
-banner via the shared ROWS path; orphaned overview moved to [[STATUS-001]]) landed `1b5d3def`
+banner via the shared ROWS path; orphaned overview moved to [STATUS-001]) landed `1b5d3def`
 + sub-test fix `cb94e64e`. GET-027 (`be get be://` clone read a degenerate zero-length pack
 bookmark → WIRECRPT; the "off-by-one hashlet" theory was wrong, two independent bugs fixed)
 landed `a8fa2e87`.

@@ -5,7 +5,7 @@
 
 ##  The model
 
-A weave is one file's whole DAG history as **structure-of-arrays**, byte-compatible with HUNK's `text`+`toks`. The current interleaved-TLV form plus its 7-buffer runtime decode (`wdec`) collapse into a single canonical columnar form; `struct weave` is a zero-copy parsed view over a serialized blob, and the builders write a fresh blob into a caller-owned `u8s` (resource-at-top, CLAUDE §5).
+A weave is one file's whole DAG history as *structure-of-arrays*, byte-compatible with HUNK's `text`+`toks`. The current interleaved-TLV form plus its 7-buffer runtime decode (`wdec`) collapse into a single canonical columnar form; `struct weave` is a zero-copy parsed view over a serialized blob, and the builders write a fresh blob into a caller-owned `u8s` (resource-at-top, CLAUDE §5).
 
 ```c
 typedef struct {
@@ -76,18 +76,18 @@ ok64 WEAVEEmitMerged(weave const *w, weavescope const *groups, u32 ngroups,
 
 ##  Producing any past rev
 
-Content at rev R = walk `toks` in weave order and emit `text[tok]` for every token whose **inserter bit set in scope(R)** and **no remover bit set in scope(R)**, where `scope(R)` is the bitmap of R's ancestor closure over `commits[]` (built from R's active hashlets via `WEAVEScope`). This is exactly today's `weave_scope_alive` single-predicate classifier; "produce a rev" is the `to`-only degenerate of a diff. `WEAVEAlive` is the hot tip case (rm-bit-clear scan, no set lookups). The weave alone cannot compute `scope(R)` (no parent edges stored) — graf's DAG supplies the ancestor `u64` ids, mapped through `commits[]`, as today. Fast path: with `commits[]` in fold order, a linear rev's scope is a prefix test (`index ≤ k`); only a cross-branch rev after a merge needs the full ancestor set.
+Content at rev R = walk `toks` in weave order and emit `text[tok]` for every token whose *inserter bit set in scope(R)* and *no remover bit set in scope(R)*, where `scope(R)` is the bitmap of R's ancestor closure over `commits[]` (built from R's active hashlets via `WEAVEScope`). This is exactly today's `weave_scope_alive` single-predicate classifier; "produce a rev" is the `to`-only degenerate of a diff. `WEAVEAlive` is the hot tip case (rm-bit-clear scan, no set lookups). The weave alone cannot compute `scope(R)` (no parent edges stored) — graf's DAG supplies the ancestor `u64` ids, mapped through `commits[]`, as today. Fast path: with `commits[]` in fold order, a linear rev's scope is a prefix test (`index ≤ k`); only a cross-branch rev after a merge needs the full ancestor set.
 
 ##  WEAVENext / WEAVEMerge
 
- -  **Next** diffs `WEAVEAlive(w)` against tokenized `new_blob` (RAPHash +
+ -  *Next* diffs `WEAVEAlive(w)` against tokenized `new_blob` (RAPHash +
     relocated BRAM/NEIL): survivors keep identity, deleted survivors gain
     `commit` as a remover (`rm`, `custom` if multi), new tokens insert with
     inserter=`commit` anchored before the next survivor — today's
     `weave_diff_core`, emitting columns not TLV.
- -  **Merge** walks A and B by `(commit-id, per-commit ordinal)`: a token in
+ -  *Merge* walks A and B by `(commit-id, per-commit ordinal)`: a token in
     both emits once with remover set = UNION (dead in either ⇒ dead); a
-    side-only run splices in; colliding concurrent runs order by **commit-id**
+    side-only run splices in; colliding concurrent runs order by *commit-id*
     (total, deterministic — no timestamp tie-break). This is the
     shared-sequence merge [DIS-003] prescribes; conflict markers stay
     render-time-only in `WEAVEEmitMerged`.

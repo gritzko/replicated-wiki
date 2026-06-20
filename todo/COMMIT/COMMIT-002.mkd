@@ -1,7 +1,7 @@
 #   COMMIT-002: `commit:` should inline the full diff as relayed hunks
 
 [COMMIT-001] (landed `dac9dab7`) made `be commit:?<sha>` append a navigable
-`diff:?<sha>` **link** after the metadata, keeping keeper diff-free.  In use
+`diff:?<sha>` *link* after the metadata, keeping keeper diff-free.  In use
 that is one click too many: the user wants `commit:` to read like `git show`
 — commit metadata immediately followed by the FULL diff, inline, as `dog/HUNK`
 hunks.  Since keeper owns `commit:` and graf owns `diff:` (separate dog
@@ -46,23 +46,23 @@ mechanism the sub recursion already uses.  This supersedes COMMIT-001's link.
 ##  WIP
 
 ### Design decisions (to confirm in session)
- -  **Where to chain.** Option A (preferred): BE dispatcher special-cases
+ -  *Where to chain.* Option A (preferred): BE dispatcher special-cases
     `commit:` — run keeper `commit:?<sha>` for the metadata hunk, then run graf
     `diff:?<sha>` and relay its hunks into the same output, single resolved sha
     threaded through.  Option B: keeper keeps emitting the link and BE expands
     any `diff:?` `U`-link into the actual relayed hunks (more general, more
     surface).  Lean A — it is literally "run it, relay hunks".
- -  **Ordering vs subs.** A plain `commit:` on a parent must emit parent
+ -  *Ordering vs subs.* A plain `commit:` on a parent must emit parent
     metadata + parent diff, THEN recurse into subs (mirror `diff:`'s existing
     sub fan-out so pins render once, in order) — audit against the [DIFF-001]
     diff-sub relay so the two stay coherent.
 
 ### TODOs
- -[ ] Confirm Option A vs B with a quick spike on `BE.cli.c:1104` dispatch.
- -[ ] Thread the resolved commit sha from the `commit:` step into a
+-[ ] Confirm Option A vs B with a quick spike on `BE.cli.c:1104` dispatch.
+-[ ] Thread the resolved commit sha from the `commit:` step into a
       `diff:?<sha>` graf run; relay via `HUNKu8sRelay`.
- -[ ] Remove/keep the COMMIT-001 link per the TLV-consumer decision.
- -[ ] Test: extend `test/commit/01-diff-link` (or a new `commit/02-inline-diff`)
+-[ ] Remove/keep the COMMIT-001 link per the TLV-consumer decision.
+-[ ] Test: extend `test/commit/01-diff-link` (or a new `commit/02-inline-diff`)
       — assert `be commit:?<sha>` output contains BOTH the metadata header AND
       the diff body (e.g. the changed token), in Color/Text/TLV; sub case
       asserts the sub's pin-range diff is relayed under the subpath.

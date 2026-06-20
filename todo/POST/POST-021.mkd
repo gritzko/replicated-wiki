@@ -39,18 +39,18 @@ A tree N commits ahead of its git remote cannot push; the wire dies mid-send.
 (pending root-cause)
 
 ### TODOs
- -[ ] Find the BNOROOM raiser on the SEND path. Leads: `keeper/KEEP.c:742`
+-[ ] Find the BNOROOM raiser on the SEND path. Leads: `keeper/KEEP.c:742`
       (`if (u8bIdleLen(out) < outsz) return BNOROOM` — a fixed-cap out buffer), the
       git push send in `keeper/WIRE.c` / `keeper/KEEP.exe.c` (receive-pack peer) /
       `keeper/KEEP.cli.c`. BNOROOM is an abc buffer overflow → a send/pkt buffer is
       likely undersized for the pack stream (cf. the `dog/WEAVE.c` rms `NOROOM` fixed
       in DOG-003 — same undersized-buffer class).
- -[ ] Check whether the MULTI-LINE commit message on `25fb62bd` trips the wire encoder
+-[ ] Check whether the MULTI-LINE commit message on `25fb62bd` trips the wire encoder
       (work.mkd: wire messages "may be multi-line once the parser allows"); if so fix
       the encoder, or enforce the 1-line/≤64-char commit rule and re-test.
- -[ ] Check the submodule-recursion interaction (the abc sub-push precedes the failing
+-[ ] Check the submodule-recursion interaction (the abc sub-push precedes the failing
       parent push; does the parent inherit a spent buffer / bad state?).
- -[ ] Repro-first (CLAUDE.md §17): a failing push test, then fix.
+-[ ] Repro-first (CLAUDE.md §17): a failing push test, then fix.
 
 ### Blockers and bummers
  -  Complete breakage of git-scheme publishing. The DOG line is stranded local-only on

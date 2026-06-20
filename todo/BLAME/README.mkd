@@ -10,7 +10,7 @@
 BLAME-006a (blame skipped a DELETED file instead of folding an empty layer → readd
 inherited the ROOT seq) landed `fa09701f`. BLAME-006b (`commit:?<root>` token-diffed
 the whole initial tree — root cause a 9.5 MB binary; skip token-diff of binary blobs +
-one-sided short-circuit) landed `8d66369c`. Both split from the [[BLAME-006]] umbrella scan.
+one-sided short-circuit) landed `8d66369c`. Both split from the [BLAME-006] umbrella scan.
 
 [BLAME-006]: BLAME-006.mkd "umbrella scan (split into 006a/006b)"
 [BLAME-006a]: BLAME-006a.mkd

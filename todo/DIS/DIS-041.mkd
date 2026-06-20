@@ -3,12 +3,12 @@
 When a store-backed worktree that is BEHIND trunk is fast-forwarded
 (`be get '?'`), files that diverged on both sides need a 3-way weave. If the
 relevant commit DAG is not indexed, the weave drops to
-`build_tip_weave_tunable`'s **no-history fallback** (`graf/GET.c:537-548`),
+`build_tip_weave_tunable`'s *no-history fallback* (`graf/GET.c:537-548`),
 which stamps each side's blob with its own tip hashlet so the two sides share
 NO baseline birth-ids → `WEAVEApply` matches nothing → `GRAFFAIL`
 (`sniff/GET.c:748`), and sniff prints `merge failed … (graf err) — leaving wt
 content untouched`, i.e. the file is left UNMERGED. The only correct fallback
-is to **index the commits and RETRY** the weave — never bail, never silently
+is to *index the commits and RETRY* the weave — never bail, never silently
 return `ours`. See [PATCH], [POST], [Graf].
 
 ##  Input
@@ -39,22 +39,22 @@ return `ours`. See [PATCH], [POST], [Graf].
 ##  WIP
 
 ### Design decisions
- -  **RETRACTED (unproven, was BS):** the prior conclusion "the `graf err` is a
+ -  *RETRACTED (unproven, was BS):* the prior conclusion "the `graf err` is a
     verb-layer base/target SELECTION failure" is withdrawn — it was asserted
     without a live repro. Diagnose from the repro now available, not theory.
- -  **PROVEN, keep:** the graf weave ENGINE merges disjoint edits
+ -  *PROVEN, keep:* the graf weave ENGINE merges disjoint edits
     byte-identical to `git merge-file` (the frozen SUBS-019 trio, 135584 B,
     clean via `GRAFMerge3Bytes`/`GRAFMergeWtFile`/`GRAFMergeWtFileTunable`). So
     the engine is correct; the bug is the verb dropping to the un-indexed
     fallback instead of indexing + retrying.
 
 ### TODOs
- -[ ] Repro-first: a hermetic small store + behind-worktree FF that triggers
+-[ ] Repro-first: a hermetic small store + behind-worktree FF that triggers
       `graf err` (regression test, e.g. extend `graf/test/MERGEWT01.c`).
- -[ ] Make the weave path index the commits and RETRY when history is absent
+-[ ] Make the weave path index the commits and RETRY when history is absent
       (`build_tip_weave_tunable` / `GRAFIndexFromTips`); propagate index
       failure (drop the `(void)`), never leave-untouched / return-ours.
- -[ ] Prove `be get '?'` on a real behind-worktree MERGES the divergent files.
+-[ ] Prove `be get '?'` on a real behind-worktree MERGES the divergent files.
 
 ### Blockers and bummers
  -  Currently blocks landing BE-004 (its FF hits this); BE-004 stays unmerged

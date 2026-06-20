@@ -31,15 +31,15 @@ Flagged by the lifecycle + custody lenses (high confidence). Method: [Issues].
     stdio unprotect between `JABCio_STD` and the table loop, free the table.
 
 ### TODOs
- -[ ] Repro-first: open + close enough files to force an fd reuse and assert the old
+-[ ] Repro-first: open + close enough files to force an fd reuse and assert the old
       object is unprotected; uninstall and assert stdout/stderr still write.
- -[ ] Apply the four custody fixes; verify under ASAN/LSAN.
+-[ ] Apply the four custody fixes; verify under ASAN/LSAN.
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `08df5879`** (2026-06-16): guard the slot-overwrite unprotect in
+ -  *LANDED `08df5879`* (2026-06-16): guard the slot-overwrite unprotect in
     `JABCioMakeFileObject`, skip `close()` for fds 0/1/2 in `JABCioCloseFile`,
     dedup the stdio unprotect (null `JS_FILES[0..2]` before the close-loop), and
     `free(JS_FILES)` on uninstall; C++ harness now drives io install/uninstall

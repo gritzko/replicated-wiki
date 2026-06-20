@@ -1,17 +1,17 @@
 #   KEEP-001: converge the three near-duplicate keeper tree-walkers
 
-Keeper carries **three copies** of the same "recurse a git tree, hold a per-level scratch, collect subtree shas" walker. They drifted apart, and the MEM-023/MEM-024 memory-safety work had to fix the *same* per-level-1 MiB-buffer bug in each copy separately — the clearest possible signal they should be one function. Per [CLAUDE] §13 (don't reimplement) and the reuse-not-local-dups rule, fold them into a single keeper-owned walker with a visitor callback. See [Keeper].
+Keeper carries *three copies* of the same "recurse a git tree, hold a per-level scratch, collect subtree shas" walker. They drifted apart, and the MEM-023/MEM-024 memory-safety work had to fix the *same* per-level-1 MiB-buffer bug in each copy separately — the clearest possible signal they should be one function. Per [CLAUDE] §13 (don't reimplement) and the reuse-not-local-dups rule, fold them into a single keeper-owned walker with a visitor callback. See [Keeper].
 
 ##  Issues
 The three walkers are byte-similar but each grew its own extra logic, so a fix in one silently leaves the others broken (exactly what happened in MEM-023/024).
 
- -  `keeper/WALK.c:walk_tree_dive` (`:40`) — the general **visitor** form (`visit`/`ctx`, `pathbuf`, `eager` lazy flag); drives `WALKTree`/`WALKTreeLazy`, the pack-build reachable-set. Fixed by [[MEM-023]] (right-size the carve via `KEEPGetSize`, `WALK_MAX_DEPTH` 4096 cap).
- -  `keeper/KEEP.c:keep_walk_tree` (`:2716`) — a **reachable-set collector** (`out`/`n`/`cap`), no dedup. Reachable ONLY from the legacy ssh `KEEPPush` — it has **no test caller at all**. Fixed by [[MEM-023]] (rewritten iterative, BASS worklist).
- -  `keeper/WIRECLI.c:wpush_walk_tree` (`:1109`) — `keep_walk_tree` plus a `have`/`add_to_have` **dedup set** (the merge-history short-circuit at `:1183`); the LIVE `be://` `WIREPush` path. Its own comment (`:1069`) admits "Mirrors keep_walk_tree (KEEP.c) but lives [here]". Fixed by [[MEM-024]].
+ -  `keeper/WALK.c:walk_tree_dive` (`:40`) — the general *visitor* form (`visit`/`ctx`, `pathbuf`, `eager` lazy flag); drives `WALKTree`/`WALKTreeLazy`, the pack-build reachable-set. Fixed by [MEM-023] (right-size the carve via `KEEPGetSize`, `WALK_MAX_DEPTH` 4096 cap).
+ -  `keeper/KEEP.c:keep_walk_tree` (`:2716`) — a *reachable-set collector* (`out`/`n`/`cap`), no dedup. Reachable ONLY from the legacy ssh `KEEPPush` — it has *no test caller at all*. Fixed by [MEM-023] (rewritten iterative, BASS worklist).
+ -  `keeper/WIRECLI.c:wpush_walk_tree` (`:1109`) — `keep_walk_tree` plus a `have`/`add_to_have` *dedup set* (the merge-history short-circuit at `:1183`); the LIVE `be://` `WIREPush` path. Its own comment (`:1069`) admits "Mirrors keep_walk_tree (KEEP.c) but lives [here]". Fixed by [MEM-024].
  -  Net: a memory or correctness fix to tree-walking must be written three times; two of the copies are reachable-set collectors that differ only by an optional dedup set, and the third is a strict superset (a visitor) of both.
 
 ##  Blockers
- -  Land [[MEM-023]] and [[MEM-024]] FIRST, so the convergence starts from fixed, tested, depth-capped code rather than re-introducing the leaks during a refactor.
+ -  Land [MEM-023] and [MEM-024] FIRST, so the convergence starts from fixed, tested, depth-capped code rather than re-introducing the leaks during a refactor.
  -  The copies carry differing extra behaviour the unified walker must parameterise without regressing: WALK's `eager`/lazy + path accumulation, WIRECLI's `have`-set dedup, KEEP/WIRECLI's bounded `out` reachable-set (vs WALK's visitor). The reachable-set output is order-independent (only consumer = the pack builder, iterates unordered) — verify before merging.
 
 ##  Planned
@@ -31,7 +31,7 @@ One iterative, depth-capped, right-sized keeper walker; the three call sites pas
     re-expressed as visitors; have/close-set dedup → `WALKSKIP`. The fully-dead
     `keep_walk_tree`/`KEEPPush`/`keep_walk_commit` chain deleted (zero-caller proven).
     New `keeper/test/CLOSE.c`; 396/396, ASan/LSan clean. Delivers the unlanded
-    [[MEM-023]]/[[MEM-024]] safety goal (depth cap + right-size) without that gate.
+    [MEM-023]/[MEM-024] safety goal (depth cap + right-size) without that gate.
 
 [Keeper]: ../wiki/Keeper.mkd "the keeper dog (object pool)"
 [CLAUDE]: ../../beagle/CLAUDE.md "coding guidelines — reuse, repro-first"

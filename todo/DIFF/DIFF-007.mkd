@@ -4,7 +4,7 @@
 `WEAVEEmitFull` carves a fixed 65536-token buffer and accumulates the UNION of
 base+wt weave tokens into one hunk; when that union exceeds 65536 the `u32bFeed1`
 returns NOROOM, which is swallowed (`ret=fo; goto cleanup`) → zero hunks emitted,
-exit 0. Real bug. Split from [[DIFF-005]]'s bare-diff re-investigation. Method:
+exit 0. Real bug. Split from [DIFF-005]'s bare-diff re-investigation. Method:
 [Issues].
 
 ##  Input
@@ -44,22 +44,22 @@ exit 0. Real bug. Split from [[DIFF-005]]'s bare-diff re-investigation. Method:
  -  Two complementary fixes: (1) flush `WEAVEEmitFull` by TOKEN-count too (not only the
     1 MB byte cap) so the buffer never overflows; (2) stop swallowing NOROOM — propagate
     it so a truncated/failed diff is an error, not a silent exit 0.
- -  Note: [[DIFF-005]] option-a (bound large files → `WEAVEEmitDiff`) would INCIDENTALLY
+ -  Note: [DIFF-005] option-a (bound large files → `WEAVEEmitDiff`) would INCIDENTALLY
     make GET.c/PATCH.c/POST.c render, masking this — but the swallowed-NOROOM and missing
     token-flush should be fixed regardless.
 
 ### TODOs
- -[ ] Repro: `be diff:sniff/GET.c` empty; confirm token count > 65536 and NOROOM at
+-[ ] Repro: `be diff:sniff/GET.c` empty; confirm token count > 65536 and NOROOM at
       `WEAVE.c:1099`.
- -[ ] Fix: token-count flush in `WEAVEEmitFull` + propagate NOROOM (no swallow).
- -[ ] Test: a >65536-token file diff is non-empty (and errors instead of silently
+-[ ] Fix: token-count flush in `WEAVEEmitFull` + propagate NOROOM (no swallow).
+-[ ] Test: a >65536-token file diff is non-empty (and errors instead of silently
       empties on genuine overflow).
 
 ### Blockers and bummers
- -  Interacts with [[DIFF-005]] (option-a masks it) — fix independently anyway.
+ -  Interacts with [DIFF-005] (option-a masks it) — fix independently anyway.
 
 ##  Outcome
- -  (open — scan in [[DIFF-005]])
+ -  (open — scan in [DIFF-005])
 
 [DIFF-005]: DIFF-005/README.mkd "bare-diff re-investigation (parent scan)"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

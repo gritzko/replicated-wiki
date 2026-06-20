@@ -66,7 +66,7 @@ Blocks are containers (lists, blockquotes, divs) or leaves (paragraphs, headers,
  -  A bare indent opens a generic container (a div) where CommonMark would start a code block — a slight generalization.
  -  If a marker ends in a non-space char, the next char must be whitespace (the gap space); e.g. `####` needs a following space.
  -  Block markers: `>   ` quote, ` -  ` bullet, ` 1. ` numbered, four spaces a div, `##  ` header (4 levels).
- -  More markers: 3–4 backticks a code fence, `[x]:` a reference def, `---`/`--- `/`----` a ruler, `[ ] ` a list TODO.
+ -  More markers: 3–4 backticks a code fence, `[x]:` a reference def, `---`/`--- `/`----` a ruler, `-[ ]` a TODO.
  -  Structural markup is 4-char-wide, except two shorter cases: a 3-backtick code fence and a 3-dash `---` ruler.
 
 ##  Headers
@@ -82,8 +82,9 @@ StrictMark allows four header levels, ATX only, and a header may span lines. Mar
 
 ##  Lists
 
-The unordered marker is the dash `-`; `*` is dropped as ambiguous and `+` as unpopular — there must be one way only. Ordered lists use `12.` (digits then dot), again four chars per level, and the GitHub TODO syntax `[ ]` is supported as another leaf block.
+The unordered marker is the dash `-`; `*` is dropped as ambiguous and `+` as unpopular — there must be one way only. Ordered lists use `12.` (digits then dot), again four chars per level; a TODO item is a dash plus a bracketed one-char state, `-[ ]`, its own four-char block.
 
+ -  TODO states: `-[ ]` not started, `-[v]` done/closed, `-[-]` blocked, `-[x]` wontfix/moot — uppercase `V`/`X` also accepted.
  -  Marker padding is the author's taste, but a non-space final char needs a following gap space.
  -  Numbered lists cap at 999 numbered entries; writing every entry `1.` renders fine but the raw markup is then mis-numbered.
  -  Separate two adjacent same-kind lists with an empty `<!-- -->` comment — better still, put real text between them.

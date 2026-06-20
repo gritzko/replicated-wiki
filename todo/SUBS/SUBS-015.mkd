@@ -1,6 +1,6 @@
 #   SUBS-015: `blob:<path>` without `?ref` returns KEEPNONE in the parent
 
-**LOW (found mid-fix in [SUBS-011]/[SUBS-012]).**  `be blob:<path>` with **no**
+*LOW (found mid-fix in [SUBS-011]/[SUBS-012]).*  `be blob:<path>` with *no*
 `?ref` slot returns `KEEPNONE` even on a plain parent file (not submodule-
 related).  Per VERBS.md §"Open edges", `blob:file.c` (no ref) is defined as the
 git-hash-object bytes of the wt's on-disk file, and `blob:file.c?` (empty ref)

@@ -1,13 +1,13 @@
 #   GET-010: clone of an empty/elided-refs store writes a 0-byte `refs` + `be get` escapes HOME during shard discovery
 
-`be get "file://<abs-store>?/<proj>"` against a project store whose `refs` is empty/elided does two wrong things instead of refusing the empty source: (1) it **writes a fresh 0-byte `refs`** (and a stray nested `<store>/.be/` shard) at the target, manufacturing exactly the empty-refs shape that looks like store damage — though here **no live data is lost** (new-empty, not truncation, so this is distinct from [[ULOG-001]]); and (2) during shard discovery it **escapes `HOME`** — even with `HOME` pointed at a scratch dir it resolves the shard under the *real* `~/.be`, so a test (or a stray clone) can silently mutate the user's real store. This is the clone/secondary-wt + store-discovery path, not the in-place truncation [[ULOG-001]] fixed. See [Issues], [CLAUDE], [[GET-004]], [[ULOG-001]].
+`be get "file://<abs-store>?/<proj>"` against a project store whose `refs` is empty/elided does two wrong things instead of refusing the empty source: (1) it *writes a fresh 0-byte `refs`* (and a stray nested `<store>/.be/` shard) at the target, manufacturing exactly the empty-refs shape that looks like store damage — though here *no live data is lost* (new-empty, not truncation, so this is distinct from [ULOG-001]); and (2) during shard discovery it *escapes `HOME`* — even with `HOME` pointed at a scratch dir it resolves the shard under the *real* `~/.be`, so a test (or a stray clone) can silently mutate the user's real store. This is the clone/secondary-wt + store-discovery path, not the in-place truncation [ULOG-001] fixed. See [Issues], [CLAUDE], [GET-004], [ULOG-001].
 
 ##  Issues
 Two defects on the empty-source clone path.
 
- -  **0-byte refs written**: cloning from an empty/elided-refs project store produces a `refs` of 0 bytes plus a stray nested `<store>/.be/{wtlog,<proj>/refs}` shard, rather than failing cleanly with "nothing to clone".
- -  **HOME-escape in discovery**: with `HOME` set to a scratch dir, `be get file://<abs-store>?/<proj>` still reads/creates shards under the real `~/.be` (the `.be` shield walk escapes the configured HOME). Breaks test hermeticity and risks touching the user's live store.
- -  Reproduced twice: directly (a `be get` here created `~/.be/.be/{wtlog,beagle/refs}` + `~/.be/refs`, all 0 B, while `HOME` discovery should have kept it scratch-local), and by the [[ULOG-001]] worker's H4 repro.
+ -  *0-byte refs written*: cloning from an empty/elided-refs project store produces a `refs` of 0 bytes plus a stray nested `<store>/.be/{wtlog,<proj>/refs}` shard, rather than failing cleanly with "nothing to clone".
+ -  *HOME-escape in discovery*: with `HOME` set to a scratch dir, `be get file://<abs-store>?/<proj>` still reads/creates shards under the real `~/.be` (the `.be` shield walk escapes the configured HOME). Breaks test hermeticity and risks touching the user's live store.
+ -  Reproduced twice: directly (a `be get` here created `~/.be/.be/{wtlog,beagle/refs}` + `~/.be/refs`, all 0 B, while `HOME` discovery should have kept it scratch-local), and by the [ULOG-001] worker's H4 repro.
  -  Related/likely-shared root: the legacy elided-store clone crash (secondary-wt path, `FILEINVAL` still open) and the `.be` shield-walk escape rule.
 
 ##  Blockers
@@ -16,10 +16,10 @@ Need a hermetic repro that can't itself touch `~/.be` — chicken-and-egg with t
 ##  Planned
 Refuse the empty source; honor HOME in discovery.
 
- -  Repro-first ([CLAUDE] §17): a hermetic case that clones a project store with an empty `refs`, asserting (a) the clone **fails cleanly** (no 0-byte `refs`, no stray `<store>/.be/` shard written) and (b) **no path under the real `~/.be` is opened** (verify via `strace -f`, `HOME` set to scratch).
+ -  Repro-first ([CLAUDE] §17): a hermetic case that clones a project store with an empty `refs`, asserting (a) the clone *fails cleanly* (no 0-byte `refs`, no stray `<store>/.be/` shard written) and (b) *no path under the real `~/.be` is opened* (verify via `strace -f`, `HOME` set to scratch).
  -  Make `be get` of an empty/elided-refs source error (e.g. `WIRECLFL`/`GRAFNONE`) instead of writing an empty `refs`; never create a placeholder 0-byte log on the clone path.
  -  Fix store/shard discovery to honor the configured `HOME` — the `.be` shield walk must not escape to `~/.be` when a scratch `HOME` is set (cf. the `.be`-shield-walk anchoring rule).
- -  Cross-check against [[GET-004]] (`be://` path→store resolution) so the empty-path / `*.be` / dir-or-file cases agree.
+ -  Cross-check against [GET-004] (`be://` path→store resolution) so the empty-path / `*.be` / dir-or-file cases agree.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
 [CLAUDE]: ../../CLAUDE.md "coding guidelines"

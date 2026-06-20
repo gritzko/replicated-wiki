@@ -29,10 +29,10 @@ and the test exits 0 even on failure — violating CLAUDE.md §3/§8. Method: [I
     round-trip (catches JS-002); make the harness exit non-zero on failure.
 
 ### TODOs
- -[ ] Add `test.cpp` table for convert/utf8 boundaries.
- -[ ] Add the libFuzzer target + corpus dir.
- -[ ] Add the `file.write`/`read` pipe round-trip.
- -[ ] Make `test.js` (and the harness) exit non-zero on FAIL.
+-[ ] Add `test.cpp` table for convert/utf8 boundaries.
+-[ ] Add the libFuzzer target + corpus dir.
+-[ ] Add the `file.write`/`read` pipe round-trip.
+-[ ] Make `test.js` (and the harness) exit non-zero on FAIL.
 
 ### Blockers
  -  None.

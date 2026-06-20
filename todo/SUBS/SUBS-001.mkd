@@ -1,18 +1,18 @@
 #   SUBS-001: POST silently drops a level's own edits when its sub is also dirty (LANDED)
 
-**HIGH — silent data loss — LANDED `97de77b8` (2026-06-06).**  Fixed per
+*HIGH — silent data loss — LANDED `97de77b8` (2026-06-06).*  Fixed per
 option (a): `sniff/POST.c` `post_pd_cb` now classifies the auto-generated
 sub-gitlink-bump `put <sub>#<40-hex>` row *before* the `c->any_pd = YES`
 flip and returns early, so a dirty (or clean) sub no longer flips the level
 into selective mode — commit-all own-file edits survive.  Repros
 `test/post/26` and `test/post/27` now pass (removed from `WILL_FAIL`).
 
-**HIGH — silent data loss.**  When a worktree level has BOTH its own dirty
+*HIGH — silent data loss.*  When a worktree level has BOTH its own dirty
 tracked files AND a dirty mounted submodule, `be post` commits the gitlink
-bump but **silently omits the level's own edits**, exiting 0.  Root cause: the
+bump but *silently omits the level's own edits*, exiting 0.  Root cause: the
 post-order recursion stages the sub's new tip with `be put <subpath>`, writing
 a `put <subpath>#<sha>` row into `.be/wtlog`.  That lone explicit `put` row
-flips the level's POST from **implicit (commit-all)** mode into **selective**
+flips the level's POST from *implicit (commit-all)* mode into *selective*
 mode scoped to `<subpath>` only (see VERBS.md §"Per-file classification"), so
 the genuinely-dirty own files fall outside scope and never enter the commit.
 
@@ -20,7 +20,7 @@ the genuinely-dirty own files fall outside scope and never enter the commit.
  1. `be get <parent>?master` (parent has a `vendor/sub` gitlink).
  2. Append a line to `main.c` AND to `vendor/sub/core.c`.
  3. `be post 'both dirty'`.
- 4. `be blob:main.c?master` — the appended line is **absent**; exit was 0.
+ 4. `be blob:main.c?master` — the appended line is *absent*; exit was 0.
 
 ##  Manifestation B (only-parent-dirty → POSTNONE + sticky poison)
 Edit only `main.c` (sub clean), `be post 'msg'`:
@@ -28,7 +28,7 @@ Edit only `main.c` (sub clean), `be post 'msg'`:
  -  The recursion still ran `be put vendor/sub` (staging the *unchanged* pin
     `put vendor/sub#<same-sha>`), flipping POST selective → the unchanged
     baseline resolves to no-change → POSTNONE.
- -  The stale put-row **persists** in `.be/wtlog`, so a follow-up
+ -  The stale put-row *persists* in `.be/wtlog`, so a follow-up
     `be post --nosub 'msg'` ALSO returns POSTNONE — the parent stays stuck
     dropping its edits until the user manually runs `be put ./main.c`.
 

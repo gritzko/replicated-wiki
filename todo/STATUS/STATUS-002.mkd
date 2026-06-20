@@ -47,12 +47,12 @@
     open/scan that drives it (incl. the `be status:<sub>/` relay).
 
 ### TODOs
- -[ ] Roll back the prior fix: drop `igno_is_build*`/`Corpus` from `dog/git/IGNO.c`,
+-[ ] Roll back the prior fix: drop `igno_is_build*`/`Corpus` from `dog/git/IGNO.c`,
       revert the test that pinned it; `IGNOMatch` pattern-only again.
- -[ ] Implement the chain: load+stack `.gitignore` from the path's dir up to
+-[ ] Implement the chain: load+stack `.gitignore` from the path's dir up to
       `$HOME`/`/`; compound with git precedence; cache per directory.
- -[ ] Wire into the status walk so sub subtrees inherit the parent chain.
- -[ ] Repro-first test (hermetic): a sub subtree with a PARENT-ONLY `.gitignore`
+-[ ] Wire into the status walk so sub subtrees inherit the parent chain.
+-[ ] Repro-first test (hermetic): a sub subtree with a PARENT-ONLY `.gitignore`
       → build artifacts ignored; plus a `!`-negation / precedence case. ctest green.
 
 ### Blockers and bummers

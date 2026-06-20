@@ -12,9 +12,9 @@ resolution + fallback for real, the way GET already does. See [SUBS-020], [Submo
 ### Context
 Three source cases (user's framing; identical to [SUBS-020]):
 
- -  **beagle remote** → expect the sub in the SAME repo/peer.
- -  **git repo, `.git` URI** → no same-repo expectation; the sub's official URL.
- -  **git repo, fs URI** → expect the sub repo in the fs at the parent-relative
+ -  *beagle remote* → expect the sub in the SAME repo/peer.
+ -  *git repo, `.git` URI* → no same-repo expectation; the sub's official URL.
+ -  *git repo, fs URI* → expect the sub repo in the fs at the parent-relative
     path. In the beagle and fs cases, if the assumption fails, FALL BACK to the
     official `.gitmodules` URL.
 
@@ -64,12 +64,12 @@ remote (dest for POST, src for GET), all reusing the SAME resolver:
     bepushgit_recurse_cb) get case 4, for push/fetch symmetry.
 
 ### TODOs
- -[v] Trace `be post ssh://<fs-path>` — absolute `.gitmodules` url →
+-[v] Trace `be post ssh://<fs-path>` — absolute `.gitmodules` url →
       SNIFFSubCandidateGitRel NONE → official url wins (repro'd $HOME/tmp).
- -[v] POST case 4: url absolute → dest = SNIFFSubCandidateGitRel(src,
+-[v] POST case 4: url absolute → dest = SNIFFSubCandidateGitRel(src,
       subpath); keep relative-url arm + official fallback.
- -[v] GET case 4: add `<src>/<subpath>` candidate before official (SUBS.c).
- -[v] Tests: post/45 + get/53 — absolute-url sub lands `<remote>/<sub>`,
+-[v] GET case 4: add `<src>/<subpath>` candidate before official (SUBS.c).
+-[v] Tests: post/45 + get/53 — absolute-url sub lands `<remote>/<sub>`,
       NOT official; ctest 394/394 WITH_SSH.
 
 ### Blockers and bummers

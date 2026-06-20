@@ -2,7 +2,7 @@
 
 `?#<sha>` (empty query + `#`-fragment sha) means "current/trunk branch, pinned to
 state <sha>" — a NON-detached trunk-state checkout you can commit on top of. But the
-[[GET-023]] checkout arm canonicalises it into the DETACHED form `?<sha>` (query=sha,
+[GET-023] checkout arm canonicalises it into the DETACHED form `?<sha>` (query=sha,
 empty fragment) when it records the cur-tip, so a follow-up `be post` is refused
 POSTDET ("detached wt — re-attach to a branch"). Real regression from `d6f35358`,
 caught by `be-put-06-triangle` (SSH-gated, so it slipped the build-debug merge checks).
@@ -15,7 +15,7 @@ Method: [Issues].
     → `be post`) dies at the post with `sniff: post: refusing on detached wt … Error: POSTDET`.
     PASSES on parent `b71eba2a`, FAILS 3/3 on `d6f35358`/`ef8901fa` (clean trunk,
     `-DWITH_SSH=ON`). Not flaky, not a stale-wt artifact (main wt cur == trunk tip).
- -  Root cause: [[GET-023]] (`d6f35358`) added the `?#<sha>` arm at `sniff/GET.c` (the
+ -  Root cause: [GET-023] (`d6f35358`) added the `?#<sha>` arm at `sniff/GET.c` (the
     `has_q && $empty(query) && !$empty(fragment)` branch + its `~:2175` source compose)
     that builds the GETCheckout SOURCE in the DETACHED form `?<frag>` (`u8csMv(fsrc_u.query,
     frag)`, empty fragment) → the cur-tip wtlog row lands as `?<sha40>`. `post_is_detached_wt`
@@ -49,18 +49,18 @@ Method: [Issues].
     in the fragment — exactly what `post_is_detached_wt` treats as NON-detached.
 
 ### TODOs
- -[ ] Repro-first (WITH_SSH): `be-put-06-triangle` RED on trunk; minimal repro
+-[ ] Repro-first (WITH_SSH): `be-put-06-triangle` RED on trunk; minimal repro
       `be put ?#<sha>` → `be get --force ?#<sha>` → `be post` → POSTDET.
- -[ ] Fix the GET-023 arm to record trunk-state, not detached; keep `?<sha>` detached.
- -[ ] `be-put-06-triangle` + `SNIFFfragref` + the detached-refuse tests (`get-33`) all green;
+-[ ] Fix the GET-023 arm to record trunk-state, not detached; keep `?<sha>` detached.
+-[ ] `be-put-06-triangle` + `SNIFFfragref` + the detached-refuse tests (`get-33`) all green;
       full ctest in build-debug AND build-ssh.
 
 ### Blockers and bummers
- -  Regression of [[GET-023]] (`d6f35358`). The fix is GET-side (canonical form), not a
+ -  Regression of [GET-023] (`d6f35358`). The fix is GET-side (canonical form), not a
     change to POST's detached refusal (that is correct).
 
 ##  Outcome
- -  **LANDED `134b9e30`** (2026-06-16): the GET-023 arm composed the GETCheckout source as
+ -  *LANDED `134b9e30`* (2026-06-16): the GET-023 arm composed the GETCheckout source as
     the detached query-sha `?<frag>` (`u8csMv(fsrc_u.query, frag)`, empty fragment) → len-41
     query → recorded DETACHED. Fix: carry `u`'s own present-but-empty query
     (`u8csMv(fsrc_u.query, u->query)`) so `URIutf8Feed` emits the bare `?` trunk sigil and

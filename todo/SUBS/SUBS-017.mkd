@@ -1,22 +1,22 @@
 #   SUBS-017: parent `be post be://localhost?/<proj>` recurses into a sub and fails `WIRECLFL` though the sub's project exists in the remote
 
-A parent `be post be://localhost?/dogs` recurses (`be: post abc`) and the submodule push dies `WIRECLFL`/`BEDOGEXIT`, even though the sub's project DOES exist in the remote `~/.be` (a direct `be post --nosub be://localhost?/abc` from inside the sub pushes fine). So the sub-recursion derives the wrong remote target / branch for the sub instead of pushing it to its own project in the same peer. See [POST], [Submodules], [CLAUDE], [[submodule-parent-source-fetch]], [[submodule-synthetic-branch-post]].
+A parent `be post be://localhost?/dogs` recurses (`be: post abc`) and the submodule push dies `WIRECLFL`/`BEDOGEXIT`, even though the sub's project DOES exist in the remote `~/.be` (a direct `be post --nosub be://localhost?/abc` from inside the sub pushes fine). So the sub-recursion derives the wrong remote target / branch for the sub instead of pushing it to its own project in the same peer. See [POST], [Submodules], [CLAUDE], [submodule-parent-source-fetch], [submodule-synthetic-branch-post].
 
 ##  Issues
 The recursive sub push targets the wrong remote coordinate.
 
  -  `be post be://localhost?/dogs` → `be: post abc` → `WIRECLFL`, while `be post --nosub be://localhost?/abc` from the sub succeeds — so the peer and project are reachable; the recursion picks the wrong target.
- -  The sub is on the synthetic coordinate `?/libabc/.dogs` (see [[submodule-synthetic-branch-post]]); the recursion likely pushes that synthetic branch / a `?/dogs`-derived path instead of the sub's own `?/<subproj>` on the peer.
+ -  The sub is on the synthetic coordinate `?/libabc/.dogs` (see [submodule-synthetic-branch-post]); the recursion likely pushes that synthetic branch / a `?/dogs`-derived path instead of the sub's own `?/<subproj>` on the peer.
  -  Net: a parent push can never carry its subs to a be:// peer; the user must push each sub by hand.
 
 ##  Blockers
-Depends on how the parent derives a sub's remote target (mirror of the parent-source FETCH logic, [[submodule-parent-source-fetch]]).
+Depends on how the parent derives a sub's remote target (mirror of the parent-source FETCH logic, [submodule-parent-source-fetch]).
 
 ##  Planned
 Recurse the sub push to the sub's own project on the same peer.
 
  -  Repro-first ([CLAUDE] §17): a mounted sub + local beagle peer; `be post be://localhost?/<parent>` pushes BOTH parent and sub (sub → its `?/<subproj>` on the peer), exit 0.
- -  Derive the sub's push target from the parent's peer + the sub's project (not the synthetic `?/<sub>/.<parent>` coordinate); resolve its remote branch like [[POST-013]] for git remotes.
+ -  Derive the sub's push target from the parent's peer + the sub's project (not the synthetic `?/<sub>/.<parent>` coordinate); resolve its remote branch like [POST-013] for git remotes.
 
 [POST]: ../../wiki/POST.mkd "POST verb"
 [Submodules]: ../../wiki/Submodules.mkd "submodule recursion"

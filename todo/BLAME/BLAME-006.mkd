@@ -10,14 +10,14 @@ decide fixes. Method: [Issues].
 ##  Input
 
 ### Context
- -  `be blame:ABC.md` (307 hunk lines) pins **5** pieces to `?c7184818#initial`
+ -  `be blame:ABC.md` (307 hunk lines) pins *5* pieces to `?c7184818#initial`
     (first piece is line 1). `be log:` tail confirms `c7184818` (31Jul24
-    "initial", parent of `31902055` "compat: bswap") is the **root** commit.
+    "initial", parent of `31902055` "compat: bswap") is the *root* commit.
  -  ABC.md (the ABC refactoring-policies one-pager) is recent; it almost certainly
     was NOT in the 31Jul24 initial tree. Blaming its lines to root ⇒ the blame
     DAG/line-trace likely falls through to root instead of stopping at the file's
     real introduction (or a diff mis-attributes context onto the boundary commit).
- -  Perf: clicking the `c7184818` link in the blame view takes **seconds** to load.
+ -  Perf: clicking the `c7184818` link in the blame view takes *seconds* to load.
     The initial import is large, so `commit:?c7184818` may inflate/serve a huge
     tree/diff, or the load path is inefficient.
  -  "Something fishy" — surfaced 2026-06-16 while reading `be blame:ABC.md`.
@@ -52,21 +52,21 @@ decide fixes. Method: [Issues].
     to `GRAF.exe.c:505` → `GRAFDiffTreeRefs` (`DIFFREF.c:564`) which token-diffs the
     ENTIRE 291-file initial tree as all-INS — O(repo), 4.35s (vs 0.16s typical).
     Fix: emit raw all-add when one side is empty (skip token-level weave diff).
- -  SPLIT recommended: **BLAME-006a** (blame delete-fold correctness, `BLAME.c`
-    480/492 + WEAVE fold-on-delete) and **BLAME-006b** (root/whole-tree `diff:`
+ -  SPLIT recommended: *BLAME-006a* (blame delete-fold correctness, `BLAME.c`
+    480/492 + WEAVE fold-on-delete) and *BLAME-006b* (root/whole-tree `diff:`
     perf, `GRAF.exe.c:505`/`DIFFREF.c:564`). Independent; any blame fix keeps
     `GRAFblameident` byte-identical.
 
 ### TODOs
- -[v] Scanned: ABC.md add-commit `8948262e` (deleted `006b9039`, root not it); the 5
+-[v] Scanned: ABC.md add-commit `8948262e` (deleted `006b9039`, root not it); the 5
       mis-attributed = title + blank lines that RAPHash-collide across the readd.
- -[v] Root-fallback located: `graf/BLAME.c:480/492` skip-on-absent, no empty fold.
- -[v] Slow-load profiled: `GRAFDiffTreeRefs` whole-tree all-INS (`DIFFREF.c:564`).
- -[ ] SPLIT into 006a (correctness) + 006b (perf); fork a fix worker per split.
+-[v] Root-fallback located: `graf/BLAME.c:480/492` skip-on-absent, no empty fold.
+-[v] Slow-load profiled: `GRAFDiffTreeRefs` whole-tree all-INS (`DIFFREF.c:564`).
+-[ ] SPLIT into 006a (correctness) + 006b (perf); fork a fix worker per split.
 
 ##  Outcome
- -  SPLIT (2026-06-16) into [[BLAME-006a]] (blame delete-fold correctness) and
-    [[BLAME-006b]] (root/whole-tree `diff:` perf). This ticket = the umbrella scan;
+ -  SPLIT (2026-06-16) into [BLAME-006a] (blame delete-fold correctness) and
+    [BLAME-006b] (root/whole-tree `diff:` perf). This ticket = the umbrella scan;
     fixes land under 006a/006b.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

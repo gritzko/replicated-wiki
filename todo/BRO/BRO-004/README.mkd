@@ -1,9 +1,9 @@
 #   BRO-004: colored `diff:` render — added-side flush (LANDED) + first-hunk incoherence (LANDED) + context-line dup (REOPENED Part 3)
 
-Part 1 (LANDED `fc906b77`): `be --color diff:` dropped the **added (`+`) side** of a
+Part 1 (LANDED `fc906b77`): `be --color diff:` dropped the *added (`+`) side* of a
 change — fixed by a trailing-row flush in bro's two-pass renderer. Part 2 (LANDED
 `2e271665`): colour first-hunk incoherence (mid-word splits, interleaving, em-dash
-line duplicated) — fixed in the block-end scan. **Part 3 (REOPENED 2026-06-16):** a
+line duplicated) — fixed in the block-end scan. *Part 3 (REOPENED 2026-06-16):* a
 single-line INSERT duplicates the adjacent CONTEXT line — colour renders it as both
 removed and inserted; `--plain` is correct. Evidence: [iteration-dup] (Part 3),
 [diff-incoherence] (Part 2). Method: [Issues].
@@ -21,7 +21,7 @@ removed and inserted; `--plain` is correct. Evidence: [iteration-dup] (Part 3),
     read them for full coverage:` appears twice. `grep -c 'canonical docs'` = 2 in BOTH
     `--color`-stripped and `--plain` (in plain those are the legit removed+added; in colour
     they're garbled). Full capture + repro: [diff-incoherence].
- -  Every garbled boundary involves an em-dash (`—`) → suspect the [[ABC-003]] `UTF8_LEN`
+ -  Every garbled boundary involves an em-dash (`—`) → suspect the [ABC-003] `UTF8_LEN`
     width bug (NOT landed in `$HOME/beagle`, so multibyte width is still wrong there) as a
     contributor — but confirm vs a separate bro line-break bug.
  -  PART 3 (OPEN): `be --color diff:ABC.md` in `$HOME/beagle` — a single-line INSERT (a new
@@ -36,50 +36,50 @@ removed and inserted; `--plain` is correct. Evidence: [iteration-dup] (Part 3),
 ### Goals
  -  The colour `diff:` FIRST hunk renders coherently — no mid-word splits, no
     interleaving, no duplicated em-dash line — matching what `--plain` conveys.
- -  Determine whether landing `UTF8_LEN` ([[ABC-003]]) alone makes it coherent, or a
+ -  Determine whether landing `UTF8_LEN` ([ABC-003]) alone makes it coherent, or a
     separate bro line-break / wrap / row-emit bug remains; fix that.
 
 ### Constraints
  -  Render path only (bro / `dog/HUNK`), producers untouched. Keep the Part-1 flush + the
     inline (line-OR-token-by-volume) behaviour. Full `ctest` green; abc/core + render gate.
- -  Verify in RAW colour bytes (ANSI-stripping fuses inline) — see [[bro-color-diff-modes]].
+ -  Verify in RAW colour bytes (ANSI-stripping fuses inline) — see [bro-color-diff-modes].
 
 ##  WIP
 
 ### Design decisions
- -  ISOLATED (2026-06-16): the incoherence is NOT [[ABC-003]] — applying `UTF8_LEN`
+ -  ISOLATED (2026-06-16): the incoherence is NOT [ABC-003] — applying `UTF8_LEN`
     alone leaves the first hunk garbled, and the bro fix makes it coherent even with
     the buggy `UTF8_LEN`. The "em-dash at every boundary" was a red herring (the
     em-dash just sits in the shared LCS suffix the structural bug duplicated). Fully
     separable from ABC-003.
 
 ### TODOs
- -[v] Part 1 — added `+` side flush, landed `fc906b77`.
- -[v] Repro Part 2; isolation = NOT ABC-003 (residual bro bug).
- -[v] Root-caused + fixed the residual bro row-emit bug (below); test `test/diff/15`.
- -[v] Gate the render diff; **landed `2e271665`**.
- -[v] PART 3: repro ([iteration-dup] → `test/diff/16-color-insert-context`); root-caused
+-[v] Part 1 — added `+` side flush, landed `fc906b77`.
+-[v] Repro Part 2; isolation = NOT ABC-003 (residual bro bug).
+-[v] Root-caused + fixed the residual bro row-emit bug (below); test `test/diff/15`.
+-[v] Gate the render diff; *landed `2e271665`*.
+-[v] PART 3: repro ([iteration-dup] → `test/diff/16-color-insert-context`); root-caused
       to the Part-2 block-end gate being TOO BROAD; fixed with `bro_line_continues()`;
-      303/303. **LANDED `0dd4e0ba`**.
+      303/303. *LANDED `0dd4e0ba`*.
 
 ### Blockers and bummers
- -  Parts 1/2 independent of [[ABC-003]] (confirmed by isolation). Render path only.
+ -  Parts 1/2 independent of [ABC-003] (confirmed by isolation). Render path only.
  -  Part 3 is a SEPARATE site from Part 2 (block-grouping/line-alignment, not the block-end
     `\n`-side scan) — confirm before reusing the Part-2 fix.
 
 ##  Outcome
- -  Part 1 LANDED `fc906b77`. **Part 2 LANDED `2e271665`**: root cause
+ -  Part 1 LANDED `fc906b77`. *Part 2 LANDED `2e271665`*: root cause
     `bro/BRO.c:624-630` (`bro_walk_hunk` block-end scan broke at an eq-context segment
     even when the boundary `\n` into it was on the RM side, so the shared eq tail line
     rendered TWICE / interleaved). Fix: break at an eq segment only when the boundary
     `\n` is EQ-side (`&& (j==i || info[j-1].bnd_side==TOK_SIDE_EQ)`). New
     `test/diff/15-color-emdash-coherent` (RED→GREEN) + `test/diff/INDEX.md` entry;
-    300/300 before and after. Confirmed independent of [[ABC-003]].
- -  **Part 3 LANDED `0dd4e0ba`** (FF child of `8d66369c`; msg `BRO-004: colour insert no
+    300/300 before and after. Confirmed independent of [ABC-003].
+ -  *Part 3 LANDED `0dd4e0ba`* (FF child of `8d66369c`; msg `BRO-004: colour insert no
     longer dups context line`): colour duplicated the
     context line adjacent to a single-line insert. Producer was CORRECT (TLV toks mark
     the line EQ, the insert block all-IN incl. its `\n`); the bug was bro's render. Root
-    cause: the **Part-2 block-end gate was TOO BROAD** — it treated ANY non-EQ boundary
+    cause: the *Part-2 block-end gate was TOO BROAD* — it treated ANY non-EQ boundary
     `\n` as a row continuation, so a pure insert's `IN`-side `\n` pulled the following EQ
     line into the change block (emitted on both rm + in sides). Fix (`bro/BRO.c` only):
     `bro_line_continues()` — a non-EQ boundary `\n` continues a row only when its side is
@@ -87,7 +87,7 @@ removed and inserted; `--plain` is correct. Evidence: [iteration-dup] (Part 3),
     line, `RM` `\n` continues an IN line); a self-terminating pure insert/delete does NOT
     continue, so the next EQ line correctly breaks the block. New
     `test/diff/16-color-insert-context` (RED→GREEN); preserves Parts 1/2 (diff-14/15);
-    **303/303**.
+    *303/303*.
 
 [diff-incoherence]: diff-incoherence.txt "be --color diff:ABC.md garbled first hunk (Part 2 evidence)"
 [iteration-dup]: iteration-dup.txt "colour dup of context line on a single-line insert (Part 3 evidence)"

@@ -26,7 +26,7 @@ is the SHA in the subproject slot. Method: [Issues].
     (`BE.cli.c:2954-2990`), the `lq`/`DOGQueryStripProject` arm (`:3010-3025`), the
     `synth_view`/`msg_view` assembly (`:3159-3201`).
  -  This stray row is the likely source of the abc sub's odd `be head` "2 ahead" /
-    `POSTDET` symptoms hit while landing [[ABC-003]] — NOT a branch-format bug.
+    `POSTDET` symptoms hit while landing [ABC-003] — NOT a branch-format bug.
 
 ### Goals
  -  The `<subproj>` slot is ALWAYS the project title (never a SHA) and the
@@ -53,29 +53,29 @@ is the SHA in the subproject slot. Method: [Issues].
     missed REFSResolve, fell through, and the fallback wrote the query string
     VERBATIM into BOTH the recorded query AND fragment → `?<sha40>/.par#<sha40>/.par`
     (it "succeeded" only because the 40-hex prefix matched the pin via prefix lookup).
- -  FIX: gate the fallback on **`DOGIsHashlet(u->query)`** (6..40 hex). A query
+ -  FIX: gate the fallback on *`DOGIsHashlet(u->query)`* (6..40 hex). A query
     with path junk (`?<sha40>/.par`) is not a hashlet → clean `SNIFFFAIL`; clean
     sha-PREFIX gets (`?abc1234`, README:64) still work. (NB: `DOGIsFullSha` —
     used in the first pass — was WRONG; it requires 40/64 hex and would reject
     every sha-prefix get.)
 
 ### TODOs
- -[v] Repro-first: `test/post/41-sub-synth-no-sha-in-subproj/` (hermetic `file://`)
+-[v] Repro-first: `test/post/41-sub-synth-no-sha-in-subproj/` (hermetic `file://`)
       — RED pre-fix (sha-in-subproj get accepted rc 0), GREEN post-fix (refused).
- -[v] Root-caused: GET-side fallback, not the POST arm (above).
- -[v] Fix: `sniff/GET.c` `DOGIsFullSha` gate; behaviour-preserving for real `?<40hex>`.
- -[v] SUBS/post table-driven repro added; 299/299.
- -[v] **Landed `8c69c16b`** (`be put`+`be post --nosub`; 299/299 before & after).
- -[ ] (maintainer) drop the stray real-store rows; NOT from the wt.
+-[v] Root-caused: GET-side fallback, not the POST arm (above).
+-[v] Fix: `sniff/GET.c` `DOGIsFullSha` gate; behaviour-preserving for real `?<40hex>`.
+-[v] SUBS/post table-driven repro added; 299/299.
+-[v] *Landed `8c69c16b`* (`be put`+`be post --nosub`; 299/299 before & after).
+-[ ] (maintainer) drop the stray real-store rows; NOT from the wt.
 
 ### Blockers and bummers
  -  Separate, OUT OF SCOPE: `be get '?/<sub>/.<parent>'` (well-formed synthetic
     re-attach) currently also fails — a reconcile-to-synthetic-branch issue; flag as
     a follow-up, not fixed here.
- -  [[ABC-003]] is NOT blocked by this (dot-branch well-formed; wt already attached).
+ -  [ABC-003] is NOT blocked by this (dot-branch well-formed; wt already attached).
 
 ##  Outcome
- -  **LANDED `8c69c16b`**: `sniff/GET.c` **`DOGIsHashlet`** gate (corrected from
+ -  *LANDED `8c69c16b`*: `sniff/GET.c` *`DOGIsHashlet`* gate (corrected from
     `DOGIsFullSha`) + `test/post/41-sub-synth-no-sha-in-subproj` (malformed
     `?<sha>/.par` refused AND a clean sha-prefix get still succeeds); 299/299 before
     & after; canonical untouched. Follow-up still OPEN: `be get '?/<sub>/.<parent>'`

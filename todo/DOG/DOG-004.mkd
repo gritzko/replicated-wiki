@@ -29,9 +29,9 @@ Port the rendering surface onto `dog/WEAVE` ([DOG-003]): `WEAVEEmitDiff` (window
     re-absorption is not a real conflict).
 
 ### TODOs
- -[ ] `WEAVEEmitDiff`/`EmitFull`/`EmitMerged` over `u32cs` index scopes.
- -[ ] 16 MiB detect + coarse blob-level fallback + a `capped` report row.
- -[ ] Port the emit tests; add a >16 MiB large-file case that locks [DIFF-007].
+-[ ] `WEAVEEmitDiff`/`EmitFull`/`EmitMerged` over `u32cs` index scopes.
+-[ ] 16 MiB detect + coarse blob-level fallback + a `capped` report row.
+-[ ] Port the emit tests; add a >16 MiB large-file case that locks [DIFF-007].
 
 ### Blockers and bummers
  -  Gates on [DOG-003].

@@ -14,7 +14,7 @@ second `be diff:?<sha>`.  This ticket surfaces the diff from `commit:`.
 ### Goals
  -  After the commit metadata, surface the commit's diff so `commit:` reads
     like `git show`.
- -  **Preferred:** emit a navigable link to `diff:?<sha>` (graf's projector)
+ -  *Preferred:* emit a navigable link to `diff:?<sha>` (graf's projector)
     that [Bro] can follow — keeps `commit:` single-purpose, reuses graf's diff
     renderer, no diff code in keeper.
  -  Alternative: inline graf's unified diff right after the message.
@@ -29,18 +29,18 @@ second `be diff:?<sha>`.  This ticket surfaces the diff from `commit:`.
 ##  WIP
 
 ### Design decisions
- -  Link vs inline: recommend the **link** — keeper stays diff-free, one clean
+ -  Link vs inline: recommend the *link* — keeper stays diff-free, one clean
     dog boundary; inlining would force keeper to call graf or duplicate diff
     logic. (User leaning: link.)
  -  Link target = `diff:?<sha>` for the sha the `commit:` URI resolved to.
 
 ### TODOs
- -[v] Decided: **link** (keeper stays diff-free).
- -[v] Localized: `KEEPProjCommit` (`keeper/PROJ.c`), `diff:` query form is the
+-[v] Decided: *link* (keeper stays diff-free).
+-[v] Localized: `KEEPProjCommit` (`keeper/PROJ.c`), `diff:` query form is the
       one that triggers graf's commit-show (`#` fragment renders empty).
- -[v] Implemented: append a `diff:?<sha40>` `U` tok32 click-target after the
+-[v] Implemented: append a `diff:?<sha40>` `U` tok32 click-target after the
       headers+message; Bro follows it (existing link primitive, no new dep).
- -[v] Test `test/commit/01-diff-link`.
+-[v] Test `test/commit/01-diff-link`.
 
 ### Blockers and bummers
  -  A linked diff inherits whatever `diff:` shows — now fixed for sub-pin-bump

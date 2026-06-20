@@ -1,6 +1,6 @@
 #   POST-010: no-op `file://` re-push prints a stray `FILEFAIL` while reporting success
 
-A no-op re-push over the local-exec `file://` edge (nothing new to send) prints a stray `FILEFAIL` from `wpush_send_pack_interleaved` (`keeper/WIRECLI.c:1492`) even though the push still reports success — a benign `EPIPE`/`POLLHUP` race when the peer closes its end early on an empty/already-current pack. Local-exec only; not seen on the ssh path. Split out of [[POST-008]]. Cosmetic but noisy — a spurious error line on a successful no-op erodes trust in the output. See [POST], [CLAUDE].
+A no-op re-push over the local-exec `file://` edge (nothing new to send) prints a stray `FILEFAIL` from `wpush_send_pack_interleaved` (`keeper/WIRECLI.c:1492`) even though the push still reports success — a benign `EPIPE`/`POLLHUP` race when the peer closes its end early on an empty/already-current pack. Local-exec only; not seen on the ssh path. Split out of [POST-008]. Cosmetic but noisy — a spurious error line on a successful no-op erodes trust in the output. See [POST], [CLAUDE].
 
 ##  Issues
 An empty/no-op pack send races the peer's early close.

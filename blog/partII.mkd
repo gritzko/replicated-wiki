@@ -3,7 +3,7 @@ title: "Beagle SCM: HTTP/CLI interface"
 ---
 #   II. Beagle SCM: HTTP/CLI interface
 
-    [**Part I. SCM as a database for the code**][1]
+    [*Part I. SCM as a database for the code*][1]
 
 Despite L.Torvalds initially described git as "information manager
 from hell", it was a very innovative revision control system. 
@@ -453,13 +453,13 @@ wait for Part III.
 Acknowledgements. A.Borzilov, N. Prokopov (aka tonsky), J.Syrowiecki
 contributed feedback and ideas for this draft.
 
-[**Part I. SCM as a database for the code**][1]
+[*Part I. SCM as a database for the code*][1]
 
-**Part III. Inner workings of Beagle revision control.**
+*Part III. Inner workings of Beagle revision control.*
 
-**Part IV. Experiments.**
+*Part IV. Experiments.*
 
-**Part V. The Vision.**
+*Part V. The Vision.*
 
 [1]: partI.mkd
 [2]: ./img/nav.jpg#rightw40 "Navigation"

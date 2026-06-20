@@ -1,6 +1,6 @@
 #   DIS-034: `be put <dir>` regressed — a directory without a trailing slash is "does not exist"/`PUTNONE`
 
-`be put <dir>` no longer stages a directory's files unless the path carries a **trailing slash**. Without the slash the dir is reported "does not exist — skipped" (and, if it is the only argument, the whole put fails `PUTNONE`/`NONE`); `be put <dir>/` recurses correctly. This used to work without the slash. Hit landing the DIS-030 changeset: `be put test/patch/32-bare-next-one` → `PUTNONE`, while `be put test/post/32-msg-bang-ban/` staged. The misleading "does not exist" for a dir that plainly exists compounds it. See [PUT], [CLAUDE].
+`be put <dir>` no longer stages a directory's files unless the path carries a *trailing slash*. Without the slash the dir is reported "does not exist — skipped" (and, if it is the only argument, the whole put fails `PUTNONE`/`NONE`); `be put <dir>/` recurses correctly. This used to work without the slash. Hit landing the DIS-030 changeset: `be put test/patch/32-bare-next-one` → `PUTNONE`, while `be put test/post/32-msg-bang-ban/` staged. The misleading "does not exist" for a dir that plainly exists compounds it. See [PUT], [CLAUDE].
 
 ##  Issues
 A directory argument is only recognized with a trailing slash.

@@ -6,7 +6,7 @@
     sniff: put: no eligible paths
     Error: PUTNONE
 ````
-`be put` resolves paths only against the **parent** project's tree and never relays a `<sub>/<path>` into the submodule's own staging. Other verbs recurse into mounted subs via the SUBS relay (POST/GET/DELETE — `BEActSubsRelay`), but PUT does not, so submodule files can only be staged by `cd`-ing into the sub. Surfaced staging the abc-pin's untracked `ROCKMERGE.h`/`test/POLloop.c`/`test/ROCKMERGE.c`. See [PUT], [Submodules], [SUBS], [CLAUDE].
+`be put` resolves paths only against the *parent* project's tree and never relays a `<sub>/<path>` into the submodule's own staging. Other verbs recurse into mounted subs via the SUBS relay (POST/GET/DELETE — `BEActSubsRelay`), but PUT does not, so submodule files can only be staged by `cd`-ing into the sub. Surfaced staging the abc-pin's untracked `ROCKMERGE.h`/`test/POLloop.c`/`test/ROCKMERGE.c`. See [PUT], [Submodules], [SUBS], [CLAUDE].
 
 ##  Issues
 PUT is parent-tree only; it has no submodule delegation.
@@ -17,7 +17,7 @@ PUT is parent-tree only; it has no submodule delegation.
  -  Repro: with a mounted `abc` sub holding an untracked file, `be put abc/<file>` → `PUTNONE`.
 
 ##  Blockers
-Relates to the [SUBS] recursion (the relay POST/GET/DELETE already use); independent of [[DIS-034 (`be put <dir>` trailing-slash)]] but both are PUT path-classification gaps.
+Relates to the [SUBS] recursion (the relay POST/GET/DELETE already use); independent of [DIS-034 (`be put <dir>` trailing-slash)] but both are PUT path-classification gaps.
 
 ##  Planned
 Wire PUT into the submodule relay so `<sub>/<path>` delegates to the sub's put.

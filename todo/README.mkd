@@ -4,14 +4,14 @@ Index of Beagle's open work: one topic per dir, each holding numbered [Plan]-sha
 
 ##  Active topics
 
- -  [BE] — dispatcher CLI front-end; open: BE-003 (uniform error line, needs a ruling), BE-006 (one failed push prints 5 stacked Error/raw lines → collapse to one → [[BE-003]]). BE-007 (root out ROWS — `HUNKu8sFeedRow` ULOG→HUNK serializer, no types; fixed POST-022) landed `1a006d08`, retiring BE-005.
- -  [DIS] — cross-cutting spec/impl discrepancies; DIS-045 CLOSING (premise false — engine already correct via DIS-043/044; teeth committed `711618fe`, `be-patch-15` fail re-tasked to [[DOG-005]]). DIS-043 (RGA criss-cross) `8eece3f3` + DIS-044 (causal tie-break) `5041ed18` landed.
+ -  [BE] — dispatcher CLI front-end; open: BE-003 (uniform error line, needs a ruling), BE-006 (one failed push prints 5 stacked Error/raw lines → collapse to one → [BE-003]). BE-007 (root out ROWS — `HUNKu8sFeedRow` ULOG→HUNK serializer, no types; fixed POST-022) landed `1a006d08`, retiring BE-005.
+ -  [DIS] — cross-cutting spec/impl discrepancies; DIS-045 CLOSING (premise false — engine already correct via DIS-043/044; teeth committed `711618fe`, `be-patch-15` fail re-tasked to [DOG-005]). DIS-043 (RGA criss-cross) `8eece3f3` + DIS-044 (causal tie-break) `5041ed18` landed.
  -  [MEM] — memory-safety audit (digest `MEM/MEM.mkd`); 10 open (6 JSC-blocked `js` ones dropped as stale — superseded by the landed JS work).
  -  [KEEP] — keeper object pool / walks / wire; KEEP-001 (converge 4 tree-walkers → `KEEPWalkTree`) landed `0eb0afab`, KEEP-002 landed `8f7233c3`.
  -  [GIT] — pack-log format & sync; open: GIT-001 (umbrella — all impl children landed; only the PackLog wiki reconcile remains). GIT-002/003/004/005/007/008 landed; GIT-006 dropped; GIT-009 (fresh-remote `.be` blob → fsck) landed `c4955e5b`.
  -  [SUBS] — submodule recursion; open: SUBS-013 (`git submodule add` parity), SUBS-025 (sub GET recursion leaks raw fetch progress to stderr instead of relaying it as hunks). SUBS-024 landed `b09b09bf`.
- -  [POST] — commit-path gaps; open: POST-006 (POSTCFLCT false-fires on marker strings → [[DIS-040]]), POST-019 (internal gitlink-bump `put:` banner leaks mid-post). POST-021 (git-scheme push BNOROOM — BASS exhaustion) landed `387a6f99`; POST-022 (wrecked sub-output) subsumed by BE-007 `1a006d08`; POST-020 landed `8c7f5f3a`.
- -  [GET] — checkout / fetch / sync; open: GET-009 (be:// sync umbrella), GET-017 (→ [[DIS-039]]), GET-018 (atomic wt GET), GET-022 (no per-file checkout-from-rev — `be get path?rev` drops the path).
+ -  [POST] — commit-path gaps; open: POST-006 (POSTCFLCT false-fires on marker strings → [DIS-040]), POST-019 (internal gitlink-bump `put:` banner leaks mid-post). POST-021 (git-scheme push BNOROOM — BASS exhaustion) landed `387a6f99`; POST-022 (wrecked sub-output) subsumed by BE-007 `1a006d08`; POST-020 landed `8c7f5f3a`.
+ -  [GET] — checkout / fetch / sync; open: GET-009 (be:// sync umbrella), GET-017 (→ [DIS-039]), GET-018 (atomic wt GET), GET-022 (no per-file checkout-from-rev — `be get path?rev` drops the path).
  -  [BLAME] — blame perf + output; open: BLAME-001, BLAME-003 (needs a ruling).
  -  [PTR] — pointer-discipline / slice-safety audit; open (all gated): PTR-001 (abc), PTR-007 (woof). PTR-009 (URI API → `u8s out`) landed `b0455595`. The blockquote/list HasPrefix + `MKDTLineMarker` out-ptr rework was DISCARDED (stale PTR-005-reverting tangle) — needs fresh rework if wanted; PTR-006 CLOSED (won't fix).
  -  [DIFF] — the `diff:` view; open: DIFF-005 (single-file whole-file context — needs a UX ruling), DIFF-007 (`diff:<largefile>` silently empty — outtoks overflow).

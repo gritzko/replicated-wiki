@@ -1,6 +1,6 @@
 #   GET-006: `be get` from a fresh dir escapes store discovery to `~/.be` and self-pollutes `~/.be/wtlog`
 
-Running `be get file:$HOME/.be/?/beagle` (or `be://…`) from a brand-new empty directory with no anchoring `.be` lets store discovery walk UP to `~/.be` and write a `~/.be/wtlog` there, self-anchoring the real global store. Subsequent `be` ops that reach `~/.be` then fail `SNIFFFAIL` / "no baseline in `.be/wtlog`" — breaking every fresh clone AND existing loop clones until the stray `~/.be/wtlog` is moved aside (the `.bak` pattern). This cost a long debug detour this session. The hermetic workaround (a pre-created empty `.be/wtlog` anchor in the destination, per `keeper/test/LOAD_CLONE.sh`) works, but a bare `be get` must not be able to poison the global store. See [[be dot be shield walk]], [GET], [CLAUDE].
+Running `be get file:$HOME/.be/?/beagle` (or `be://…`) from a brand-new empty directory with no anchoring `.be` lets store discovery walk UP to `~/.be` and write a `~/.be/wtlog` there, self-anchoring the real global store. Subsequent `be` ops that reach `~/.be` then fail `SNIFFFAIL` / "no baseline in `.be/wtlog`" — breaking every fresh clone AND existing loop clones until the stray `~/.be/wtlog` is moved aside (the `.bak` pattern). This cost a long debug detour this session. The hermetic workaround (a pre-created empty `.be/wtlog` anchor in the destination, per `keeper/test/LOAD_CLONE.sh`) works, but a bare `be get` must not be able to poison the global store. See [be dot be shield walk], [GET], [CLAUDE].
 
 ##  Issues
 A destination without a `.be` anchor lets `be get` write a wtlog above itself.
@@ -11,7 +11,7 @@ A destination without a `.be` anchor lets `be get` write a wtlog above itself.
  -  Repro: `mkdir /tmp/x && cd /tmp/x && be get file:$HOME/.be/?/beagle` → writes/modifies `~/.be/wtlog`.
 
 ##  Blockers
-Relates to the `.be` shield-walk discovery and store layout — coordinate with [[keepresolveuri funnel plan]] / store-layout DIS-001/024.
+Relates to the `.be` shield-walk discovery and store layout — coordinate with [keepresolveuri funnel plan] / store-layout DIS-001/024.
 
 ##  Planned
 Make `be get` anchor its own destination and never write a wtlog into an ancestor store.

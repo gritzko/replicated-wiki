@@ -9,13 +9,13 @@ implementation. Method: [Issues].
 ##  Input
 
 ### Context
- -  `js/` is **JABC**: a thin JavaScriptCore C++ binding (`JABC.hpp`, `convert.cpp`,
+ -  `js/` is *JABC*: a thin JavaScriptCore C++ binding (`JABC.hpp`, `convert.cpp`,
     `io.cpp`, `main.cpp`; `js2c.js` bundles `*.js`→`*.js.c`). Engine = stock
     `libjavascriptcore` (JSC C API: `JSObjectRef`/`JSValueRef`/`JSContextRef`,
     `JABC_FN_DEFINE`/`JABC_FN_THROW`/`JABC_FN_CALL` over the PRO.h `__`/`ok64str`).
  -  STATED PHILOSOPHY (`js/README.md`, load-bearing): bindings are GLUE that "hold no
-    memory"; **"Do not toss buffers across layers … let JavaScript manage the buffers
-    (`ArrayBuffer`/`TypedArray`), no shared custody"**; minimize native-held JS refs.
+    memory"; *"Do not toss buffers across layers … let JavaScript manage the buffers
+    (`ArrayBuffer`/`TypedArray`), no shared custody"*; minimize native-held JS refs.
     The current ABC↔JS bridge is TLV-COPY (`convert.cpp` serialises JS values into a
     `u8b` via `TLVu8bInto`/`RDX_TYPE_*`) — there is no zero-copy container path yet.
  -  ABC containers in scope: typed slices+buffers `u64s`/`u64b`, `u32s`/`u32b`
@@ -24,10 +24,10 @@ implementation. Method: [Issues].
     (128-bit `(key,val)`) sorted-run entries with `…Z` orderings + `wh128sFindGE`
     (`dog/WHIFF.h`). BASS = the bump-scratch (`ABC_BASS`, `a_carve`, `Bu8mark`/rewind;
     `call`/`try` snapshot-rewind it). mmap = `u8bMap`/`Bu8` (MAP_SHARED — fails EINVAL on
-    9p, see [[be_store_no_9p]]).
+    9p, see [be_store_no_9p]).
 
 ### Goals
- -  **THE POINT (maintainer): run the TIGHT LOOPS in C, not the JS interpreter.** The cost
+ -  *THE POINT (maintainer): run the TIGHT LOOPS in C, not the JS interpreter.* The cost
     is the JS↔C boundary crossing; the win is amortizing it — the hot loop executes ONCE in
     C over the whole container. So the API is BULK / whole-container ops (sort, `findGE`/
     binary-search, set intersect/union/diff, dedup, build-hash + probe-many, merge sorted
@@ -50,9 +50,9 @@ implementation. Method: [Issues].
 
 ### Design decisions (options + recommendation)
 
- -  **Memory ownership — THE CRUX. RECOMMEND: JS owns the bytes; ABC containers are
-    transient VIEWS over a JS-owned region; BASS never escapes a call.**
-    - (A, RECOMMENDED) **View-over-ArrayBuffer.** Each JS container object WRAPS a JS
+ -  *Memory ownership — THE CRUX. RECOMMEND: JS owns the bytes; ABC containers are
+    transient VIEWS over a JS-owned region; BASS never escapes a call.*
+    - (A, RECOMMENDED) *View-over-ArrayBuffer.* Each JS container object WRAPS a JS
       `ArrayBuffer` (the bytes). A method materialises an ABC `u64b`/`kv64`/`wh128cs`
       view over the ArrayBuffer's backing pointer *for the duration of that call*, runs
       the ABC op, and returns — the view is stack-only and dies with the call. JS GC
@@ -60,16 +60,16 @@ implementation. Method: [Issues].
       used ONLY for ephemeral per-method scratch and is rewound before return (it must
       never back a value handed to JS). This dissolves the BASS-vs-GC hazard entirely
       and matches `README.md` #3/#4.
-    - (B, REJECTED) **C-owned BASS region + JS handle + finalizer.** A JS object pins a
+    - (B, REJECTED) *C-owned BASS region + JS handle + finalizer.* A JS object pins a
       carved BASS block; a JSC finalizer frees it. Rejected: BASS is bump-allocated with
       `call`/`try` REWIND semantics — it cannot safely hold arbitrary-lifetime regions a
       GC reclaims out of order; this is exactly the "shared custody" the README forbids.
-    - **mmap** fits model A cleanly: expose a file as a JS buffer via
+    - *mmap* fits model A cleanly: expose a file as a JS buffer via
       `JSObjectMakeTypedArrayWithBytesNoCopy`/an `ArrayBuffer`-no-copy whose deallocator
       `munmap`s — JS GC drives the unmap, still "JS owns it." (9p: MAP_SHARED EINVAL →
       fall back to read-into-ArrayBuffer; the constructor detects and degrades.)
 
- -  **Binding shape — REVISED (maintainer, 2026-06-16): JS already HAS u64/u32 buffers.**
+ -  *Binding shape — REVISED (maintainer, 2026-06-16): JS already HAS u64/u32 buffers.*
     `Uint32Array` (u32) and `BigUint64Array` (u64) over `ArrayBuffer` are native (ES2020).
     So DO NOT add `U64Buf`/`U32Buf` classes — the native typed array IS the buffer. The
     u64/u32 binding is just a set of `JABC_FN` FUNCTIONS over a passed-in typed array
@@ -82,7 +82,7 @@ implementation. Method: [Issues].
     `findGE`/`merge` (`HASHkv64Put`, `wh128sFindGE`, …). Persistent bytes stay JS-owned
     (the typed array / its `ArrayBuffer`); the binding holds no memory.
 
- -  **JS API surface (sketch).** u64/u32 = NATIVE typed arrays + ABC functions over them:
+ -  *JS API surface (sketch).* u64/u32 = NATIVE typed arrays + ABC functions over them:
     ```js
     let a = new BigUint64Array(1024);    // the u64 buffer IS native
     abc.u64.sort(a);                     // in-place, ABC `…Z` ordering
@@ -99,7 +99,7 @@ implementation. Method: [Issues].
     ```
     Only `KV*`/`WH*` are objects; `u64`/`u32` are just function namespaces over native arrays.
 
- -  **Type set + the slice/buffer/consumed distinction.** u64/u32 = workhorse numeric
+ -  *Type set + the slice/buffer/consumed distinction.* u64/u32 = workhorse numeric
     buffers; kv64/kv32 = the hash/heap maps; wh64/wh128 = the whiff sorted-index runs
     (`wh128` = the WHIFF `(key,val)` entry). The ABC `…s`(slice)/`…b`(buffer)/`…cs`
     (consumed) distinction is HIDDEN from JS: a JS container == a buffer (has `push`),
@@ -107,7 +107,7 @@ implementation. Method: [Issues].
     iterators (no head-advance). Deferred: utf8/text slices (already covered by the TLV
     string bridge), arbitrary `wh*` widths, nested containers.
 
- -  **BASS vs the JS call stack / callbacks (maintainer Q, 2026-06-16).** You do NOT track
+ -  *BASS vs the JS call stack / callbacks (maintainer Q, 2026-06-16).* You do NOT track
     the JS stack — the C `call`/`try` frames already snapshot+rewind the two `ABC_BASS`
     head pointers (`PRO.h:80-83/100-103`), and a SYNCHRONOUS JS callback nests LIFO inside
     the C stack: native A carves → JS callback → native B snapshots at A's bump level,
@@ -115,37 +115,37 @@ implementation. Method: [Issues].
     callbacks with zero extra machinery. The ONLY thing that breaks it is an ASYNC YIELD:
     a native op that carves BASS then returns to the event loop (await/timer/promise)
     without rewinding — the arena stops being LIFO and the next task buries the rewind
-    point. HARD RULE: **never hold a BASS region across an event-loop turn**; if an op must
+    point. HARD RULE: *never hold a BASS region across an event-loop turn*; if an op must
     await, copy its live data into a JS-owned `ArrayBuffer` and drop BASS before yielding.
     This is exactly why model A is right — persistent bytes are JS-owned, so BASS is only
     ever transient SYNCHRONOUS-LEAF scratch (and most ops — `push`/`get`/`findGE` — carve
     none). BASS's role in the bindings is near-zero by design.
 
 ### Mapping (ABC → JS)
- -  **Storage (zero-copy):** an ABC slice `{begin,end}` ≡ a JS TypedArray (backing ptr +
+ -  *Storage (zero-copy):* an ABC slice `{begin,end}` ≡ a JS TypedArray (backing ptr +
     byteOffset + length). `u8s/u8b`↔`Uint8Array`, `u32s/u32b`↔`Uint32Array`,
     `u64s/u64b`↔`BigUint64Array`. SLICE→TypedArray `subarray`; BUFFER(append)→TypedArray
     capacity + a `len` cursor (grow = bigger `ArrayBuffer` + copy); CONSUMED(`…cs`)→does
     NOT map (JS uses an explicit index/iterator).
- -  **Elements:** u32 lane→`number`; u64 lane→`BigInt` (native `BigUint64Array` output);
+ -  *Elements:* u32 lane→`number`; u64 lane→`BigInt` (native `BigUint64Array` output);
     utf8 text→JS string (existing TLV bridge).
- -  **Mechanism:** a `JABC_FN` reads the TypedArray backing ptr+len from JSC
+ -  *Mechanism:* a `JABC_FN` reads the TypedArray backing ptr+len from JSC
     (`JSObjectGetTypedArrayBytesPtr`/`…Length`), builds the ABC view on the C stack (no
     alloc), runs the typed op in place, returns. No BASS retention.
- -  **Structured = typed array + invariant + ops:** `kv32`/`kv64` → a `Uint32Array`/
+ -  *Structured = typed array + invariant + ops:* `kv32`/`kv64` → a `Uint32Array`/
     `BigUint64Array` of `(key,val)` open-address slots + size/cap (`HASHkv*Put/Get`);
     `wh64`/`wh128` → a `BigUint64Array` sorted run (`wh128` = 2 u64 lanes/entry) ordered by
     `…Z` (insert / `wh128sFindGE` / merge). A THIN `KV*`/`WH*` JS shim holds only `len`/`cap`
     + the array ref — storage stays the JS-owned TypedArray, so bindings hold no memory.
 
 ### Open questions / risks
- -  **u64 ≥ 2^53 vs the JS double.** RECOMMEND BigInt for `u64`/`WH128.key`; plain
+ -  *u64 ≥ 2^53 vs the JS double.* RECOMMEND BigInt for `u64`/`WH128.key`; plain
     `number` for u32, lengths, indices. Alt: lo/hi `u32` pair accessors (faster, uglier).
- -  **9p mmap** (MAP_SHARED EINVAL, [[be_store_no_9p]]) — mmap constructors must detect
+ -  *9p mmap* (MAP_SHARED EINVAL, [be_store_no_9p]) — mmap constructors must detect
     and fall back to a copy-in ArrayBuffer.
- -  **Thread-safety** — `JABC_CONTEXT` is `thread_local`; containers are per-context,
+ -  *Thread-safety* — `JABC_CONTEXT` is `thread_local`; containers are per-context,
     not shared across threads (document it).
- -  **`js2c.js` bundling** — any `*.js` helpers (a `containers.js` shim) flow through
+ -  *`js2c.js` bundling* — any `*.js` helpers (a `containers.js` shim) flow through
     `js2c.js`→`*.js.c`; keep the native classes registered in `main.cpp`.
 
 ##  Outcome

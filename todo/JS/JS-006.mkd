@@ -24,13 +24,13 @@ finding. Method: [Issues].
  -  (open) Change `args[0]` → `args[i]` in the string branch.
 
 ### TODOs
- -[ ] Repro-first: `io.log("a", "b")` asserts output contains `b`.
- -[ ] Fix the index; check the `write` return.
+-[ ] Repro-first: `io.log("a", "b")` asserts output contains `b`.
+-[ ] Fix the index; check the `write` return.
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `abc29c84`** (2026-06-16): `JABCioLog` now converts `args[i]` (was `args[0]`), strips the NUL and honours `write()`'s short return; C++ harness row `run_log_args_repro` drives two strings over a piped STDERR and asserts both appear (red→green).
+ -  *LANDED `abc29c84`* (2026-06-16): `JABCioLog` now converts `args[i]` (was `args[0]`), strips the NUL and honours `write()`'s short return; C++ harness row `run_log_args_repro` drives two strings over a piped STDERR and asserts both appear (red→green).
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

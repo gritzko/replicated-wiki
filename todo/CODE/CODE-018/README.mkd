@@ -13,7 +13,7 @@ does NOT, so each conversion is a per-case correctness check.  Method: [Issues].
 
 ### Context
  -  Finder (run at repo root): `be 'spot:.c#ok64 o=A;if(o!=OK) return o;'` →
-    116 hits 2026-06-16: **93 in `.c`, 23 in `.h`** (full list: [suspects]).
+    116 hits 2026-06-16: *93 in `.c`, 23 in `.h`* (full list: [suspects]).
  -  The pattern is functionally an error-forward, but `call(A)` additionally
     snapshots+rewinds BASS around `A` (frees the callee's per-call scratch).  Some
     manual sites may be INTENTIONAL — the callee returns a slice/buffer carved in
@@ -35,12 +35,12 @@ does NOT, so each conversion is a per-case correctness check.  Method: [Issues].
     rewording to dodge the search.
 
 ### Constraints
- -  **BASS-rewind hazard is the gate**: before converting a site, confirm the
+ -  *BASS-rewind hazard is the gate*: before converting a site, confirm the
     callee leaves nothing live in BASS that the caller reads after `A`.  If unsure,
     SKIP and list it.
- -  **abc/ is GATED** (28 suspects across `abc/*.c` + `abc/*.h`) — surface those
+ -  *abc/ is GATED* (28 suspects across `abc/*.c` + `abc/*.h`) — surface those
     diffs for maintainer review, never autoland ([CLAUDE] "abc changes reviewed").
- -  **False positives** (do NOT touch): `abc/PRO.h#trace`, `abc/Bx.h`, `abc/SSTx.h`
+ -  *False positives* (do NOT touch): `abc/PRO.h#trace`, `abc/Bx.h`, `abc/SSTx.h`
     (macro/template headers); `*/test/*` + `abc/fuzz/*` (TEST/FUZZ frames, low
     priority).  All flagged in [suspects].
  -  No behaviour change to BASS lifetime, error codes, or control flow.
@@ -54,26 +54,26 @@ does NOT, so each conversion is a per-case correctness check.  Method: [Issues].
     a conversion could shift behaviour.
 
 ### TODOs
- -[v] `.c` conversions: 51 sites across 18 non-abc `.c` files, each BASS-verified
+-[v] `.c` conversions: 51 sites across 18 non-abc `.c` files, each BASS-verified
       (callee output is mmap/scalar/caller-carved, never live BASS scratch). Suspect
       count 116→65; finder re-run confirms the drop is real `call()`/`try()`.
- -[v] `.h` triage: `dog/DPATH.h` (DPATHVerify, DPATHBranchNormFeed) — KEEP MANUAL
+-[v] `.h` triage: `dog/DPATH.h` (DPATHVerify, DPATHBranchNormFeed) — KEEP MANUAL
       (inlinable forwarders, no cleanup, PRO.h is `.c`-only). No move-to-`.c`.
- -[v] Skipped + listed the BASS/control-flow hazards (Blockers below) — findings.
- -[v] abc/ (28): reviewed, recommendations prepared, NOT landed; HAZARD flagged.
- -[v] `ctest -j16 --timeout 10` = 298/298 per batch incl. final tree.
+-[v] Skipped + listed the BASS/control-flow hazards (Blockers below) — findings.
+-[v] abc/ (28): reviewed, recommendations prepared, NOT landed; HAZARD flagged.
+-[v] `ctest -j16 --timeout 10` = 298/298 per batch incl. final tree.
 
 ### Blockers and bummers
  -  SKIPPED (BASS-hazard / control-flow, correctly left manual): `ULOGMergeWalk`
     + `SNIFFMergeWalk` cb-dispatch (cb may carve cross-call BASS in ctx — MEM-018);
     `diffref_remember_submodule` (cross-step `u8bAcquire`); `BRAM.c`/`CAPOEmit` are
     `try`/`on`-idioms not forwards; tok BRCT/MDT/MKDT (no frame, ptr-arith legacy).
- -  abc GATED: clean candidates `PATH.c`/`URI.c`/`JSON.c`/`FILE.c`; **HAZARD
-    `abc/ROCK.c#ROCKGet`** holds a `rocksdb_get` `val` needing free — a `call()`
+ -  abc GATED: clean candidates `PATH.c`/`URI.c`/`JSON.c`/`FILE.c`; *HAZARD
+    `abc/ROCK.c#ROCKGet`* holds a `rocksdb_get` `val` needing free — a `call()`
     early-return leaks it; keep manual / restructure. abc `.h` all `fun` inlineables.
 
 ##  Outcome
- -  **LANDED `a5d133f8`** (ff atop GET-020 `49039f36`): 51 `.c` conversions across
+ -  *LANDED `a5d133f8`* (ff atop GET-020 `49039f36`): 51 `.c` conversions across
     18 non-abc files, 298/298; `POSTCFLCT` was the documented false positive
     (`// ====` comment banners, no real markers) — forced with `be post!` as gated.
  -  CLOSED as-is (2026-06-16): the abc/ remainder (28 sites) is NOT pursued —

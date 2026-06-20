@@ -1,6 +1,6 @@
 #   SUBS-005: path-scoped DELETE of a submodule (or sub-interior file) false-positives DELDIRTY
 
-**MEDIUM.**  There is no working way to remove a submodule, or a file inside
+*MEDIUM.*  There is no working way to remove a submodule, or a file inside
 one, via `be delete <path>`.  Both `be delete vendor/sub` (the gitlink dir) and
 `be delete vendor/sub/core.c` (a file inside the mount) abort with `DELDIRTY`
 (exit 157), leaving the path on disk and nothing staged.

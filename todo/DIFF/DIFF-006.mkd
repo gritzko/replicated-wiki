@@ -4,7 +4,7 @@ In a multi-hunk unified diff (e.g. bare `be diff:`), the `--- a/<path>` /
 `+++ b/<path>` file-header pair is emitted for EVERY `@@` hunk instead of once per
 file. So 17 changed files with 62 hunks print 62 header pairs; git prints 17 (one
 pair, then its `@@` hunks grouped under it). Cosmetic unified-diff divergence, low
-severity. Split from [[DIFF-005]]'s bare-diff re-investigation. Method: [Issues].
+severity. Split from [DIFF-005]'s bare-diff re-investigation. Method: [Issues].
 
 ##  Input
 
@@ -35,15 +35,15 @@ severity. Split from [[DIFF-005]]'s bare-diff re-investigation. Method: [Issues]
     (first hunk of each file).
 
 ### TODOs
- -[ ] Repro: count `--- a/` vs distinct paths in a multi-file `be diff:`.
- -[ ] Fix: emit the header pair once per file (path-change boundary) in `dog/HUNK.c`.
- -[ ] Test: a 2-file, ≥3-hunk diff prints exactly 2 header pairs.
+-[ ] Repro: count `--- a/` vs distinct paths in a multi-file `be diff:`.
+-[ ] Fix: emit the header pair once per file (path-change boundary) in `dog/HUNK.c`.
+-[ ] Test: a 2-file, ≥3-hunk diff prints exactly 2 header pairs.
 
 ### Blockers and bummers
  -  Pure cosmetics; do AFTER the real DIFF-007 overflow bug.
 
 ##  Outcome
- -  **CLOSED 2026-06-16 — WON'T FIX (maintainer).** Repeating the `--- a/`/`+++ b/`
+ -  *CLOSED 2026-06-16 — WON'T FIX (maintainer).* Repeating the `--- a/`/`+++ b/`
     pair per hunk is a cosmetic unified-diff divergence from git's per-file grouping;
     output is otherwise correct and every hunk self-identifies its path. Not worth the
     coalescing-pass churn. Ticket left in place; dropped from the active index.

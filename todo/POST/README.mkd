@@ -5,7 +5,7 @@
 ##  Active tickets
 
  -  [POST-006] — `POSTCFLCT` false-fires on conflict-marker strings in tracked source comments/literals (e.g. `sniff/PATCH.c:339`), forcing a blunt `--force`. Recognize only the real WEAVE output shape, not any inline `<<<<…||||…>>>>` occurrence.
- -  [POST-019] — an internal gitlink-bump `put:` banner (`staged 1 put row(s)`) leaks into the MIDDLE of `be post` when a submodule advanced; the bump already shows as `mod <sub>` in the parent post rows. Suppress the standalone put banner for the internal path. Surfaced by [[POST-018]]/[[BE-005]].
+ -  [POST-019] — an internal gitlink-bump `put:` banner (`staged 1 put row(s)`) leaks into the MIDDLE of `be post` when a submodule advanced; the bump already shows as `mod <sub>` in the parent post rows. Suppress the standalone put banner for the internal path. Surfaced by [POST-018]/[BE-005].
 POST-021 (git-scheme push `BNOROOM` — BASS exhaustion: per-commit walk scratch never
 rewound + unused walk buffer; skip it, route the walk through try(), size pack buffers)
 landed `387a6f99`; `test/post/46`. POST-022 (sub-push wrecked output: bare per-row label

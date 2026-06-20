@@ -29,20 +29,20 @@ The 2026-06-15 audit found spot/ reads a typed record array back out of a `u8b` 
  -  The two highest-value fixes are the `spot_todo` slab (typed slice) and the SPOTbinds `source_base`/`ndl_base` base-pointer pattern — together they account for most of the `+offset` slice reconstruction in the module.
 
 ### TODOs
- -[ ] Repro-first: lock grep/spot/replace outputs on existing tables.
- -[ ] `spot_todo` slab → typed slice (Bx.h); drop `void*`/`sizeof`.
- -[ ] SPOTbinds → `u8csc` source/needle slices; offsets via typed helper.
- -[ ] `SPOTReplace` → typed `SPOTrep` buffer + sort.
- -[ ] GREP `buf/len` → `u8b`; trigram/span/seek_runs → slice ops.
- -[ ] Ext resolve + `CAPOBuildHunk` + LESS slice conversions.
- -[ ] Build + ctest; report done vs skipped.
+-[ ] Repro-first: lock grep/spot/replace outputs on existing tables.
+-[ ] `spot_todo` slab → typed slice (Bx.h); drop `void*`/`sizeof`.
+-[ ] SPOTbinds → `u8csc` source/needle slices; offsets via typed helper.
+-[ ] `SPOTReplace` → typed `SPOTrep` buffer + sort.
+-[ ] GREP `buf/len` → `u8b`; trigram/span/seek_runs → slice ops.
+-[ ] Ext resolve + `CAPOBuildHunk` + LESS slice conversions.
+-[ ] Build + ctest; report done vs skipped.
 
 ### Blockers and bummers
  -  None known.
 
 ##  Outcome
 
- -  **CLOSED 2026-06-16 — WON'T FIX (no value, maintainer call).** The spot/
+ -  *CLOSED 2026-06-16 — WON'T FIX (no value, maintainer call).* The spot/
     ptr-discipline churn (`spot_todo` void*/sizeof slab, SPOTbinds base-ptr binds,
     GREP `buf[1024]`+len) doesn't justify the risk/effort on a hot search path; the
     existing code is contained and search output is the contract. Not landed; the

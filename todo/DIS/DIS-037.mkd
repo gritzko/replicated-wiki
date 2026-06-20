@@ -1,6 +1,6 @@
 #   DIS-037: the remote `~/.be` addresses projects by store-DIRECTORY name (`dogs`, `abc`), not by project TITLE
 
-In the remote `~/.be`, the beagle project resolves as `?/dogs` and libabc as `?/abc` — but `dogs`/`abc` are the on-disk store-DIRECTORY names, not the project TITLES (`beagle`, `libabc`). Addressing happens to work by dir-name coincidence; the canonical `?/<proj>` should resolve by project title, with the directory name an implementation detail. [Issues]'s own clone command uses `be get file:///home/gritzko/.be?/beagle` (title), yet only `?/dogs` (dir name) actually resolves — a direct mismatch. See [GET], [Submodules], [CLAUDE], [[wtlog-row0-sha-plan]].
+In the remote `~/.be`, the beagle project resolves as `?/dogs` and libabc as `?/abc` — but `dogs`/`abc` are the on-disk store-DIRECTORY names, not the project TITLES (`beagle`, `libabc`). Addressing happens to work by dir-name coincidence; the canonical `?/<proj>` should resolve by project title, with the directory name an implementation detail. [Issues]'s own clone command uses `be get file:///home/gritzko/.be?/beagle` (title), yet only `?/dogs` (dir name) actually resolves — a direct mismatch. See [GET], [Submodules], [CLAUDE], [wtlog-row0-sha-plan].
 
 ##  Issues
 Dir names are used where titles belong.
@@ -10,7 +10,7 @@ Dir names are used where titles belong.
  -  A copied / renamed store dir breaks addressing, since identity rides the dir name instead of the title recorded in the project.
 
 ##  Blockers
-Needs the project title (row-0 / config) as the identity key; ties to [[wtlog-row0-sha-plan]].
+Needs the project title (row-0 / config) as the identity key; ties to [wtlog-row0-sha-plan].
 
 ##  Planned
 Resolve `?/<title>` to the matching store dir.

@@ -1,6 +1,6 @@
 #   SUBS-003: GET status report stamped DDMon not HH:MM (FIXED)
 
-**MEDIUM — FIXED this session** (uncommitted, per session rules).  `be get`'s
+*MEDIUM — FIXED this session* (uncommitted, per session rules).  `be get`'s
 clone/checkout status report rendered every file row's time column as a date
 (`06Jun`) instead of the wall-clock `HH:MM` that bare `be`/put/post emit.  The
 skew made the long-standing `test/get/05-submodule-from-ssh` and
@@ -12,7 +12,7 @@ time column, which never matches `06Jun`).
 RON60 `hk->ts` to a `struct tm` via `RONToTime`, then call `mktime(&tm)`.  The
 `tm` is zero-initialised, so `tm_isdst == 0`; in a DST-active zone (CEST,
 UTC+2) `mktime` interprets the local wall-clock as standard time (UTC+1),
-yielding an epoch **one hour in the future**.  A 23:19 stamp thus rolls past
+yielding an epoch *one hour in the future*.  A 23:19 stamp thus rolls past
 midnight to `00:19 06Jun`, and `now - ts < 0` falls out of
 `DOGutf8sFeedDate`'s same-day/HH:MM window into its DDMon branch.  GET hits
 this because its hunks carry a live `hk->ts` (`sniff/GET.c` per-file rows);

@@ -44,11 +44,11 @@ fallback used only when the parent has no copy. `be get` already forwards
     / the HEAD leg of dispatch).
 
 ### TODOs
- -[ ] Repro hermetic (WITH_SSH=ON): be-parent with a sub whose declared URL is
+-[ ] Repro hermetic (WITH_SSH=ON): be-parent with a sub whose declared URL is
       dead; `be head be://` must still peek via the parent.
- -[ ] Forward the parent source into HEAD's sub recursion; fallback on miss.
- -[ ] Verify github-offline no longer aborts; declared-URL fallback still works.
- -[ ] Land + ctest WITH_SSH=ON.
+-[ ] Forward the parent source into HEAD's sub recursion; fallback on miss.
+-[ ] Verify github-offline no longer aborts; declared-URL fallback still works.
+-[ ] Land + ctest WITH_SSH=ON.
 
 ### Blockers and bummers
  -  Needs `WITH_SSH=ON` to exercise the ssh-localhost sub path

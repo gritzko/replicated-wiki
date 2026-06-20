@@ -4,7 +4,7 @@
 
 ##  Active tickets
 
- -  [BE-003] — every dog must print **name + verb + URI + error code** on an error exit (one uniform line, single-sourced) — today error exits are contextless (`Error: SNIFFFAIL`, `bro: cannot open …: FILENONE`); general form of BE-002.
+ -  [BE-003] — every dog must print *name + verb + URI + error code* on an error exit (one uniform line, single-sourced) — today error exits are contextless (`Error: SNIFFFAIL`, `bro: cannot open …: FILENONE`); general form of BE-002.
  -  [BE-006] — one unreachable-remote `be post` prints FIVE lines for one failure (raw `ssh:` leak + `be: remote unreachable` + `Error: WIREUNRCH` + `Error: BEDOGEXIT` ×2, one per spawned `be` level); collapse to a single uniform error line. Concrete instance of [BE-003].
 
 BE-007 (root out ROWS — deleted `dog/ROWS.{h,c}` + 4 types, 18 callers repointed to the

@@ -1,27 +1,27 @@
 #   SUBS-011: search projectors (grep/spot/regex) do not descend into submodules (LANDED)
 
-**HIGH — LANDED `7d37f90f` (2026-06-06).**  Two coupled fixes: (1) **index on
-mount** — a sub mount runs a *local* `be get ?<pin>` which doesn't trip the
+*HIGH — LANDED `7d37f90f` (2026-06-06).*  Two coupled fixes: (1) *index on
+mount* — a sub mount runs a *local* `be get ?<pin>` which doesn't trip the
 transport-gated indexers, so the sub shard had `keeper.idx` but no `.spot.idx`;
 new `BEIndexMount` (`beagle/SUBS.c`) forks `spot get`+`graf get` with cwd=the
-sub mount, called from `BEGetDrainSubs` after each sub checkout.  (2) **projector
-recursion** — new `BEProjectorSubs` (`beagle/BE.cli.c`) enumerates mounts via
+sub mount, called from `BEGetDrainSubs` after each sub checkout.  (2) *projector
+recursion* — new `BEProjectorSubs` (`beagle/BE.cli.c`) enumerates mounts via
 `BESubsHere` and relays the projector into each, path-prefixed via `BERelaySub`;
 `--nosub` honoured.  Applies to grep/spot/regex.  Repro `test/spot/10` off
 `WILL_FAIL`.  (SUBS-012 reuses the same machinery for the object/diff/history
 projectors.)
 
-**HIGH (feature gap — the headline of "seamless interop").**  Repo-wide
+*HIGH (feature gap — the headline of "seamless interop").*  Repo-wide
 `be grep:`, `be spot:`, `be regex:` search only the parent project's index;
 they never look into a mounted submodule's index.  Two coupled causes:
 
- 1. **`BEProjector` has zero submodule recursion** (`beagle/BE.cli.c:557`).  It
+ 1. *`BEProjector` has zero submodule recursion* (`beagle/BE.cli.c:557`).  It
     resolves the owning dog (grep/spot/regex → the `spot` dog), forwards the
     URI + `--at`, and runs it once against the parent store.  Unlike the verb
     paths it never calls `BESubsHere` / `BERelaySub` / `BERecurseInto`.
- 2. **A mounted sub is never indexed.**  After `be get` materialises
+ 2. *A mounted sub is never indexed.*  After `be get` materialises
     `vendor/sub`, the sub shard `.be/<sub>/` has a `keeper.idx` from the fetch
-    but **no `.spot.idx`** — its content was never trigram-indexed, so even a
+    but *no `.spot.idx`* — its content was never trigram-indexed, so even a
     recursing search would have nothing to query.
 
 ##  Repro
@@ -33,7 +33,7 @@ they never look into a mounted submodule's index.  Two coupled causes:
  4. `ls .be/sub/*.spot.idx` → none (sub not indexed).
 
 ##  Counter-evidence (what already works)
- -  **Path-scoped** grep into a sub file works: `be grep:vendor/sub/core.c#findme`
+ -  *Path-scoped* grep into a sub file works: `be grep:vendor/sub/core.c#findme`
     returns `vendor/sub/core.c#L1 …` — the path-scoped form scans the named
     file directly (no index needed).  So the bytes are reachable; only the
     repo-wide index search misses them.

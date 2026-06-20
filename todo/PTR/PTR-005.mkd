@@ -30,13 +30,13 @@ The 2026-06-15 audit found sniff/ builds a 20-byte writable slice via `sha.data+
  -  Land the 11-site sha-hex swap first as one mechanical pass (single canonical helper), then the `memcmp` and array conversions.
 
 ### TODOs
- -[ ] Repro-first: lock outputs on the sniff test tables.
- -[ ] sha-hex decode 11× → `sha1FromHex`.
- -[ ] `sha_eq`/`memcmp` sha-eq → `sha1Eq`; `EMPTY_BLOB_SHA` via `sha1FromBin`.
- -[ ] `sniff_step_fn` → `ulogrecsc`.
- -[ ] `parse_tree`/`sort_entries` → `entryb`+`entryZ` sort.
- -[ ] DEL/PUT/LS pointer juggling → slice helpers; field literals → `u8csEq`.
- -[ ] Rebuild `sniff` + ctest; report done vs skipped.
+-[ ] Repro-first: lock outputs on the sniff test tables.
+-[ ] sha-hex decode 11× → `sha1FromHex`.
+-[ ] `sha_eq`/`memcmp` sha-eq → `sha1Eq`; `EMPTY_BLOB_SHA` via `sha1FromBin`.
+-[ ] `sniff_step_fn` → `ulogrecsc`.
+-[ ] `parse_tree`/`sort_entries` → `entryb`+`entryZ` sort.
+-[ ] DEL/PUT/LS pointer juggling → slice helpers; field literals → `u8csEq`.
+-[ ] Rebuild `sniff` + ctest; report done vs skipped.
 
 ### Blockers and bummers
  -  None known; `sniff` is a separate binary — rebuild it, not just `be`.

@@ -31,15 +31,15 @@ through a C-ABI callback is UB. Method: [Issues].
     re-entrancy-aware.
 
 ### TODOs
- -[ ] Repro-first: a callback that schedules/cancels a timer or closes a file
+-[ ] Repro-first: a callback that schedules/cancels a timer or closes a file
       mid-loop does not corrupt the table; a throwing callback does not escape.
- -[ ] Add `JSStringRelease` + the `catch(...)` guards + the contract note/assert.
+-[ ] Add `JSStringRelease` + the `catch(...)` guards + the contract note/assert.
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `f20e2ec7`** (2026-06-16): audited io/utf8/main.cpp — no remaining
+ -  *LANDED `f20e2ec7`* (2026-06-16): audited io/utf8/main.cpp — no remaining
     live `JSStringRef` leaks (all paired w/ release; the cited utf8:18 was JS-003,
     convert.cpp is dead); wrapped both poll callbacks (`timeout_cb`,
     `JABCioNetOnEvent`) in `try{}catch(...){}` + a single-thread re-entrancy guard

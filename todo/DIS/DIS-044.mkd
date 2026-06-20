@@ -1,12 +1,12 @@
 #   DIS-044: WEAVEMerge RGA order key is not causally monotonic
 
 [DIS-043] gave `dog/WEAVE` tokens an RGA stable order and sorts concurrent siblings by
-raw **commit-id DESC**. That is only causally valid when a commit's id is larger than
+raw *commit-id DESC*. That is only causally valid when a commit's id is larger than
 its ancestors' — true for the DWEAVE fuzzer (it keys commit-id = line index, monotonic)
 but FALSE for real 60-bit commit hashlets, which are arbitrary. When the common-ancestor
 (spine) id exceeds the edit ids, a replace-edit's inserted token is stranded behind the
 dead original's whole subtree, and a same-line divergence can splice clean instead of
-conflicting — **silent merge data-loss**. Found during [DOG-005] (graf cut-over):
+conflicting — *silent merge data-loss*. Found during [DOG-005] (graf cut-over):
 diff/blame/cat/get are byte-parity-clean, but 11 real-commit merge tests fail. The
 green DIS-043 fuzz was misleading — its monotonic-id oracle could never hit this.
 

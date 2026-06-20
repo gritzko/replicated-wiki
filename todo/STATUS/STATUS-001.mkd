@@ -1,7 +1,7 @@
 #   STATUS-001: `be status!` extended + `status:<path>/` sub-scope
 
 Two status refinements on the shared ROWS banner ([BE-005]). `be status!`
-(≡ `be status --force`, verb-bang) is **extended** status: the file rows
+(≡ `be status --force`, verb-bang) is *extended* status: the file rows
 PLUS the state of all tracked branches + remotes (uri→hash) — rehoming
 `SNIFFGetSummary`'s body, orphaned when [GET-026] makes bare `be get` a
 checkout. `be status:<path>/` scopes the report to ONLY that path's
@@ -39,12 +39,12 @@ submodule, not the whole worktree.
     (SUBS path), suppressing the parent's rows — a sub-scope gate.
 
 ### TODOs
- -[ ] Repro: `be status!` lists branch/remote uri→hash rows; plain
+-[ ] Repro: `be status!` lists branch/remote uri→hash rows; plain
       `be status` does not (table-driven, color & --tlv).
- -[ ] `sniff_status_work`: `--force`/bang appends branch+remote rows
+-[ ] `sniff_status_work`: `--force`/bang appends branch+remote rows
       (rehome `SNIFFGetSummary`; then delete it).
- -[ ] Repro + impl: `be status:abc/` shows only the `abc` sub.
- -[ ] Wiki note for `be status!` and `status:<path>/`; `ctest -j16` green.
+-[ ] Repro + impl: `be status:abc/` shows only the `abc` sub.
+-[ ] Wiki note for `be status!` and `status:<path>/`; `ctest -j16` green.
 
 ### Blockers and bummers
  -  None yet.

@@ -26,15 +26,15 @@ yet leaves partial state.
  -  Recovery used (legit, not a silent patch): complete the tree via per-file
     `be get <path>` (real store checkouts), verify 1200 ok, then build.
  -  2026-06-16 PTR-sweep batch (9 wts off one `~/beagle/.be`): 7 of 9 truncated
-    to **474/528 `test/` files**, a CLEAN tree-order cutoff at `test/put/05` (ALL
+    to *474/528 `test/` files*, a CLEAN tree-order cutoff at `test/put/05` (ALL
     of `test/spot`+`test/tree`+`test/put/05…` dropped, `mis`); `woof/`+`abc/`
     present here, so the dropped SET is NOT fixed across runs.
- -  The 2 complete wts (528) are exactly the ones whose worker **re-ran `be
-    get`** → a second pass filled the tail.  So re-run makes PROGRESS (474→528),
+ -  The 2 complete wts (528) are exactly the ones whose worker *re-ran `be
+    get`* → a second pass filled the tail.  So re-run makes PROGRESS (474→528),
     not the "doesn't converge" earlier theory; cutoff is a moving truncation point.
  -  Live repro preserved at `$HOME/todo/PTR-001` (do NOT delete) — truncated wt,
     `be status` shows the 54 `mis`.  Consequence: truncated wts ran `ctest` over a
-    REDUCED set — **286 vs 298** in complete wts (~12 spot/tree/put cases silently
+    REDUCED set — *286 vs 298* in complete wts (~12 spot/tree/put cases silently
     never registered); their "green" excluded those.
 
 ### Goals
@@ -76,20 +76,20 @@ yet leaves partial state.
     only signal.
 
 ### TODOs
- -[v] Repro: single `be get` truncates at `test/put/05`; BASS climbs to 1023 MiB
+-[v] Repro: single `be get` truncates at `test/put/05`; BASS climbs to 1023 MiB
       then `BNOROOM`.  Repro preserved at `$HOME/todo/PTR-001` (read-only).
- -[v] Fix: `try()`-wrap the `walk_tree_dive` recursion (BASS rewind per subtree);
+-[v] Fix: `try()`-wrap the `walk_tree_dive` recursion (BASS rewind per subtree);
       fresh `be get` now 1441 tracked / 0 `mis`, abc mounted, exit 0.
- -[v] Test: `WALKtest6` (1300-wide sibling tree) — FAILS pre-fix (`BNOROOM`),
+-[v] Test: `WALKtest6` (1300-wide sibling tree) — FAILS pre-fix (`BNOROOM`),
       PASSES post-fix; full suite 298/298.
- -[ ] Land: gate the diff (`keeper/WALK.c` + `keeper/test/WALK.c`), then ff-post.
+-[ ] Land: gate the diff (`keeper/WALK.c` + `keeper/test/WALK.c`), then ff-post.
 
 ### Blockers and bummers
  -  Intermittent / likely concurrency-dependent → repro may need parallel
     invocations against a shared store.
 
 ##  Outcome
- -  **LANDED `49039f36`** (ff, parent `229d122b`): `keeper/WALK.c` `try()`-wrap of
+ -  *LANDED `49039f36`* (ff, parent `229d122b`): `keeper/WALK.c` `try()`-wrap of
     the `walk_tree_dive` recursion + `keeper/test/WALK.c::WALKtest6`.  298/298; a
     fresh `be get` now checks out the COMPLETE tree (1204 ok, 0 `mis`).
  -  Spun off: sibling-`sniff` PATH-fallback masks which binary runs when

@@ -42,9 +42,9 @@ A failed push (or any error exit) reports ONCE, uniformly.
 process only, vs. each dog, vs. the spawning frame.)
 
 ### TODOs
- -[ ] Repro: `be post` to an unreachable remote; assert exactly one error line.
- -[ ] Suppress nested-process `Error:` re-prints (PRO.h `MAIN` / the sub-spawn path).
- -[ ] Capture/label raw `ssh:` transport stderr instead of leaking it.
+-[ ] Repro: `be post` to an unreachable remote; assert exactly one error line.
+-[ ] Suppress nested-process `Error:` re-prints (PRO.h `MAIN` / the sub-spawn path).
+-[ ] Capture/label raw `ssh:` transport stderr instead of leaking it.
 
 ### Blockers and bummers
 (none yet)

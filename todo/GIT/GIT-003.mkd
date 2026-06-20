@@ -4,7 +4,7 @@
 
 ### Context
 
-Child of [[GIT-001]]; depends on [[GIT-002]]. `KEEPIngestFile` (`keeper/KEEP.c:2238`) and `KEEPIngestStream` (`:2431`) append the received object stream verbatim, patch one PACK count, drop a `(count, byte_len)` bookmark, then `UNPKIndex` the slice. A verbatim foreign pack carries REF_DELTA / thin bases / arbitrary offsets — incompatible with the OFS-only invariant. Replace the verbatim append with a dependency-ordered per-object re-emit through the GIT-002 writer: foreign packs may use whatever, the stored result is uniform OFS-only. `UNPK` already walks and resolves every object (OFS forest + REF waiters + Phase-C thin fallback), so the re-emit fuses into that existing pass rather than adding a second one. See [PackLog], [CLAUDE].
+Child of [GIT-001]; depends on [GIT-002]. `KEEPIngestFile` (`keeper/KEEP.c:2238`) and `KEEPIngestStream` (`:2431`) append the received object stream verbatim, patch one PACK count, drop a `(count, byte_len)` bookmark, then `UNPKIndex` the slice. A verbatim foreign pack carries REF_DELTA / thin bases / arbitrary offsets — incompatible with the OFS-only invariant. Replace the verbatim append with a dependency-ordered per-object re-emit through the GIT-002 writer: foreign packs may use whatever, the stored result is uniform OFS-only. `UNPK` already walks and resolves every object (OFS forest + REF waiters + Phase-C thin fallback), so the re-emit fuses into that existing pass rather than adding a second one. See [PackLog], [CLAUDE].
 
  -  Verbatim append injects foreign deltas into storage: a received pack's REF_DELTA and thin bases would persist, violating OFS-only and the droppable-shard rule.
  -  Offsets are throwaway: the foreign pack's internal offsets don't match our log, so OFS bases must be re-pointed; a thin REF base may live in an already-stored pack (UNPK Phase C, `UNPK.c:525`).
@@ -16,7 +16,7 @@ Child of [[GIT-001]]; depends on [[GIT-002]]. `KEEPIngestFile` (`keeper/KEEP.c:2
  -  Fuse the re-emit into UNPK's existing resolve pass (no second parse) and dedup objects the shard already holds.
 
 ### Constraints
- -  Quarantine foreign formats in `UNPK` + this funnel only; the native writer/resolver stay OFS-only ([[GIT-001]] design). Keep `UNPK`'s full REF/OFS/thin reader — it is the foreign reader, not deleted.
+ -  Quarantine foreign formats in `UNPK` + this funnel only; the native writer/resolver stay OFS-only ([GIT-001] design). Keep `UNPK`'s full REF/OFS/thin reader — it is the foreign reader, not deleted.
  -  Keep deflated bytes where possible: a foreign OFS/REF delta re-emits as OFS by rewriting only the header offset against the base's new log offset (reuse GIT-002's append entry); re-deltify only when the base was dropped by dedup.
  -  Map incoming→local: thread an (incoming-offset / base-sha → local-offset) map for the ingest duration off UNPK's resolved forest — no second parse pass; respect [CLAUDE] §10 (slices, no ptr math).
  -  RECV push-receive (`keeper/RECV.c`) feeds the same funnel, so pushed packs normalize identically.
@@ -29,13 +29,13 @@ Child of [[GIT-001]]; depends on [[GIT-002]]. `KEEPIngestFile` (`keeper/KEEP.c:2
 ### TODOs
 Drain → resolve (UNPK forest) → topo-emit per object through the GIT-002 writer.
 
- -[v] Re-emit objects in dependency order from UNPK's forest: raw objects appended as-is; OFS/REF deltas re-pointed to the base's local offset and written as OFS_DELTA; thin bases resolved via the existing `KEEPGet`/Phase-C path then OFS-referenced.
- -[v] Dedup: before appending, probe the index (`KEEPHas`); skip objects already present, but still record their local offset in the map so dependents re-point correctly.
- -[v] Remove the verbatim path: drop the whole-pack `u8bFeed` + count-patch (`:2308-2323`) and the single PACK bookmark push (`:2360`); indexing now happens per appended object inside the writer.
- -[v] Repro-first ([CLAUDE] §17): extend `test/UNPK.c` / `test/PSTR.c` fixtures — ingest (a) a non-thin OFS pack, (b) a thin REF_DELTA pack whose base is already stored, (c) a pack overlapping existing objects; assert the resulting log is OFS-only, dedup'd, and every object round-trips via `KEEPGet`. A be↔git clone+incremental-fetch round-trip stays green (build WITH_SSH per [[GIT-001]] note).
+-[v] Re-emit objects in dependency order from UNPK's forest: raw objects appended as-is; OFS/REF deltas re-pointed to the base's local offset and written as OFS_DELTA; thin bases resolved via the existing `KEEPGet`/Phase-C path then OFS-referenced.
+-[v] Dedup: before appending, probe the index (`KEEPHas`); skip objects already present, but still record their local offset in the map so dependents re-point correctly.
+-[v] Remove the verbatim path: drop the whole-pack `u8bFeed` + count-patch (`:2308-2323`) and the single PACK bookmark push (`:2360`); indexing now happens per appended object inside the writer.
+-[v] Repro-first ([CLAUDE] §17): extend `test/UNPK.c` / `test/PSTR.c` fixtures — ingest (a) a non-thin OFS pack, (b) a thin REF_DELTA pack whose base is already stored, (c) a pack overlapping existing objects; assert the resulting log is OFS-only, dedup'd, and every object round-trips via `KEEPGet`. A be↔git clone+incremental-fetch round-trip stays green (build WITH_SSH per [GIT-001] note).
 
 ### Blockers and bummers
- -  [[GIT-002]] dependency satisfied (`PACKu8sFeedObj` landed `e59a1c91`).
+ -  [GIT-002] dependency satisfied (`PACKu8sFeedObj` landed `e59a1c91`).
 
 ##  Outcome
  -  Landed `fa52117d` on `dogs` trunk: ingest re-encodes foreign packs to OFS-only via a `reemit` sink fused into UNPK's resolve pass (`keep_ingest_reemit` → `KEEPPackFeed` → `PACKu8sFeedObj`), with `KEEPHas` dedup; the verbatim whole-pack append + count-patch + foreign PACK bookmark are removed; RECV funnels through the same path unchanged. Took the re-deltify floor (not deflate-passthrough) per the ticket. build-ssh `ctest` 394/394 (the 66 ssh-localhost clone/fetch/push round-trips RAN, not skipped); a real 3-fetch incremental store inspected → `ref_delta=0`, every object round-trips via `KEEPGetExact`.

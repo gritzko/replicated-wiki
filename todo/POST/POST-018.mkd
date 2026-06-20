@@ -36,12 +36,12 @@ banner + `--tlv` model as get/status.
  -  Put's count becomes the banner/summary, mirroring status's tail.
 
 ### TODOs
- -[ ] Repro: `be post`/`be put` emit a banner-headed hunk (commit row /
+-[ ] Repro: `be post`/`be put` emit a banner-headed hunk (commit row /
       staged rows) in color & --tlv; no raw stderr report line.
- -[ ] `SNIFF.exe.c:815`: commit confirmation → ROWS commit row.
- -[ ] `PUT.c:1027`: staged count → banner/summary, not bare stderr.
- -[ ] Post msg-picker (`POST.c:2439`) → banner rows.
- -[ ] `ctest -j16` green.
+-[ ] `SNIFF.exe.c:815`: commit confirmation → ROWS commit row.
+-[ ] `PUT.c:1027`: staged count → banner/summary, not bare stderr.
+-[ ] Post msg-picker (`POST.c:2439`) → banner rows.
+-[ ] `ctest -j16` green.
 
 ### Blockers and bummers
  -  None yet.

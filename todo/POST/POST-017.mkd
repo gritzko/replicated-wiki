@@ -12,7 +12,7 @@ all-or-nothing. Method: [Issues].
 
 ### Context
  -  Repro (2026-06-16, landing BLAME-006b): `be post` was refused by `POSTCFLCT`
-    (the [[POST-006]] marker-string false positive on `graf/WEAVE.c`), yet it had
+    (the [POST-006] marker-string false positive on `graf/WEAVE.c`), yet it had
     ALREADY appended a stray row to the shared store reflog
     (`/home/gritzko/beagle/.be/dogs/refs`: `26616Cpe5S post ?#f6bea1c5…`, a duplicate
     of the parent row) and staged an `abc` gitlink — while creating NO commit. `be
@@ -21,7 +21,7 @@ all-or-nothing. Method: [Issues].
  -  Root: the refs/reflog (and staging) write happens BEFORE the commit is finalized,
     so a late refusal (conflict scan) or any error after that write but before the
     commit leaves the partial row behind. A post is not all-or-nothing.
- -  Cousin of [[GET-018]] (atomic wt GET) — same "stage/commit-point ordering so a
+ -  Cousin of [GET-018] (atomic wt GET) — same "stage/commit-point ordering so a
     mid-op failure leaves nothing changed" shape, on the POST side.
 
 ### Goals
@@ -36,7 +36,7 @@ all-or-nothing. Method: [Issues].
     BEFORE any reflog/staging mutation, so a refusal never reaches the write.
  -  Don't regress the legitimate post path or the documented `--force` conflict-scan
     bypass; output and landed-commit shape unchanged on the happy path.
- -  Store writes only — keep the wtlog/refs/index ordering consistent with [[GET-018]].
+ -  Store writes only — keep the wtlog/refs/index ordering consistent with [GET-018].
 
 ##  WIP
 
@@ -58,31 +58,31 @@ all-or-nothing. Method: [Issues].
     skips the pre-flight exactly as before.
 
 ### TODOs
- -[v] Repro-first: `test/post/42-refuse-atomic-store` — refused post leaves the store
+-[v] Repro-first: `test/post/42-refuse-atomic-store` — refused post leaves the store
       byte-identical (excl. volatile `.refs.idx`/`.wtlog.idx` read-caches a `be head` also
       rewrites); RED on unfixed (mutated `0000000001.keeper` + `*.keeper.idx`), GREEN with fix;
       also covers the `--force` bypass.
- -[v] Reorder so all validation runs before any store write (objects→index→reflog stay the
+-[v] Reorder so all validation runs before any store write (objects→index→reflog stay the
       commit point).
- -[v] Test: refused post → store unchanged; happy path byte-identical; full `ctest` 303/303.
- -[ ] (follow-up, OUT OF SCOPE here) `be`-level cross-project ordering: `BEActSubsPost`
+-[v] Test: refused post → store unchanged; happy path byte-identical; full `ctest` 303/303.
+-[ ] (follow-up, OUT OF SCOPE here) `be`-level cross-project ordering: `BEActSubsPost`
       recurses+commits SUBS (`DISPATCH.c:446`) BEFORE `BEActSniffPost` scans the parent
       (`:447`); make the parent's conflict scan gate sub-recursion too. Larger orchestration
       change — separate ticket if wanted.
 
 ### Blockers and bummers
- -  Pairs with [[POST-006]] (whose false-positive exposed this) and [[GET-018]] (the GET-side
+ -  Pairs with [POST-006] (whose false-positive exposed this) and [GET-018] (the GET-side
     atomicity). Cleaning the existing stray `26616Cpe5S` row is a separate maintainer step.
 
 ##  Outcome
- -  **LANDED `f5b41282`** (FF child of `0dd4e0ba`; msg `POST-017: validate before any store
+ -  *LANDED `f5b41282`* (FF child of `0dd4e0ba`; msg `POST-017: validate before any store
     write (atomic post)`): within-`POSTCommit` atomicity — conflict scan + validators hoisted
     to a pre-flight (`post_cflct_scan_cb`, step 5a) before any object/index/reflog write
     (`sniff/POST.c`), so a refused post leaves the store byte-identical. New
     `test/post/42-refuse-atomic-store` (RED→GREEN), happy path byte-identical, 303/304 (the
     1 red was a local stale-build of `be-diff-16`, NOT a regression — verified BRO-004 Part 3
     is correct on trunk). Correction: leak was orphan objects + index, not the refs row.
-    NB the land itself hit [[POST-006]] (POSTCFLCT false-positive on `sniff/POST.c`'s own
+    NB the land itself hit [POST-006] (POSTCFLCT false-positive on `sniff/POST.c`'s own
     marker-literal comment) → documented `--force` conflict-scan bypass. The `be`-level
     scan-before-sub-recursion ordering remains a flagged follow-up.
 

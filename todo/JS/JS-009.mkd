@@ -28,15 +28,15 @@ an over-long path. Method: [Issues].
     NULL; check `argc` before `args[0]`; reject a path that overflows the page.
 
 ### TODOs
- -[ ] Repro-first: `io.mmap()` (no args) does not OOB; force a TA-construct failure
+-[ ] Repro-first: `io.mmap()` (no args) does not OOB; force a TA-construct failure
       and assert (LSAN) no mapping leaks; a `>PAGESIZE` path errors.
- -[ ] Apply the three fixes.
+-[ ] Apply the three fixes.
 
 ### Blockers
  -  None.
 
 ##  Outcome
- -  **LANDED `621f4633`** (2026-06-16): `JABCioFileMap` now guards `argc<1`
+ -  *LANDED `621f4633`* (2026-06-16): `JABCioFileMap` now guards `argc<1`
     before reading `args[0]`, rejects an over-long (`len>=PAGESIZE`) path, and
     `FILEUnMap`s the mapping on the typed-array-construct-fail path. C++ repro
     `run_mmap_argc_repro` (argc==0 → ASAN SEGV on `args[0]` RED, clean GREEN;

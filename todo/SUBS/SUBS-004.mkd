@@ -1,8 +1,8 @@
 #   SUBS-004: bare `be put` with only the sub dirty exits 206/PUTNONE
 
-**MEDIUM.**  When only a mounted submodule is dirty (parent clean), bare
+*MEDIUM.*  When only a mounted submodule is dirty (parent clean), bare
 `be put` correctly recurses and stages the sub blob, but the aggregate command
-exits **206/PUTNONE** because the parent sniff's `PUTNONE` ("no changes")
+exits *206/PUTNONE* because the parent sniff's `PUTNONE` ("no changes")
 propagates as the command exit.  The relay (`BEActSubsRelay`) runs AFTER the
 parent's put action in `BE_PLAN_PUT` and its `-q` only swallows the SUB's NONE,
 not the parent's.  DELETE has no such asymmetry — a parent-only bare delete is

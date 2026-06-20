@@ -1,33 +1,33 @@
 #   DIS-024: flat→sharded store-layout migration (retire the top-level `.be/refs`)
 
-**Store-layout migration — large, deliberate, single-session.**  [STORE]
+*Store-layout migration — large, deliberate, single-session.*  [STORE]
 specifies one layout: `.be/wtlog` (default-wt log) + `.be/<project>/{refs,
 *.keeper,*.idx}` (project shard).  The codebase still carries a *legacy flat*
 layout — when `h->project` is empty, every shard path collapses to the
 top-level `.be/` and `.be/refs` becomes the live ref log.  The directed end
 state (prior-session handoff) is: `HOMEOpen` resolves the project so
-`h->project` is **never empty**, then the top-level `.be/refs` creation +
+`h->project` is *never empty*, then the top-level `.be/refs` creation +
 all accesses + the empty-project `HOMEBranchDir` branch are deleted.
 
 ##  Why this is NOT a small change (measured 2026-06-06)
 A first attempt — basename-derive in `HOMEOpen` (derive `h->project` from the
 wt-root basename when empty) — was implemented and reverted.  Findings:
- -  **Blast radius is the whole flat-layout corpus: 60+ tests fail**, not the
+ -  *Blast radius is the whole flat-layout corpus: 60+ tests fail*, not the
     ~5 first estimated (the estimate came from a broken awk that mislabeled
     1142 of 1199 `HOMEBranchDir` empty-project firings).  Empty-`project`/flat
     is the *common* test layout, established by `test/lib/repo-setup.sh`'s
     empty-`.be/` shield.
- -  **For flat stores `.be/refs` is LIVE, not vestigial.**  E.g.
+ -  *For flat stores `.be/refs` is LIVE, not vestigial.*  E.g.
     `be-post-nonff` poisons `.be/refs` and the non-ff check reads it; moving
     the code to `.be/<project>/refs` desyncs it from every fixture that
     manipulates the flat path.  The handoff premise ("top-level `.be/refs` is
     meaningless") only holds *after* the migration, not before.
- -  **Shield-escape hazard.**  Creating a `.be/<project>/` shard subdir inside
+ -  *Shield-escape hazard.*  Creating a `.be/<project>/` shard subdir inside
     a shield `.be/` flips `home_dir_no_subdirs()` (dog/HOME.c) from YES
     (shield) to NO (populated store), breaking the shield so store discovery
     escapes up to the real `$HOME/.be`.  During the attempt a non-hermetic
     test escaped and wrote `?fix1`/`?fix2` rows into `$HOME/.be/wtlog`, which
-    then **hung every `be` bootstrap under `$HOME`** (the documented
+    then *hung every `be` bootstrap under `$HOME`* (the documented
     "`~/.be/wtlog` self-anchor hangs" hazard).  Recovered by restoring the
     pre-session row-0 anchor; see `$HOME/.be/wtlog.subs-session-polluted.bak`.
 
@@ -50,7 +50,7 @@ wt-root basename when empty) — was implemented and reverted.  Findings:
     `.be/<project>/`.
 
 ##  Planned (staged; each stage ends green)
- 0. **Hermetic guard FIRST — DONE (2026-06-06, via FIREWALL, not a ceiling).**
+ 0. *Hermetic guard FIRST — DONE (2026-06-06, via FIREWALL, not a ceiling).*
     `repo-setup.sh` drops an empty `.be` FILE at the test scratch base
     (`$HOME/tmp`, parent of every per-run dir).  A walk that escapes a broken
     wt shield hits it and returns NOTAWT instead of ascending into the dev
@@ -58,8 +58,8 @@ wt-root basename when empty) — was implemented and reverted.  Findings:
     refusal (HOMEtest "secondary empty .be file"); no env var, no discovery
     code change.  `rs_firewall` in `test/lib/repo-setup.sh`; suite 230/230.
     (An earlier `BE_CEILING` env-var attempt was reverted in favour of this.)
- 1. **Derivation source — DECIDED & LANDED (2026-06-06): SINGLE-SHARD
-    SCAN, project read FROM THE STORE.**  Two cases, matching
+ 1. *Derivation source — DECIDED & LANDED (2026-06-06): SINGLE-SHARD
+    SCAN, project read FROM THE STORE.*  Two cases, matching
     `home_anchor_resolve`'s file/dir split:
       - Secondary wt (`.be` is a FILE): project from row 0's
         `?/<project>/<branch>` anchor — already implemented
@@ -121,7 +121,7 @@ wt-root basename when empty) — was implemented and reverted.  Findings:
 
 ##  Independently landable now
 The `BEActResolveRef` project band-aid (`beagle/BE.cli.c` ~2719-2726) is
-**confirmed dead** (0 firings across 230 tests + live dogfood resolves) and
+*confirmed dead* (0 firings across 230 tests + live dogfood resolves) and
 removable without any layout change — but it is the only piece that is.
 
 [STORE]: ../wiki/URI.mkd "URI/store model (STORE.md lives in the beagle code repo)"

@@ -1,15 +1,15 @@
 #   GET-018: make `be get`'s worktree update atomic — stage-to-temp + atomic swap (or journal+rollback) so a mid-write failure leaves ref/wtlog/tree all unchanged
 
-Split from [[GET-016]] Part 1. `be get`'s COMMIT POINT (`sniff/GET.c:1338-1429`) advances the local branch ref + wtlog BEFORE the non-crash-safe worktree write (`WALKTreeLazy` + drains + sub loop), deliberately — the comment documents replay-via-`be get --force ?<cur>` as the recovery, and `test/get/09-refuse-no-commit` + `test/get/10-partial-recovery` pin that model (get/10 asserts the wtlog GROWS after a failing write and that `--force` replay is the fix). So the literal "advance the ref only after the write succeeds" reorder is rejected: it breaks that documented crash-safety model and both tests. True all-or-nothing atomicity needs a redesign — stage the wt mutation to a scratch area then atomically swap + advance the ref, or journal each mutation and roll back on failure. GET-016 Part 2 (the `--force` full-reset that makes the replay recovery actually work) landed separately. See [GET], [[GET-016]], [CLAUDE].
+Split from [GET-016] Part 1. `be get`'s COMMIT POINT (`sniff/GET.c:1338-1429`) advances the local branch ref + wtlog BEFORE the non-crash-safe worktree write (`WALKTreeLazy` + drains + sub loop), deliberately — the comment documents replay-via-`be get --force ?<cur>` as the recovery, and `test/get/09-refuse-no-commit` + `test/get/10-partial-recovery` pin that model (get/10 asserts the wtlog GROWS after a failing write and that `--force` replay is the fix). So the literal "advance the ref only after the write succeeds" reorder is rejected: it breaks that documented crash-safety model and both tests. True all-or-nothing atomicity needs a redesign — stage the wt mutation to a scratch area then atomically swap + advance the ref, or journal each mutation and roll back on failure. GET-016 Part 2 (the `--force` full-reset that makes the replay recovery actually work) landed separately. See [GET], [GET-016], [CLAUDE].
 
 ##  Repro (target behaviour)
  -  Inject a mid-`WALKTreeLazy` write failure during `be get` onto a new tip; today the ref + wtlog advance while the tree is left partial (recoverable only by a manual `be get --force ?<cur>`).
  -  Target: after the failed get, the branch ref, the wtlog, AND the on-disk tree are byte-identical to their pre-get state — no partial application, no manual replay needed.
 
 ##  Design fork (decide first — this is why GET-016 split it out)
- -  **Reorder** (advance ref after the write): simplest, but breaks `test/get/10`'s documented "wtlog grows on failure → `--force` replay recovery" model; only viable if that model is deliberately abandoned and 09/10 rewritten.
- -  **Stage-to-temp + atomic swap** (preferred): materialise the new tree into a scratch dir, fsync, then a single swap/commit + ref advance; a partial failure discards the scratch and the live tree is untouched.
- -  **Journal + rollback**: record an undo entry per wt mutation; on failure replay it backwards. More invasive; handles in-place edits without a full second copy.
+ -  *Reorder* (advance ref after the write): simplest, but breaks `test/get/10`'s documented "wtlog grows on failure → `--force` replay recovery" model; only viable if that model is deliberately abandoned and 09/10 rewritten.
+ -  *Stage-to-temp + atomic swap* (preferred): materialise the new tree into a scratch dir, fsync, then a single swap/commit + ref advance; a partial failure discards the scratch and the live tree is untouched.
+ -  *Journal + rollback*: record an undo entry per wt mutation; on failure replay it backwards. More invasive; handles in-place edits without a full second copy.
 
 ##  Constraints
 Must not regress the crash-safety property `test/get/09`/`10` protect — either preserve replay-recovery as a fallback, or migrate those tests to the new no-drift model as a deliberate, reviewed step.

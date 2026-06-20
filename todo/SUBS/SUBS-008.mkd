@@ -1,6 +1,6 @@
 #   SUBS-008: GET unmount of a removed sub orphans the sub's worktree files (LANDED)
 
-**LOW — LANDED `50722656` (2026-06-06).**  `BEGetSubUnmount` (`beagle/SUBS.c`)
+*LOW — LANDED `50722656` (2026-06-06).*  `BEGetSubUnmount` (`beagle/SUBS.c`)
 only unlinked `<wt>/<subpath>/.be` (the logical unmount), leaving the sub's
 checked-out files (`core.c`, `helper.c`, `..be.idx`) orphaned under the parent
 wt.  Fix: after unlinking the anchor, best-effort `FILErmrf` the whole mount dir
@@ -9,7 +9,7 @@ pure clutter once the gitlink is gone (git `submodule deinit` + tree-switch
 parity).  This is the shared GET/PATCH unmount path, so both verbs get the
 cleanup.  Added `be-get-sub-unmount-clean` repro.
 
-**LOW.**  When `be get ?<branch>` switches to a target tree where a gitlink has
+*LOW.*  When `be get ?<branch>` switches to a target tree where a gitlink has
 been removed (the sub and its `.gitmodules` entry are gone), GET correctly
 unmounts the sub — removes `vendor/sub/.be` and prunes — but leaves the sub's
 worktree files (`core.c`, `helper.c`) and internal metadata (`..be.idx`)

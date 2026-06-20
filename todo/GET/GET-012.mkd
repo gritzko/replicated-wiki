@@ -1,6 +1,6 @@
 #   GET-012: `be get file://<local-store>?/<proj>` makes a full clone, not a store-backed worktree
 
-`be get file:///home/gritzko/.be?/dogs` produces a FULL independent clone — a `.be/` **directory** with its own per-project object stores (`dogs/`, `libabc/`) — instead of a store-backed **worktree** (a `.be` **file** anchoring into the shared `~/.be`). So every `be post` from such a tree commits into the throwaway clone store and never reaches the shared trunk, and the colocated real worktree sees nothing. This is the root cause of a whole fix-and-land batch "landing" into dead stores. Repro: `mkdir t && cd t && be get "file:///home/gritzko/.be?/dogs" && file .be` → `directory` (expected: a regular file). See [GET], [Submodules], [Issues], [CLAUDE], [[storedirect-worktree]].
+`be get file:///home/gritzko/.be?/dogs` produces a FULL independent clone — a `.be/` *directory* with its own per-project object stores (`dogs/`, `libabc/`) — instead of a store-backed *worktree* (a `.be` *file* anchoring into the shared `~/.be`). So every `be post` from such a tree commits into the throwaway clone store and never reaches the shared trunk, and the colocated real worktree sees nothing. This is the root cause of a whole fix-and-land batch "landing" into dead stores. Repro: `mkdir t && cd t && be get "file:///home/gritzko/.be?/dogs" && file .be` → `directory` (expected: a regular file). See [GET], [Submodules], [Issues], [CLAUDE], [storedirect-worktree].
 
 ##  Issues
 The local-store `file://` clone form builds an independent store, not a worktree.
@@ -11,7 +11,7 @@ The local-store `file://` clone form builds an independent store, not a worktree
  -  A full own-store clone is the `be://host?/<proj>` behavior; the local `file://<store>` form should attach a worktree.
 
 ##  Blockers
-Ties to the `BEGetWorktree` `path_is_store` branch and [[storedirect-worktree]]; coordinate with [[GET-011]] (in-flight sub-source).
+Ties to the `BEGetWorktree` `path_is_store` branch and [storedirect-worktree]; coordinate with [GET-011] (in-flight sub-source).
 
 ##  Planned
 The local-store `file://` form attaches a worktree.

@@ -31,13 +31,13 @@ The 2026-06-15 audit found graf/ builds slices via the API then rips them apart 
  -  Fix `DAGParents`' contract first (out-count/returned slice) — it removes the base-save + subtraction + raw loop at all three call sites in one change.
 
 ### TODOs
- -[ ] Repro-first: lock blame/log/weave outputs on existing tables.
- -[ ] `DAGParents` return-slice/out-count + update DAG/BLAME/LOG callers.
- -[ ] `weave_set_*` → `u32cs`/`u32s`.
- -[ ] `WEAVECurNext` → slice + typed drain.
- -[ ] sha-hex reinvention → `sha1FromHex` (DAG.h, DAG.c).
- -[ ] GRAF/INDEX cast+`/sizeof` and BFS queue → typed access; head bumps → `u8csUsed`.
- -[ ] Build + ctest; report done vs skipped.
+-[ ] Repro-first: lock blame/log/weave outputs on existing tables.
+-[ ] `DAGParents` return-slice/out-count + update DAG/BLAME/LOG callers.
+-[ ] `weave_set_*` → `u32cs`/`u32s`.
+-[ ] `WEAVECurNext` → slice + typed drain.
+-[ ] sha-hex reinvention → `sha1FromHex` (DAG.h, DAG.c).
+-[ ] GRAF/INDEX cast+`/sizeof` and BFS queue → typed access; head bumps → `u8csUsed`.
+-[ ] Build + ctest; report done vs skipped.
 
 ### Blockers and bummers
  -  `DAGParents` is shared across DAG/BLAME/LOG — change the signature in one commit to keep all callers compiling.

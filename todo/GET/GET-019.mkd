@@ -1,6 +1,6 @@
 #   GET-019: `be get be://host?/<title>` clone is broken — truncated pack + stale-server ?main
 
-A full `be://` clone produces an unusable worktree on two counts: the wire server ships a **truncated pack**, and it serves a **stale `?main`**.
+A full `be://` clone produces an unusable worktree on two counts: the wire server ships a *truncated pack*, and it serves a *stale `?main`*.
 
     $ be get be://localhost?/beagle
     be: subdir clone — shard at /home/gritzko/.be/localhost
@@ -12,12 +12,12 @@ A full `be://` clone produces an unusable worktree on two counts: the wire serve
 See [Keeper], [Store].
 
 ##  Issues
- -  **Truncated pack:** `unpk: scan incomplete 128215/253812` — the pack the `be://` upload-pack sent declares 253812 objects but only ~128215 are present, so the clone is missing ~half its objects (checkout then fails on the missing ones).
- -  **Stale-server ref:** the long-running `woof` server served a *pre-recovery* `?main` (a commit whose abc gitlink is the empty sha `e69de29b`, not the live tip) — it doesn't re-read `refs` after they change, so a clone gets poisoned/old history → `SUBSPARSE`.
+ -  *Truncated pack:* `unpk: scan incomplete 128215/253812` — the pack the `be://` upload-pack sent declares 253812 objects but only ~128215 are present, so the clone is missing ~half its objects (checkout then fails on the missing ones).
+ -  *Stale-server ref:* the long-running `woof` server served a *pre-recovery* `?main` (a commit whose abc gitlink is the empty sha `e69de29b`, not the live tip) — it doesn't re-read `refs` after they change, so a clone gets poisoned/old history → `SUBSPARSE`.
  -  (Store mis-naming `~/.be/localhost` is the separate [DIS-037] facet — a partial fix landed today; the clone-correctness bugs above are the blocker.)
 
 ##  Impact
-The Issues loop needs **independent clones** per worker (`be get be://localhost?/beagle`); if a clone is truncated/poisoned, the isolated-tree workflow is impossible — which is part of why today's work fell back to the shared store and corrupted it. Workflow-critical.
+The Issues loop needs *independent clones* per worker (`be get be://localhost?/beagle`); if a clone is truncated/poisoned, the isolated-tree workflow is impossible — which is part of why today's work fell back to the shared store and corrupted it. Workflow-critical.
 
 ##  Planned
  -  Upload-pack must serve the FULL reachable closure for the requested tip (count header == objects shipped); fail loudly, never ship a short pack.

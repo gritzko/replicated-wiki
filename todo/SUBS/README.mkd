@@ -1,7 +1,7 @@
 #   SUBS: submodule-recursion tickets
 
 Audit of `be`'s submodule recursion across all verbs (2026-06-05).  Model
-and spec in [Submodules].  Recursion is **default-on for every source type**
+and spec in [Submodules].  Recursion is *default-on for every source type*
 (git/ssh included); `--sub` is a dead no-op, `--nosub` is the only opt-out.
 HEAD, GET (checkout/clone/force/prune), and POST topology (post-order,
 synthetic dot-branch `?/<sub>/.<parent>/<branch>`, gitlink bumps,

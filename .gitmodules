@@ -1,3 +1,6 @@
 [submodule "html"]
 	path = html
 	url = git@github.com:gritzko/replicated.live.git
+[submodule "beagle"]
+	path = beagle
+	url = https://github.com/gritzko/beagle

@@ -1,6 +1,6 @@
 #   URI-001: Unify branch/commit naming machinery
 
-**Status: DONE — all 5 stages LANDED / CONFIRMED.**  Branch-vs-commit-hash
+*Status: DONE — all 5 stages LANDED / CONFIRMED.*  Branch-vs-commit-hash
 disambiguation WAS scattered across `dog` /
 `keeper` / `sniff` / `graf`, each re-deriving ref structure from the string
 heuristically; the canonical resolved form was unsettled (the DIS-025
@@ -11,16 +11,16 @@ unified all of it behind one keeper-owned rule: `DOGRefSplitPin` is gone,
 `KEEPResolveRef`, and the `len==40` recognizers route through `DOGIsFullSha`.
 
 ##  The one rule
-Disambiguation lives **only in keeper**, is **branch-first**, and is
-**hash-length-agnostic**:
+Disambiguation lives *only in keeper*, is *branch-first*, and is
+*hash-length-agnostic*:
 
- 1. Does the ref name a **branch** (REFS lookup)?  → branch / trunk.
- 2. Else, is the ref **all hex** AND does that **hash exist** (pack index)?
+ 1. Does the ref name a *branch* (REFS lookup)?  → branch / trunk.
+ 2. Else, is the ref *all hex* AND does that *hash exist* (pack index)?
     → hashlet (detached).  The index knows sha1 (40) vs sha256 (64); callers
     never test a length.
  3. Else → not found.
 
-**Remote exception:** a ref requested *from* a peer (`ssh:`/`be:`) is NOT
+*Remote exception:* a ref requested *from* a peer (`ssh:`/`be:`) is NOT
 disambiguated locally — the raw ref is sent and the remote keeper resolves it.
 
 ##  Chaos inventory (retire / keep)
@@ -50,12 +50,12 @@ KEEP (already principled):
     funnel; the unified machinery is built ON these.
 
 ##  Canonical form (revised 2026-06-07, LANDED `b2b4ff9e`)
-The earlier DIS-025 plan put the resolved hash in a query **pin**
+The earlier DIS-025 plan put the resolved hash in a query *pin*
 (`?/<proj>/<branch>/<sha>`, detached `?/<proj>//<sha>`).  It collides twice:
-ULOG dedup keys on the row text **before `#`** (so the tip sha must stay in the
+ULOG dedup keys on the row text *before `#`* (so the tip sha must stay in the
 REFS *fragment* — every tip-move of one ref shares a dedup key, `dog/ULOG.c:663`),
-and in argv URIs the fragment is already **verb payload** (PATCH squash/merge/
-rebase mode, GET `#~N`/`#sha`).  So the funnel canonicalises the **SCOPE only**
+and in argv URIs the fragment is already *verb payload* (PATCH squash/merge/
+rebase mode, GET `#~N`/`#sha`).  So the funnel canonicalises the *SCOPE only*
 and NEVER pins a tip into query or fragment:
 
   - `?/<proj>`             — trunk scope.
@@ -77,14 +77,14 @@ SPECIFIC commit in scope, unifying sha / hashlet / message-search) is DEFERRED
 ZERO on-disk churn: resolver/emitter change only.
 
 ##  Staged plan (test after each)
- 1. **Keeper branch-first.** ✓ LANDED `fb55301d`.  Inverted `KEEPResolveRef`
+ 1. *Keeper branch-first.* ✓ LANDED `fb55301d`.  Inverted `KEEPResolveRef`
     (branch lookup first, hex fallback only on miss) and made
     `REFSResolveURI` resolution-driven (dropped the `HEXu8sValid && len>=4`
     shortcut — DETACHED now requires a branch miss + an existing all-hex
     object).  A branch whose name is all-hex (`?dead`, `?c0ffee`) now wins
     over a same-spelled hashlet.  No format change.  Repro cases added to
     `keeper/test/RESOLVEURI.c`; 307/307 green under ASan.
- 2. **Length-agnostic.** ✓ LANDED `887da35d`.  Added `DOGIsFullSha(u8cs)`
+ 2. *Length-agnostic.* ✓ LANDED `887da35d`.  Added `DOGIsFullSha(u8cs)`
     (all-hex && width 40/64) and routed 22 `len==40 && hex` "is-this-a-full-sha"
     recognizers across sniff/keeper/graf through it; collapsed a hand-rolled
     hex loop in `KEEP.exe.c` want-by-hash.  Table test in `dog/test/DOG.c`;
@@ -94,7 +94,7 @@ ZERO on-disk churn: resolver/emitter change only.
     chain (`graf/INDEX.c`, `DOGQueryBranchOnly` — Stage 4), the const-param
     `sane()` preconditions (`KEEP.c:2646/2679`), and `AT.c:805` (already
     `sizeof`-based).
- 3. **Scope-only canonical form.** ✓ LANDED `b2b4ff9e`.  The funnel
+ 3. *Scope-only canonical form.* ✓ LANDED `b2b4ff9e`.  The funnel
     canonicalises the SCOPE only (`?/proj`, `?/proj/branch`, detached
     `?/proj/<full-sha>`) — no tip pinned into query/fragment (see "Canonical
     form").  Changed: `REFSResolveURI` emitter + `KEEPResolveURI` (preserve
@@ -106,7 +106,7 @@ ZERO on-disk churn: resolver/emitter change only.
     project-strip) and graf head target (`graf/LOG.c`); `sniff/PATCH.c` peel
     splits scope from any pin; tests `RESOLVEURI`/`REFKIND` updated.  307/307
     green under ASan.  NO REFS on-disk change.
- 4. **Retire the guessers.** ✓ LANDED.
+ 4. *Retire the guessers.* ✓ LANDED.
     - 4a ✓ LANDED `51e264e9` — located cherry-pick (`?<br>/<sha>`) retired;
       cherry-pick is bare `#<sha>` only.  Removed the `cherry_locator`
       promotion (`sniff/PATCH.c`) + located-cherry classification in
@@ -137,7 +137,7 @@ ZERO on-disk churn: resolver/emitter change only.
       fixed.  Repro test `test/diff/07-hex-named-branch` (a clone of 02
       with `fix2`→`c0ffee`, byte-identical want files) — verified RED
       before the fix, GREEN after.  308/308 green.
- 5. **Remote delegation.** ✓ CONFIRMED — no code change needed.  The wire
+ 5. *Remote delegation.* ✓ CONFIRMED — no code change needed.  The wire
     path never invokes the local branch-first machinery on a remote ref:
     `KEEP.exe.c` takes `want_ref = g->query` raw (only `DOGQueryStripProject`
     scope-normalisation — NOT a sha resolve / branch-vs-hash guess), then

@@ -4,8 +4,8 @@ The keeper owns the flat per-project object pool (git blobs/trees/commits; branc
 
 ##  Active tickets
 
- -  [KEEP-002] **LANDED `8f7233c3`** — torn `.keeper.idx` (concurrent posters sharing a pid-less temp) served as `KEEPNONE` for in-pack objects; fix = per-pid temp index names + `keep_rebuild_torn_idx` rebuilds a short index from the pack on rw-open (which also auto-recovered the live store). Hermetic repro `sniff/test/keep002-torn-idx.sh`, 282/282.
- -  [KEEP-001] **LANDED `0eb0afab`** — converged FOUR near-duplicate tree-walkers (`WALK.c`, `KEEP.c` dead chain, `WIRECLI.c`, `CLOSE.c`) into one visitor-driven `KEEPWalkTree` (`WALK.h:66`); shape B (bounded recursion + hard `WALK_MAX_DEPTH` cap + right-sized carve, so it also delivers the unlanded MEM-023/024 safety goal), have/close-set dedup as a `WALKSKIP` visitor return; dead `keep_walk_tree`/`KEEPPush` chain deleted. New `CLOSEtest`, 396/396.
+ -  [KEEP-002] *LANDED `8f7233c3`* — torn `.keeper.idx` (concurrent posters sharing a pid-less temp) served as `KEEPNONE` for in-pack objects; fix = per-pid temp index names + `keep_rebuild_torn_idx` rebuilds a short index from the pack on rw-open (which also auto-recovered the live store). Hermetic repro `sniff/test/keep002-torn-idx.sh`, 282/282.
+ -  [KEEP-001] *LANDED `0eb0afab`* — converged FOUR near-duplicate tree-walkers (`WALK.c`, `KEEP.c` dead chain, `WIRECLI.c`, `CLOSE.c`) into one visitor-driven `KEEPWalkTree` (`WALK.h:66`); shape B (bounded recursion + hard `WALK_MAX_DEPTH` cap + right-sized carve, so it also delivers the unlanded MEM-023/024 safety goal), have/close-set dedup as a `WALKSKIP` visitor return; dead `keep_walk_tree`/`KEEPPush` chain deleted. New `CLOSEtest`, 396/396.
 
 [Plan]: ../../wiki/Plan.mkd "the live planning page"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

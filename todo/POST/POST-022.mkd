@@ -41,11 +41,11 @@ Submodule-recursive post shows only the posted/pushed delta, compactly.
 (pending)
 
 ### TODOs
- -[ ] Locate the per-row `abc` label emitter (the submodule-recursion output wrapper;
+-[ ] Locate the per-row `abc` label emitter (the submodule-recursion output wrapper;
       cf. POST-020's keeper notice routing through dog/ROWS).
- -[ ] Locate why the FULL sub history is enumerated vs the delta (couples to the
+-[ ] Locate why the FULL sub history is enumerated vs the delta (couples to the
       `wpush_walk_commit` history walk in keeper, [POST-021]).
- -[ ] Repro-first (CLAUDE.md §17): a test asserting bounded, prefixed sub output.
+-[ ] Repro-first (CLAUDE.md §17): a test asserting bounded, prefixed sub output.
 
 ### Blockers and bummers
  -  Couples to [POST-021] (same submodule commit-history walk); coordinate the fixes.

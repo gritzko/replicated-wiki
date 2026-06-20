@@ -61,12 +61,12 @@ ROW no longer surfaces in the report a consumer parses.
     appends a `modl` row for `mod-del-kept` (only increments the counter).
 
 ### TODOs
- -[ ] Repro each of the 4 with kept scratch; capture the relayed sub hunk's
+-[ ] Repro each of the 4 with kept scratch; capture the relayed sub hunk's
       TLV bytes vs the direct-mode render to pinpoint where the rows drop.
- -[ ] Fix the non-tty/non-tlv render of relayed table-hunk rows (emit the body
+-[ ] Fix the non-tty/non-tlv render of relayed table-hunk rows (emit the body
       rows, path-prefixed, not just the module header).
- -[ ] Emit a `modl` status row for the modify/delete-kept case in `sniff/PATCH.c`.
- -[ ] Re-green `#78 #194 #354 #355`; full `ctest` clean.
+-[ ] Emit a `modl` status row for the modify/delete-kept case in `sniff/PATCH.c`.
+-[ ] Re-green `#78 #194 #354 #355`; full `ctest` clean.
 
 ##  Outcome
  -  Landed `3aca0998`: `HUNKu8sRelay` re-prefixes relayed sub table-hunk body

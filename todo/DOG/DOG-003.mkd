@@ -34,16 +34,16 @@ Build the new `dog/WEAVE` engine per [DOG-001]/[api]: the columnar parsed view, 
     from today's `weave_diff_core` (`DIFFu64AddEntry`, no raw writes — [MEM-036]).
 
 ### TODOs
- -[ ] Header `dog/WEAVE.h` (signatures + doc) per [api]; `dog/INDEX.md` entry.
- -[ ] `WEAVEParse`/codec; `weavecur`; `WEAVEAlive`/`WEAVEProduce`.
- -[ ] `WEAVENext` (fold one blob); `WEAVEMerge` (identity interleave).
- -[v] Table-driven test `dog/test/WEAVE01` (round-trip + diff_fold + merge_fold);
+-[ ] Header `dog/WEAVE.h` (signatures + doc) per [api]; `dog/INDEX.md` entry.
+-[ ] `WEAVEParse`/codec; `weavecur`; `WEAVEAlive`/`WEAVEProduce`.
+-[ ] `WEAVENext` (fold one blob); `WEAVEMerge` (identity interleave).
+-[v] Table-driven test `dog/test/WEAVE01` (round-trip + diff_fold + merge_fold);
       the `abac`/`aabc` holdout class folded in as `merge_fold_multirm`.
- -[v] Fuzz `Next`/`Merge` content-recovery: `dog/fuzz/WEAVE.c` (`DWEAVEfuzz`),
+-[v] Fuzz `Next`/`Merge` content-recovery: `dog/fuzz/WEAVE.c` (`DWEAVEfuzz`),
       corpus `$HOME/Corpus/DWEAVE`.
- -[v] Merge correctness pass 1: LCS interleave → identity merge-JOIN (match
+-[v] Merge correctness pass 1: LCS interleave → identity merge-JOIN (match
       every shared id, union removers); fixed the `rms`-column `NOROOM`.
- -[-] Merge concurrent-insert order is path-dependent (criss-cross dup) →
+-[-] Merge concurrent-insert order is path-dependent (criss-cross dup) →
       split out as [DIS-043]; needs a stable per-token order key.
 
 ### Blockers and bummers

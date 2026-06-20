@@ -1,6 +1,6 @@
 #   HEAD-001: be head prints no ahead/behind summary
 
-`be head ?br` / `be head ssh://host/path` is the read-only "what changed and what would change" verb, but it currently prints an **empty** summary: the fetch + cache update happen and it exits 0, yet stdout carries no ahead/behind counts and no differing-file list. The divergence of `~/beagle` (cur) from `ssh://localhost/src/dogs` was invisible at the CLI — the non-FF only surfaced later as a cryptic `WIRECLNFF` on POST, and the gap had to be read out of `.be/<proj>/refs` by hand. VERBS.md already flags the exact format as TBD (§"Open edges": "Bare `be head` output shape").
+`be head ?br` / `be head ssh://host/path` is the read-only "what changed and what would change" verb, but it currently prints an *empty* summary: the fetch + cache update happen and it exits 0, yet stdout carries no ahead/behind counts and no differing-file list. The divergence of `~/beagle` (cur) from `ssh://localhost/src/dogs` was invisible at the CLI — the non-FF only surfaced later as a cryptic `WIRECLNFF` on POST, and the gap had to be read out of `.be/<proj>/refs` by hand. VERBS.md already flags the exact format as TBD (§"Open edges": "Bare `be head` output shape").
 
 ##  Issues
 HEAD resolves the remote/branch tip and caches it, but emits no human-facing diff, so a diverged or behind branch looks identical to an up-to-date one.

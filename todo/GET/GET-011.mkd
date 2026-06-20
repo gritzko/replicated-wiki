@@ -1,15 +1,15 @@
 #   GET-011: submodules must inquire the parent beagle remote (the source being cloned), not only the `.gitmodules` URL
 
-When `be get` clones from a beagle remote (`file:///home/gritzko/.be?/dogs`, `be://host?/proj`), each submodule should be fetched from **that same remote — the exact source we are talking to —** as the primary candidate, with the `.gitmodules` URL only as a last-resort fallback. Today `SNIFFSubMount` builds parent-source candidates (`<loc>?/<url-basename>`, `<loc>?/<path-basename>`) **only** when `subs_recover_locator` sets `src_beagle` and recovers a non-empty `loc_buf`; for a `file://…?/<proj>` clone that recovery fails, so `src_beagle=NO`, the candidates at `sniff/SUBS.c:534,592` are never built, and the fetch loop runs **only** the declared `.gitmodules` URL (`https://github.com/gritzko/libabc.git`). With github unreachable/firewalled the whole clone dies `WIRECLFL`/`BEDOGEXIT` — even though the sub (`abc`) is sitting in the very `~/.be` we just cloned the parent from. Net: you cannot clone a beagle worktree offline/locally, which blocks every file: worktree and the parallel fix-and-land loop. See [Issues], [CLAUDE], [[GET-004]], [sub-parent-source].
+When `be get` clones from a beagle remote (`file:///home/gritzko/.be?/dogs`, `be://host?/proj`), each submodule should be fetched from *that same remote — the exact source we are talking to —* as the primary candidate, with the `.gitmodules` URL only as a last-resort fallback. Today `SNIFFSubMount` builds parent-source candidates (`<loc>?/<url-basename>`, `<loc>?/<path-basename>`) *only* when `subs_recover_locator` sets `src_beagle` and recovers a non-empty `loc_buf`; for a `file://…?/<proj>` clone that recovery fails, so `src_beagle=NO`, the candidates at `sniff/SUBS.c:534,592` are never built, and the fetch loop runs *only* the declared `.gitmodules` URL (`https://github.com/gritzko/libabc.git`). With github unreachable/firewalled the whole clone dies `WIRECLFL`/`BEDOGEXIT` — even though the sub (`abc`) is sitting in the very `~/.be` we just cloned the parent from. Net: you cannot clone a beagle worktree offline/locally, which blocks every file: worktree and the parallel fix-and-land loop. See [Issues], [CLAUDE], [GET-004], [sub-parent-source].
 
 ##  Issues
 The parent-remote candidate path exists but never fires for a local/`file://` clone.
 
  -  `subs_recover_locator` (`sniff/SUBS.c:529`) does not recover the parent remote for a `file://<store>?/<proj>` clone → `src_beagle=NO`, `loc_buf` empty, so `cand0`/`cand1` are skipped and the loop tries only the `.gitmodules` URL.
- -  The recovered locator should be the **exact remote the parent is being cloned from / talking to** (the live `be get` source URI, or the parent wtlog row-0 `repo` URI), NOT anything derived from `.gitmodules`.
+ -  The recovered locator should be the *exact remote the parent is being cloned from / talking to* (the live `be get` source URI, or the parent wtlog row-0 `repo` URI), NOT anything derived from `.gitmodules`.
  -  Symptom (deterministic, offline): `be get "file:///home/gritzko/.be?/dogs"` → `SUBS.dbg: SubMount url=https://github.com/gritzko/libabc.git basename=libabc` → `ssh: connect to host github.com … Connection refused` → `WIRECLFL` → `BEDOGEXIT`; `abc` never mounts though `~/.be/abc` holds the pin `8b9dfe0c`.
  -  The candidate plumbing already exists (`cand0 = <loc>?/<url-basename>`, `cand1 = <loc>?/<path-basename>`, `.gitmodules` URL last — `sniff/SUBS.c:590-612`); the gap is purely that the locator isn't recovered, so `src_beagle` stays NO.
- -  Related: pointing `.gitmodules` at `file:///home/gritzko/.be?/abc` by hand returns `SUBSPARSE` from `SNIFFSubBasename` (path basename `.be` rejected by the [[GET-004]] guard) — a `<loc>` whose store-path basename is `.be` must still yield the sub project from the `?/<proj>` query, not be refused.
+ -  Related: pointing `.gitmodules` at `file:///home/gritzko/.be?/abc` by hand returns `SUBSPARSE` from `SNIFFSubBasename` (path basename `.be` rejected by the [GET-004] guard) — a `<loc>` whose store-path basename is `.be` must still yield the sub project from the `?/<proj>` query, not be refused.
 
 ##  Blockers
 None — the candidate machinery is in place; this is recovering the locator and wiring it.
@@ -17,10 +17,10 @@ None — the candidate machinery is in place; this is recovering the locator and
 ##  Planned
 Recover the live parent remote; try it first; keep `.gitmodules` last.
 
- -  Repro-first ([CLAUDE] §17): a hermetic case — a small parent store with one beagle submodule under a scratch `~/.be`, `be get "file://<store>?/<proj>"` with github unreachable; assert the sub mounts from the **local parent remote** (no github contact — verify via `strace -f` / the `SUBS.dbg` trace) and the clone succeeds.
+ -  Repro-first ([CLAUDE] §17): a hermetic case — a small parent store with one beagle submodule under a scratch `~/.be`, `be get "file://<store>?/<proj>"` with github unreachable; assert the sub mounts from the *local parent remote* (no github contact — verify via `strace -f` / the `SUBS.dbg` trace) and the clone succeeds.
  -  Make `subs_recover_locator` recover the parent's actual remote for `file://`/`be://` clones (the in-flight `be get` source URI, falling back to the parent wtlog row-0 `repo` URI) and set `src_beagle`; `loc_buf` must carry scheme+authority+store-path so `<loc>?/<basename>` addresses the sibling sub shard.
- -  Keep the declared `.gitmodules` URL as the **final** fallback (preserve git-sub behavior); only reorder so the parent remote is tried first.
- -  Cross-check with [[GET-004]] `?/proj` store addressing and the `SNIFFSubBasename` `.be`-reject so a `file://…/.be?/abc` candidate resolves the sub project from the query.
+ -  Keep the declared `.gitmodules` URL as the *final* fallback (preserve git-sub behavior); only reorder so the parent remote is tried first.
+ -  Cross-check with [GET-004] `?/proj` store addressing and the `SNIFFSubBasename` `.be`-reject so a `file://…/.be?/abc` candidate resolves the sub project from the query.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
 [CLAUDE]: ../../CLAUDE.md "coding guidelines"
