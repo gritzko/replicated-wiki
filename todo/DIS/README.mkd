@@ -25,7 +25,8 @@ DIS collects spec↔implementation discrepancies that cut across verbs; a gap fo
  -  [DIS-039] — bare `be get` is a status no-op per GET.mkd but the Issues loop assumes it FFs; the specs contradict.
  -  [DIS-040] — POSTCFLCT can't be de-falsed at the byte level; needs a provenance check, couples to POST-016.
  -  [DIS-042] — cur's divergent commit: `be patch <peer>` + `be post` replays onto peer, drops cur's bytes (Invariant 2).
- -  [DIS-044] — WEAVEMerge's RGA tie-break sorts concurrent siblings by raw commit-id DESC, not causally — real (non-monotonic) hashlets strand replace-edits / splice clean instead of conflicting (silent merge data-loss). Fix: a causal/Lamport rank; the DWEAVE fuzzer (monotonic ids) can't see it. Found mid-[[DOG-005]]; blocks its merge cut-over.
+ -  [DIS-044] — WEAVEMerge's RGA tie-break sorts concurrent siblings by raw commit-id DESC, not causally — real (non-monotonic) hashlets strand replace-edits / splice clean instead of conflicting (silent merge data-loss). Fixed: tie-break on the causal commit index + topo-deterministic commits[]; fuzzer off its monotonic-id oracle. Landed `5041ed18`.
+ -  [DIS-045] — dog/WEAVE merge mis-anchors a blank line vs a code-line EOL (identical `\n` content) — `be-patch-15` step 2 merges wrong; a ~½ flake on graf, a hard fail on dog. The last case blocking [[DOG-005]]'s merge cut-over.
 
 DIS-043 (dog/WEAVE concurrent-insert order path-dependent — criss-cross duplication;
 fixed with an RGA stable-order key: a per-token `'A'` anchor column + identity merge-JOIN
@@ -53,6 +54,7 @@ in commit-id RGA order) landed `8eece3f3`; `dog/test/WEAVE01` + the DWEAVE fuzz 
 [DIS-040]: DIS-040.mkd
 [DIS-042]: DIS-042.mkd
 [DIS-043]: DIS-043.mkd
-[DIS-044]: DIS-044.mkd "WEAVEMerge RGA order key not causally monotonic"
+[DIS-044]: DIS-044.mkd "WEAVEMerge RGA order key not causally monotonic (landed 5041ed18)"
+[DIS-045]: DIS-045.mkd "dog/WEAVE merge mis-anchors blank line vs code EOL"
 [DOG-003]: ../DOG/DOG-003.mkd "dog/WEAVE core"
 [Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"
