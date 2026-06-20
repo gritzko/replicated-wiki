@@ -47,13 +47,15 @@ IMGDIRS := $(patsubst ./%,%,$(shell find . -type d -name img -not -path './$(OUT
 all: $(HTML) indexes assets
 
 # One page. `mark` only ever writes a sibling .html, so stage the source inside
-# the output tree, render it in place, then drop the staged copy. --head inlines
-# the shared <head> snippet and --body the top banner, so editing either
-# re-renders every page.
+# the output tree, render it in place, then drop the staged copy. --root=. is
+# the `/` anchor for absolute `[/...]` links and the source tree probed to
+# decide .mkd->.html; absolute hrefs are depth-independent, so the staged copy's
+# location does not matter. --head inlines the shared <head> snippet and --body
+# the top banner, so editing either re-renders every page.
 $(OUT)/%.html: %.mkd $(HEAD) $(BODY)
 	@mkdir -p $(@D)
 	@cp $< $(@D)/
-	@$(MARK) $(MARKFLAGS) --head=$(HEAD) --body=$(BODY) $(@D)/$(<F)
+	@$(MARK) $(MARKFLAGS) --root=. --head=$(HEAD) --body=$(BODY) $(@D)/$(<F)
 	@rm -f $(@D)/$(<F)
 
 # Directory landing pages: Home (the wiki) and every README become index.html.
