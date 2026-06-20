@@ -1,7 +1,9 @@
 name: Deploy static wiki to Pages
 
 # The site is pre-built locally with `make` (the `mark` renderer is not available
-# on the runners) and the html/ tree is committed. This workflow just publishes it.
+# on the runners) and lives in the html/ submodule (repo gritzko/replicated.live).
+# This workflow checks out that submodule and publishes it at replicated.wiki —
+# stamping THIS repo's CNAME over the submodule's own (replicated.live).
 
 on:
   push:
@@ -25,7 +27,12 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive   # pull the html/ submodule (public repo)
       - uses: actions/configure-pages@v5
+      # html/ ships replicated.live's CNAME; stamp this repo's domain so the
+      # artifact serves at replicated.wiki instead.
+      - run: cp CNAME html/CNAME
       - uses: actions/upload-pages-artifact@v3
         with:
           path: html

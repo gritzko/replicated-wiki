@@ -8,7 +8,10 @@ Project management docs.
  3. [/todo] tickets, issues, todos, ordered by the topic,
  4. [/skill] processes and skills,
  5. [/blog] the project's blog,
- 6. [/html] generated HTML.
+ 6. [/html] the generated site: a git submodule (public repo `replicated.live`),
+
+Publishing: edit sources, run `make` (renders into the `html/` submodule), then
+`make publish` — commit+push inside `html/`, then bump the gitlink here.
 
 What to read next:
 
