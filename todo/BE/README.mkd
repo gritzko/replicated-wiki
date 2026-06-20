@@ -5,9 +5,11 @@
 ##  Active tickets
 
  -  [BE-003] — every dog must print **name + verb + URI + error code** on an error exit (one uniform line, single-sourced) — today error exits are contextless (`Error: SNIFFFAIL`, `bro: cannot open …: FILENONE`); general form of BE-002.
- -  [BE-005] — **umbrella**: unify verb output through the shared ROWS/HUNK *state banner*. SUPERSEDED by [BE-007] — the one-hunk-per-module output model stays, but ROWS (the typed subsystem) is the wrong vehicle.
- -  [BE-007] — root out ROWS ENTIRELY (195 refs/18 files): it is just ULOG→HUNK token serialization and needs no data types. Replace with one utility fn in HUNK/ULOG, delete `dog/ROWS.{h,c}`, repoint every caller. Reverses [BE-005], subsumes [[POST-022]].
  -  [BE-006] — one unreachable-remote `be post` prints FIVE lines for one failure (raw `ssh:` leak + `be: remote unreachable` + `Error: WIREUNRCH` + `Error: BEDOGEXIT` ×2, one per spawned `be` level); collapse to a single uniform error line. Concrete instance of [BE-003].
+
+BE-007 (root out ROWS — deleted `dog/ROWS.{h,c}` + 4 types, 18 callers repointed to the
+typeless `HUNKu8sFeedRow` ULOG→HUNK serializer; fixed POST-022's wrecked output) landed
+`1a006d08`; retires [BE-005] (the ROWS-banner umbrella).
 
 [Plan]: ../../wiki/Plan.mkd "the live planning page"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

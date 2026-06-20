@@ -6,8 +6,10 @@
 
  -  [POST-006] — `POSTCFLCT` false-fires on conflict-marker strings in tracked source comments/literals (e.g. `sniff/PATCH.c:339`), forcing a blunt `--force`. Recognize only the real WEAVE output shape, not any inline `<<<<…||||…>>>>` occurrence.
  -  [POST-019] — an internal gitlink-bump `put:` banner (`staged 1 put row(s)`) leaks into the MIDDLE of `be post` when a submodule advanced; the bump already shows as `mod <sub>` in the parent post rows. Suppress the standalone put banner for the internal path. Surfaced by [[POST-018]]/[[BE-005]].
- -  [POST-021] — git-scheme push (`be post`/`be put ssh://localhost/src/dogs`) fails outright with `BNOROOM` + `the remote end hung up` after the submodule recursion; `be head` fetches fine, so only the send path is broken. Strands locally-committed work (the DOG line). Complete breakage.
- -  [POST-022] — submodule-recursive `be post <remote>` dumps the `abc` sub's WHOLE history (~150 rows) each preceded by a bare `abc` label line, despite `post: 0 change(s)` — wrecked output. Show only the pushed delta via ROWS with a compact `abc/` prefix.
+POST-021 (git-scheme push `BNOROOM` — BASS exhaustion: per-commit walk scratch never
+rewound + unused walk buffer; skip it, route the walk through try(), size pack buffers)
+landed `387a6f99`; `test/post/46`. POST-022 (sub-push wrecked output: bare per-row label
++ full-history dump) subsumed + fixed by [BE-007] `1a006d08`; `test/post/48`.
 POST-020 (git-push post path raw-printf'd `sniff: N change(s)` + the keeper
 synthetic-coordinate notice → both now ride `post:` ROWS) landed `8c7f5f3a`; repro
 `test/post/25-dot-branch-no-git-wire`, `post/13` grep repointed.

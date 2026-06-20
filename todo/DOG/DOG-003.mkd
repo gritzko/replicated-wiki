@@ -52,7 +52,11 @@ Build the new `dog/WEAVE` engine per [DOG-001]/[api]: the columnar parsed view, 
      linear/simple-fork histories only until the order key lands.
 
 ##  Outcome
- -  (open — merge-join + NOROOM fix landing; criss-cross tracked in [DIS-043])
+ -  Landed `25fb62bd`: columnar `dog/WEAVE` core (Parse/Serialize/Next/Merge/Produce/
+    Alive/Step/Scope) + `dog/fuzz/WEAVE` (`DWEAVEfuzz`) content-recovery fuzzer +
+    `dog/test/WEAVE01`. NOROOM (rms column) + LCS→identity-JOIN fixed here.
+ -  Criss-cross concurrent-insert order split to [DIS-043] (RGA stable-order key),
+    landed `8eece3f3`. Emit is [DOG-004] (WIP).
 
 [DOG-001]: DOG-001/README.mkd "umbrella"
 [api]: DOG-001/api.mkd "proposed dog/WEAVE API + on-wire format"

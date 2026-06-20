@@ -25,7 +25,10 @@ DIS collects spec↔implementation discrepancies that cut across verbs; a gap fo
  -  [DIS-039] — bare `be get` is a status no-op per GET.mkd but the Issues loop assumes it FFs; the specs contradict.
  -  [DIS-040] — POSTCFLCT can't be de-falsed at the byte level; needs a provenance check, couples to POST-016.
  -  [DIS-042] — cur's divergent commit: `be patch <peer>` + `be post` replays onto peer, drops cur's bytes (Invariant 2).
- -  [DIS-043] — dog/WEAVE merge: concurrent-insert order is path-dependent (criss-cross duplication); NOROOM + LCS→join landed, stable order-key open ([DOG-003]).
+
+DIS-043 (dog/WEAVE concurrent-insert order path-dependent — criss-cross duplication;
+fixed with an RGA stable-order key: a per-token `'A'` anchor column + identity merge-JOIN
+in commit-id RGA order) landed `8eece3f3`; `dog/test/WEAVE01` + the DWEAVE fuzz corpus.
 
 [DIS-001]: DIS-001.mkd
 [DIS-002]: DIS-002.mkd

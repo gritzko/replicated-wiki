@@ -5,7 +5,10 @@ The git-format storage floor: pack-log encoding, delta scheme, ingest normalizat
 ##  Active tickets
 
  -  [GIT-001] — UMBRELLA: migrate to a single-stream OFS-only pack log; all impl children below now landed (GIT-006 dropped) — only the [PackLog] wiki reconcile remains.
- -  [GIT-009] — push to a FRESH/empty git remote omits the `.be` store-anchor blob (trees reference it, the pack walk `DPATHVerify` skips it) → `git fsck` `missing blob object`. Harmless on incremental FF; only bites fresh remotes. Found mid-[[POST-021]].
+
+GIT-009 (fresh-remote push omitted the `.be` store-anchor blob → fsck `missing blob`;
+pack-closure walks now ship it via a `WALK_INCL_ANCHOR` flag, on push + serve) landed
+`c4955e5b`; `test/post/47`.
 
 GIT-007 (js/pack.hpp reduced to pure marshalling over dog/git `PACKu8sFeedObj`/
 `PACKResolveOfs` + new `PACKRecordEnd`; `JABCPackFeedOfs` + inline encode/resolve dup
