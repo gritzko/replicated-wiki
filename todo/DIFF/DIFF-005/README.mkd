@@ -1,0 +1,83 @@
+#   DIFF-005: `be diff:<file>` emits enormous (whole-file) context
+
+`be diff:dog/INDEX.md` returns 110 lines for a 2-line edit — a single hunk
+`@@ -1,106 +1,106 @@` spanning the ENTIRE file (2 added, 2 removed, **105
+context**). For a tiny change in a large doc this is "enormous context for no
+obvious reason." Likely DIFF-003's landed file-scoped full-file diff showing for
+a single-file `diff:`; research whether that is intended/acceptable or should be
+bounded. Evidence: [evidence]. Method: [Issues].
+
+##  Input
+
+### Context
+ -  `be diff:dog/INDEX.md` (106-line file, +1 row edited) → 110 output lines, ONE
+    hunk `@@ -1,106 +1,106 @@`, 2 `+` / 2 `-` / **105 context**. The whole file is
+    emitted as context for a 2-line change. Full capture + repro: [evidence].
+ -  DIFF-003 ("file-scoped diff: whole file, changes hilited") landed `eaa75793`, so
+    a single-file `diff:<path>` plausibly renders the WHOLE file BY DESIGN. But the
+    maintainer didn't expect/recognize it ("no idea why") — so either it's the
+    intended file-scoped mode (and needs documenting / a bound for large files), or
+    a context-sizing regression.
+
+### Goals
+ -  Determine: is the full-file context for `be diff:<file>` INTENDED (DIFF-003
+    file-scoped) or a context-sizing bug? Cite the code path.
+ -  Decide the right UX: if intended, bound it for large files and/or offer a
+    git-style ~N-line-context mode, and DOCUMENT it so it stops surprising; if a
+    bug, fix the context window.
+
+### Constraints
+ -  Don't regress DIFF-003's deliberate full-file-with-highlight view where that is
+    wanted (e.g. the pager); the concern is the plain `be diff:<file>` text output.
+ -  Behaviour change to diff context gates for review; add a test pinning the chosen
+    context size for a small-edit-in-large-file case.
+
+##  WIP
+
+### Design decisions (scan done 2026-06-16 — INTENDED, not a bug)
+ -  PREMISE CORRECTED (bare-`be diff` re-investigation): the bare aggregate
+    `be diff:` is ALREADY bounded — every hunk is 3-line context
+    (`GRAFDiffWtTree`→`GRAFDiffWtFile(full=NO)`→`WEAVEEmitDiff`). The whole-file
+    inflation is ONLY the single-file `diff:<file>` projector (`full=YES`). So this
+    ticket stays a single-file-projector concern; do NOT add bare-diff handling, and
+    drop the "bare diff is whole-file" framing.
+ -  The re-investigation surfaced two ADJACENT defects, now their own tickets:
+    [[DIFF-006]] (cosmetic: per-hunk `--- a/`/`+++ b/` repeated, not coalesced per
+    file — the "62 headers vs 17 files" artifact, `dog/HUNK.c:1242`) and [[DIFF-007]]
+    (REAL bug: `diff:<largefile>` silently EMPTY — `WEAVEEmitFull`'s 65536-token
+    `outtoks` carve overflows on big files, NOROOM swallowed; `WEAVE.c:1030/1099`).
+    Note: option-a here (bound large files → `WEAVEEmitDiff`) would INCIDENTALLY mask
+    DIFF-007, a strong extra argument for it.
+ -  VERDICT: the whole-file context is DELIBERATE DIFF-003 design, hard-wired
+    `full=YES` for single-file `diff:` shapes. Decision site `GRAFDiff2Layer`
+    (`graf/DIFFREF.c:163`): `if (full) WEAVEEmitFull` (no windowing, `WEAVE.c:1015`)
+    else `WEAVEEmitDiff` (3-line `WEAVE_CTX_LINES`, `WEAVE.c:802/850`). Intent
+    documented verbatim at `DIFFREF.c:108-117` + `GRAF.h:315-317`. No context knob.
+ -  Only the single-file `diff:<file>` projector is unbounded (`GRAF.exe.c:512`
+    wt-vs-base, `:502` ref, `:438` range). Tree-scope (`DIFFREF.c:377`) and the
+    `weave` verb (`GRAF.exe.c:567`) ALREADY use the bounded 3-line path — so the
+    machinery for git-style context exists.
+ -  UX options (maintainer call — see Outcome): (a) BOUND LARGE FILES — at
+    `DIFFREF.c:163`, when `full && line_count > N` (~200) demote to `WEAVEEmitDiff`;
+    small files keep the full read (one-site, no API churn — worker's preferred).
+    (b) SPLIT pager-vs-text — tty/`HUNKMode` → full, non-tty → 3-line (touches the 3
+    dispatch sites). (c) KEEP + DOCUMENT only (it self-documents already).
+
+### TODOs
+ -[v] Scanned: full-file is DIFF-003-intended; window site `DIFFREF.c:163`; only
+      single-file `diff:<file>` unbounded; tree/weave already 3-line.
+ -[ ] Maintainer picks UX (a/b/c); implement at `DIFFREF.c:163` (a) or the dispatch
+      sites (b), or just document (c).
+ -[ ] Test: small edit in a >N-line file → bounded context (alongside WEAVE2/01).
+
+### Blockers and bummers
+ -  May be working-as-DIFF-003-intended — confirm before "fixing"; the deliverable
+    might be a bound + docs, not a behaviour reversal.
+
+##  Outcome
+ -  Scan complete: INTENDED DIFF-003 behaviour (not a bug); window site
+    `graf/DIFFREF.c:163`. Awaiting a maintainer UX ruling (bound-large-files /
+    pager-vs-text / document-only), then a one-site implementation.
+
+[evidence]: diff-evidence.txt "be diff:dog/INDEX.md whole-file context capture"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,57 @@
+#   BRO-001: render the hunk status/header line as a full-width banner
+
+The shared hunk renderer draws a hunk's status/header line (the `{ts, verb,
+uri}` metadata row — `dog/HUNK.h`, currently a plain `<date>\t<verb>\t<uri>`
+in text mode) without a clear visual band. Make it a proper banner: abbreviated
+time + URI on a pale-yellow, full-width, black-text line. This is the shared
+renderer used by every projector (log/status/grep/diff/commit/blame), so the
+fix lands once and benefits all. Prerequisite for [BLAME-005].
+
+##  Input
+
+### Context
+ -  A `hunk` is `{ ron60 ts; ron60 verb; u8cs uri; text/toks }`; the status
+    line is the `ts`/`verb`/`uri` row the renderer emits (`HUNKu8sFeedText/
+    Color/Html` in `dog/HUNK.c`, consumed by [Bro]).
+ -  Today the line has no distinct band — it reads as ordinary text and is
+    easy to miss between content bodies.
+
+### Goals
+ -  The status/header line displays the **time in abbreviated format**
+    (`Fri12`-style, the same formatter `be head`/`log:` already use) **and the
+    URI**.
+ -  Style: **pale-yellow background, spanning the FULL line width** (not just
+    the text), **black text**.
+
+### Constraints
+ -  Shared renderer (`dog/HUNK.c` `HUNKu8sFeedColor` for the TTY path; keep
+    Text/Html modes coherent) — benefits all projectors, no per-producer code.
+ -  Reuse the existing abbreviated-date formatter (don't roll a new one).
+ -  Full-width fill must respect the terminal width bro already knows.
+
+##  WIP
+
+### Design decisions
+ -  Open: does the banner keep the `verb` (the hunk's third field) alongside
+    time + URI, or show only time + URI as stated? Default: keep `verb` (it's
+    free data) unless it crowds the line.
+ -  Open: Text (non-TTY) and Html modes — match the banner intent (Html =
+    pale-yellow row, already close per the `ulog` div) or leave Text plain.
+
+### TODOs
+ -[v] Banner in `HUNKu8sFeedColor` (`hunk_feed_status_color`) + bro's
+      `bro_render_ulog_title`, via shared `THEME_BANNER` (`dog/THEME.h`).
+ -[v] Reused `DOGutf8sFeedDate` (the `Fri12`-style formatter).
+ -[v] bro (width-aware) pads the band to the terminal edge; verb kept; Text
+      stays plain machine-grep; Html `.ulog` CSS made coherent.
+
+### Blockers and bummers
+ -  None. Unblocks [BLAME-005] (per-commit-run hunk headers ride this banner).
+
+##  Outcome
+ -  LANDED `afc2bd48` — black-on-pale-yellow (`48;5;230`) full-width banner:
+    abbrev date + verb + uri; shared `THEME_BANNER`; bro-padded width (no
+    hardcode); `HUNKTestStatusBanner` across all 3 themes; 290/290 green.
+
+[Bro]: ../../wiki/Bro.mkd "the bro pager"
+[BLAME-005]: ../BLAME/BLAME-005.mkd "blame produces per-commit hunks"

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO — pager / hunk-renderer tickets</h1>
+<p>
+<a href="../../wiki/Bro.html">Bro</a> is the interactive pager and the *<strong>shared hunk renderer</strong>*: every projector (<code>log</code>/<code>status</code>/<code>grep</code>/<code>diff</code>/<code>commit</code>/<code>blame</code>…) emits <code>dog/HUNK</code> streams that bro renders. Tickets here improve that rendering — presentation is bro's job, producers only emit <code>{ts,verb,uri}</code>+body. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li>(none — all BRO tickets landed.)</li>
+</ul>
+<p>
+BRO-004 (colour <code>diff:</code> added-side flush + first-hunk incoherence + single-insert context-line dup) landed <code>fc906b77</code>+<code>2e271665</code>+<code>0dd4e0ba</code> (Part 3 = the Part-2 gate was too broad; <code>bro_line_continues()</code>, <code>test/diff/16</code>). BRO-002 (one hunk-header drawer + unified table-hunk output) landed <code>25abfece</code>+<code>acbda302</code>; subsumed BRO-001 (<code>afc2bd48</code>). BRO-003 (status-row regressions: sub-relay rows + patch <code>modl</code>) landed <code>3aca0998</code>.
+</p>
+</body>
+</html>

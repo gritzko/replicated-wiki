@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-003: BRO-002 status-row regressions — sub-relay rows + patch codes</h1>
+<p>
+<a href="BRO-002/README.html">BRO-002</a> (landed <code>25abfece</code>+<code>acbda302</code>) converged every verb onto ONE per-(sub)module table hunk rendered by the single <code>HUNKu8sFeedBanner</code> path. That land regressed status-row output in two cases that four previously-green tests assert.  Both are rendering/relay gaps, not logic gaps — the verbs do the work (counters and prose lines are correct), but the per-file/per-status ROW no longer surfaces in the report a consumer parses.
+</p>
+<h2>Failing tests (all green before BRO-002; SUBS-004/005 repros landed 2026-06-06)</h2>
+<ul>
+<li><code>#355 be-put-09-sub-only-dirty-exit</code> — bare <code>be put</code> with only a mounted</li>
+</ul>
+<div>
+<p>
+sub dirty: direct (non-tlv) stdout shows only the module header <code>vendor/sub</code> but NOT the path-prefixed per-file row <code>put\tvendor/sub/core.c</code> the test greps for (<code>test/put/09-sub-only-dirty-exit/run.sh:44</code>).
+</p>
+</div>
+<ul>
+<li><code>#354 be-put-08-sub-stage-all-both-dirty</code> — same family (parent + sub both</li>
+</ul>
+<div>
+<p>
+dirty; sub's row missing from the report).
+</p>
+</div>
+<ul>
+<li><code>#194 be-delete-07-sub-delete-all-missing</code> — same family on the delete verb.</li>
+<li><code>#78 SNIFFpatch</code> — <code>FAIL: expected 'modl' status row in report</code>: the</li>
+</ul>
+<div>
+<p>
+modify/delete-kept-ours case prints the prose line (&quot;modify/delete on d.c — kept ours&quot;) and bumps <code>mod-del-kept=1</code>, but emits no per-row status code <code>modl</code> in the table.
+</p>
+</div>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>BRO-002 emits ONE per-(sub)module table hunk; mutators stream rows to</li>
+</ul>
+<div>
+<p>
+stderr in direct-tty mode, and flush the batched table hunk only in <code>--tlv</code>/relay mode (BRO-002 &quot;RULED — channels&quot;).
+</p>
+</div>
+<ul>
+<li>Sub recursion forks a <code>--tlv</code> child, captures its hunk stream, and replays</li>
+</ul>
+<div>
+<p>
+it path-prefixed via <code>HUNKu8sRelay</code> (<code>dog/HUNK.c</code>).  The per-file rows live INSIDE that relayed table hunk's <code>(text,toks)</code> body.
+</p>
+</div>
+<ul>
+<li>In the failing put/delete cases the report is captured to a FILE (not a</li>
+</ul>
+<div>
+<p>
+tty) without <code>--tlv</code>, so neither the tty-stream path nor the tlv-flush path emits the sub's per-file rows — only the module header survives.
+</p>
+</div>
+<ul>
+<li>Shared row builder is <code>dog/ROWS.{c,h}</code> (BRO-002); patch status codes are</li>
+</ul>
+<div>
+<p>
+emitted by <code>sniff/PATCH.c</code> through it (the <code>modl</code>/<code>conf</code>/<code>take</code> codes).
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li><code>be put</code> / <code>be delete</code> / <code>be patch</code> to a plain pipe (non-tty, non-tlv) emit</li>
+</ul>
+<div>
+<p>
+the per-file/per-status ROWS again — including rows from a RELAYED sub table hunk, path-prefixed — restoring the <code>&lt;date&gt;\t&lt;verb&gt;\t&lt;path&gt;</code> (and <code>patch\t&lt;code&gt;\t&lt;path&gt;</code>) grammar the tests parse.
+</p>
+</div>
+<ul>
+<li><code>SNIFFpatch</code>: the modify/delete-kept case emits a <code>modl</code> status row, not</li>
+</ul>
+<div>
+<p>
+just a counter + prose line.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Keep <a href="../../wiki/Sniff.html">Verb channels</a>: don't regress the tty streaming or the <code>--tlv</code> batch.</li>
+</ul>
+<div>
+<p>
+The gap is specifically the direct-to-pipe (non-tty, non-tlv) rendering of a relayed sub table hunk and of the patch <code>modl</code> code.
+</p>
+</div>
+<ul>
+<li>Renderer/relay rework stays in <code>dog/HUNK.c</code>+<code>dog/ROWS.c</code>+<code>sniff/PATCH.c</code>;</li>
+</ul>
+<div>
+<p>
+producers only produce hunks (presentation is bro's job).
+</p>
+</div>
+<ul>
+<li><code>abc/</code> untouched.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Likely cause (to confirm)</h3>
+<ul>
+<li>The relayed sub table hunk's body rows are dropped (or only its banner</li>
+</ul>
+<div>
+<p>
+header rendered) when the parent re-emits in a non-tlv, non-tty mode — <code>HUNKu8sRelay</code> / <code>HUNKu8sFeedBanner</code> direct-mode path likely renders the header band but elides the <code>(text,toks)</code> rows.  And <code>sniff/PATCH.c</code> never appends a <code>modl</code> row for <code>mod-del-kept</code> (only increments the counter).
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro each of the 4 with kept scratch; capture the relayed sub hunk's</li>
+</ul>
+<div>
+<p>
+  TLV bytes vs the direct-mode render to pinpoint where the rows drop.
+</p>
+</div>
+<ul>
+<li>] Fix the non-tty/non-tlv render of relayed table-hunk rows (emit the body</li>
+</ul>
+<div>
+<p>
+  rows, path-prefixed, not just the module header).
+</p>
+</div>
+<ul>
+<li>] Emit a <code>modl</code> status row for the modify/delete-kept case in <code>sniff/PATCH.c</code>.</li>
+<li>] Re-green <code>#78 #194 #354 #355</code>; full <code>ctest</code> clean.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Landed <code>3aca0998</code>: <code>HUNKu8sRelay</code> re-prefixes relayed sub table-hunk body</li>
+</ul>
+<div>
+<p>
+rows (path col + <code>U</code> nav uri); <code>sniff/PATCH.c</code> adds <code>modl</code> to the loud echo.
+</p>
+</div>
+<ul>
+<li>New regression <code>HUNKTestRelayBody</code>; <code>#78/#194/#354/#355</code> green; ctest 370/370.</li>
+</ul>
+</body>
+</html>

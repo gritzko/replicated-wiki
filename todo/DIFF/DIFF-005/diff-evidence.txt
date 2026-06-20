@@ -1,0 +1,28 @@
+DIFF-005 evidence — `be diff:dog/INDEX.md` emits whole-file context for a 2-line edit.
+Captured 2026-06-16 in $HOME/todo/PTR-005 (dog/INDEX.md modified: +1 ULOG-slice-family row).
+
+Repro:
+  cd $HOME/todo/PTR-005          # (or any wt with a small dog/INDEX.md edit)
+  be diff:dog/INDEX.md | wc -l   # 110 lines
+  be status                      # dog/INDEX.md  mod
+
+Stats (be diff:dog/INDEX.md, 110 lines total):
+  file size      : 106 lines
+  hunks (@@)     : 1   →  `@@ -1,106 +1,106 @@`  (spans the ENTIRE file)
+  added   (^+)   : 2
+  removed (^-)   : 2
+  context (^ )   : 105   ← the whole file is emitted as context for a 2-line change
+
+Header:
+  --- a/dog/INDEX.md
+  +++ b/dog/INDEX.md
+  @@ -1,106 +1,106 @@
+   # tok/ — Lightweight ragel-based tokenizers
+   …(all 106 lines, only 2 of them are +/-)…
+
+Note: DIFF-003 ("file-scoped diff: whole file, changes hilited") landed `eaa75793`,
+so a single-file `diff:<path>` appears to render the WHOLE file (full context) by
+design. Question for the worker: is the unbounded full-file context INTENDED here
+(and acceptable for a 106-line / much larger file), or should single-file `diff:`
+bound the context (git-style ~3 lines) — or offer both? Decide intended-vs-bug and
+the right UX; if full-file is intended, document it so it stops surprising.

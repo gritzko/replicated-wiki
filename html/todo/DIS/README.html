@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS tickets: cross-cutting spec/impl discrepancies</h1>
+<p>
+DIS collects spec↔implementation discrepancies that cut across verbs; a gap found mid-fix gets its own DIS ticket, linked both ways. Each entry below is one open ticket with its live state; a landed one (verify with <code>be log | grep DIS-NNN</code>) drops off. The 21 below remain open. The fix-and-land method is <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="DIS-001.html">DIS-001</a> — sha-bearing wtlog row-0 anchor; correctness landed, only the optional clone-path cleanup remains.</li>
+<li><a href="DIS-002.html">DIS-002</a> — <code>be patch</code> over a transport drops freshly-fetched commits; routing landed, still loses the added file.</li>
+<li><a href="DIS-003.html">DIS-003</a> — WEAVEMerge token identity is positional, not total; one sub-bug fixed, a clean diff-key fix stays constrained.</li>
+<li><a href="DIS-004.html">DIS-004</a> — delete's dirty gate is mtime-only, with no <code>--force</code> content double-check bypass.</li>
+<li><a href="DIS-005.html">DIS-005</a> — sha1/projector single-scheme URI grammar: document the two-step <code>be head</code> then <code>be sha1://</code> remote read.</li>
+<li><a href="DIS-006.html">DIS-006</a> — <code>be get file:</code> from a legacy elided store: migrate-in-place vs materialize-on-clone undecided.</li>
+<li><a href="DIS-007.html">DIS-007</a> — magic refs <code>?null</code> / <code>?back</code> are unimplemented.</li>
+<li><a href="DIS-008.html">DIS-008</a> — GET <code>#~N</code> commit-ancestor rewind operator is unimplemented.</li>
+<li><a href="DIS-011.html">DIS-011</a> — <code>be put ssh://host/path</code> without <code>?ref</code> force-pushes instead of logging.</li>
+<li><a href="DIS-019.html">DIS-019</a> — direct <code>be post ssh://…/&lt;sub&gt;</code> forges a funny <code>refs/heads/.beagle/</code> ref.</li>
+<li><a href="DIS-021.html">DIS-021</a> — wpush debug spew is on by default; a pack is built on error; the have-set is unused.</li>
+<li><a href="DIS-022.html">DIS-022</a> — <code>be log</code> is empty in a detached or submodule worktree.</li>
+<li><a href="DIS-023.html">DIS-023</a> — <code>be</code> status is non-idempotent: a re-run hides real modifications.</li>
+<li><a href="DIS-024.html">DIS-024</a> — flat→sharded store-layout migration; retire the top-level <code>.be/refs</code>.</li>
+<li><a href="DIS-025.html">DIS-025</a> — <code>be patch</code> squash bases on the target's PARENT (silent data loss); Stage 1 landed, resolver redesign open.</li>
+<li><a href="DIS-029.html">DIS-029</a> — MARK renders bare-indent divs as raw <code>&lt;p&gt;</code> text and merges across the depth boundary.</li>
+<li><a href="DIS-031.html">DIS-031</a> — POST provenance from a trailing <code>!</code> (refer/forget); <code>post!</code> = --force; ban messages ending in <code>!</code>.</li>
+<li><a href="DIS-032.html">DIS-032</a> — bring the PATCH/POST/URI/Verbs specs in line with the bang model.</li>
+<li><a href="DIS-039.html">DIS-039</a> — bare <code>be get</code> is a status no-op per GET.mkd but the Issues loop assumes it FFs; the specs contradict.</li>
+<li><a href="DIS-040.html">DIS-040</a> — POSTCFLCT can't be de-falsed at the byte level; needs a provenance check, couples to POST-016.</li>
+<li><a href="DIS-042.html">DIS-042</a> — cur's divergent commit: <code>be patch &lt;peer&gt;</code> + <code>be post</code> replays onto peer, drops cur's bytes (Invariant 2).</li>
+<li><a href="DIS-044.html">DIS-044</a> — WEAVEMerge's RGA tie-break sorts concurrent siblings by raw commit-id DESC, not causally — real (non-monotonic) hashlets strand replace-edits / splice clean instead of conflicting (silent merge data-loss). Fixed: tie-break on the causal commit index + topo-deterministic commits[]; fuzzer off its monotonic-id oracle. Landed <code>5041ed18</code>.</li>
+<li><a href="DIS-045.html">DIS-045</a> — CLOSING: premise false. Engine already correct (<a href="">[DIS-043</a>] idh JOIN + <a href="">[DIS-044</a>] causal order removed both DIS-003 layers); no repro in 4.7M fuzz. Committed <code>711618fe</code> (pure teeth: WEAVE03 step-2 oracle + blank criss-cross cases + <code>W2_BLANK</code> fuzz; 322/322). <code>be-patch-15</code> 5/5 fail re-tasked to <a href="">[DOG-005</a>] — graf cut-over glue, not the engine.</li>
+</ul>
+<p>
+DIS-043 (dog/WEAVE concurrent-insert order path-dependent — criss-cross duplication; fixed with an RGA stable-order key: a per-token <code>'A'</code> anchor column + identity merge-JOIN in commit-id RGA order) landed <code>8eece3f3</code>; <code>dog/test/WEAVE01</code> + the DWEAVE fuzz corpus.
+</p>
+</body>
+</html>

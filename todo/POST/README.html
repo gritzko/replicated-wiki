@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+</head>
+<body>
+<h1>POST tickets: commit / fast-forward / push</h1>
+<p>
+<code>be post</code> advances the current branch — worktree→repo commit and/or fast-forward push, recursing into mounted submodules. Tickets below tighten its commit-message handling, push transports, and no-op reporting. Each entry is one active ticket with its live state; an entry drops off once the whole ticket lands (landed commits stay on the board's POST line). The fix-and-land method is <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="POST-006.html">POST-006</a> — <code>POSTCFLCT</code> false-fires on conflict-marker strings in tracked source comments/literals (e.g. <code>sniff/PATCH.c:339</code>), forcing a blunt <code>--force</code>. Recognize only the real WEAVE output shape, not any inline <code>&lt;&lt;&lt;&lt;…||||…&gt;&gt;&gt;&gt;</code> occurrence.</li>
+<li><a href="POST-018.html">POST-018</a> — <code>be post</code>/<code>be put</code> confirmations (<code>sniff: commit &lt;hex&gt;</code>, <code>N change(s)</code>, <code>staged N</code>, the msg-picker) print raw to stderr, bypassing the shared ROWS banner. Route them through ROWS (commit <code>?&lt;sha&gt;#&lt;subject&gt;</code> row, count in the banner). Child of <a href="">[BE-005</a>].</li>
+</ul>
+<p>
+POST-017 (refused <code>be post</code> was non-atomic — POSTCFLCT scan ran mid-pack-feed, so <code>KEEPPackClose</code> persisted orphan objects + a rewritten idx before refusing; hoisted all validation to a pre-flight before any store write) landed <code>f5b41282</code>; <code>test/post/42</code>. Follow-up still open: <code>be</code>-level scan-before-sub-recursion ordering (<code>DISPATCH.c:446</code>).
+</p>
+</body>
+</html>

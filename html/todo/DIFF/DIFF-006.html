@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-006: multi-hunk diff repeats <code>--- a/</code>/<code>+++ b/</code> per hunk, not per file</h1>
+<p>
+In a multi-hunk unified diff (e.g. bare <code>be diff:</code>), the <code>--- a/&lt;path&gt;</code> / <code>+++ b/&lt;path&gt;</code> file-header pair is emitted for EVERY <code>@@</code> hunk instead of once per file. So 17 changed files with 62 hunks print 62 header pairs; git prints 17 (one pair, then its <code>@@</code> hunks grouped under it). Cosmetic unified-diff divergence, low severity. Split from <a href="">[DIFF-005</a>]'s bare-diff re-investigation. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Reproduced in <code>$HOME/todo/PTR-005</code>: <code>be diff:</code> → 62 <code>--- a/</code> headers across</li>
+</ul>
+<div>
+<p>
+exactly 17 distinct files (<code>sort -u</code> on the paths == the 17 <code>mod</code> files; no extra/unchanged/sub files — so it is NOT over-listing). PATCH.c=16 hunks, GET.c=13, PUT.c=6, etc.
+</p>
+</div>
+<ul>
+<li>Root cause: <code>dog/HUNK.c:1242-1251</code> emits <code>--- a/&lt;path&gt;</code> / <code>+++ b/&lt;path&gt;</code> for every</li>
+</ul>
+<div>
+<p>
+HUNK, and each hunk is a self-contained record carrying its own <code>path</code>. There is no per-file coalescing pass that would print the header pair once then group the file's <code>@@</code> hunks under it.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>Multi-hunk output prints ONE <code>--- a/</code>/<code>+++ b/</code> pair per file, with that file's</li>
+</ul>
+<div>
+<p>
+<code>@@</code> hunks grouped under it — matching git's unified-diff layout.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Output otherwise byte-identical (same <code>@@</code> windows, same <code>+</code>/<code>-</code>/context lines);</li>
+</ul>
+<div>
+<p>
+only the redundant repeated headers collapse. Single-hunk files unchanged.
+</p>
+</div>
+<ul>
+<li>Render/HUNK change gates for review; add a multi-hunk-per-file shape test.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Coalesce at the HUNK emit boundary (<code>dog/HUNK.c:1242</code>): suppress the file-header</li>
+</ul>
+<div>
+<p>
+pair when the previous hunk carried the same <code>path</code>; emit it only on a path change (first hunk of each file).
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro: count <code>--- a/</code> vs distinct paths in a multi-file <code>be diff:</code>.</li>
+<li>] Fix: emit the header pair once per file (path-change boundary) in <code>dog/HUNK.c</code>.</li>
+<li>] Test: a 2-file, ≥3-hunk diff prints exactly 2 header pairs.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pure cosmetics; do AFTER the real DIFF-007 overflow bug.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>CLOSED 2026-06-16 — WON'T FIX (maintainer).</strong>* Repeating the <code>--- a/</code>/<code>+++ b/</code></li>
+</ul>
+<div>
+<p>
+pair per hunk is a cosmetic unified-diff divergence from git's per-file grouping; output is otherwise correct and every hunk self-identifies its path. Not worth the coalescing-pass churn. Ticket left in place; dropped from the active index.
+</p>
+</div>
+</body>
+</html>

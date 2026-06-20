@@ -1,0 +1,48 @@
+#   PTR-007: bro/+woof/ raw pool arena, manual fragment parse
+
+The 2026-06-15 audit found woof/ backs its connection pool with a raw `u8 *` from mmap, forcing per-slot pointer arithmetic and four-cell buffer writes throughout CONN.c; bro/ hand-parses the prompt/URI path with `char[]`+`strlen`/`atoi`/`sscanf`. Behavior-preserving; **woof is a load-bearing spawn/serve path — gate the diff before landing.**
+
+##  Input
+
+### Context — woof/
+ -  `woof/WOOF.c:62-65` (+ `woof/WOOF.h:146`) — `WOOF.pool` is a raw `u8*` from `mmap`, so `WOOFConnCarve` computes `base=pool+slot*SLOT_BYTES`, `p_pin=p_in+REQBUF`, `p_out=p_pin+PIPEBUF` and writes all four cells of `c->in/pipe_in/out` by hand; `slot_release`/serve-inproc repeat `pool+slot*SLOT+off` (`CONN.c:125-953`). ROOT CAUSE.
+ -  `woof/CONN.c:63` re-rolls `#define LIT(s) ((u8cs){(u8c*)(s),(u8c*)(s)+sizeof(s)-1})` (duplicates `u8slit`); `:487,720` cell-poke `pipe_in[2]+=n`; `:329,788` Fork-by-hand (`Bu8 out={c->out[0..3]}; … c->out[2]=out[2]`); `:255,343` `char*`+len envelopes with `{(u8c*)mt,(u8c*)mt+strlen(mt)}`.
+ -  `woof/CONN.c:411-416` argv `{argv_a, argv_a+3}`; `:829` `au.data[0]=c->uri[0]; au.data[1]=c->uri[1]`.
+
+### Context — bro/
+ -  `bro/BRO.c:1931-2096` — `BRODispatchFragment(char *frag, …)`/`BROReadURI` on `char buf[512]`/`fbuf[64]`/`unquoted[256]` with `strlen`/`atoi`/`sscanf`/`memcpy(frag+es,…)`/`frag+1` and manual NUL trims ([ABC] "never manual parsing in C").
+ -  `bro/BRO.c:457-712` — `bro_classify_lines(hunkc*, bro_lineinfo *out, u32 cap)` reinterprets a `u32b` BASS buffer as `(bro_lineinfo*)u32bIdleHead(scratch)`, `out[nl++]`.
+ -  `bro/BRO.c:2259-2364` — completion `char out[256][64]`+`int n`, `txt[i]` raw index, `strcmp`/`memcpy(out[n], wp, wlen+1)`, slices `{(u8cp)buf,(u8cp)buf+len}`.
+ -  `bro/BRO.c:1432,908,1048` — `scr_emit_char(u8cp p, u32 n)` then `{p, p+n}`; `text[0]=src_head; text[1]=src_idle` two-head slice; `bro_word_around(…, char *out, u32 cap)` byte-copy. `bro/MAUS.c:21-47` — `MAUSParse(…, u8 const *buf, int len)` → `{base,base+len}` + `input[0]-base`.
+
+### Goals
+ -  Make `WOOF.pool` a `u8a`/`u8b` mapped arena; carve slots and sub-regions with `u8bAcquire`/`u8bMap` slice helpers — collapses the ~6 `pool+slot*SLOT+off` sites and the four-cell `c->in/pipe_in/out` writes.
+ -  woof: `LIT`→existing `u8slit` (delete the macro); cell-pokes→`u8bUsed`/`u8bIdle`; Fork-by-hand→`u8sFork`/`u8sJoin` (or feed `c->out` directly); envelopes→`u8csc`; `{argv_a,argv_a+3}`→`a$(u8cs, argv, argv_a)`; `au.data` restore→`$mv`/`u8csMv`.
+ -  bro: route the fragment/URI path through `u8csc`/`path8sc` + ragel `URILexer` + typed trims; completion → a `u8b` of interned word slices iterated with `$for`; `bro_lineinfo` → a typed `Bbro_lineinfo`; `scr_emit_char`→`u8csc chars`; two-head slice→`$mv(text, u8bDataC(mapped))`; `MAUS`→`u8csc`.
+
+### Constraints
+ -  woof is load-bearing — gate the diff before landing; behavior-preserving; `ctest -j16 --timeout 10` green.
+ -  Int-fd tables (`i32b maps`, conn `sock_fd`/`pipe_fd`) are real POSIX fds — not slice candidates.
+
+##  WIP
+
+### Design decisions
+ -  Convert `WOOF.pool` to an arena first — it is the root cause; most of CONN.c's pointer arithmetic disappears once slots are typed buffer views. `woof/ROUTE.c` is already clean (uses `u8slit`/`u8csEq`) — model after it.
+
+### TODOs
+ -[ ] Repro-first: lock woof serve + bro render outputs on existing tables.
+ -[ ] `WOOF.pool` → `u8a`/`u8b` arena; slots via `u8bMap`/`u8bAcquire`.
+ -[ ] woof: `LIT`→`u8slit`, cell-pokes→`u8bUsed`, Fork→`u8sFork`/`u8sJoin`, envelopes→`u8csc`.
+ -[ ] bro: `BRODispatchFragment`/`BROReadURI` → slice + ragel URI lexer.
+ -[ ] bro: `bro_lineinfo` typed buffer; completion `u8b`; `scr_emit_char`/`MAUS` → `u8csc`.
+ -[ ] Build + ctest; gate woof diff; report done vs skipped.
+
+### Blockers and bummers
+ -  woof gates on review (spawn/serve path); the pool-arena conversion is the largest single change — keep it isolated and well-tested.
+
+##  Outcome
+
+ -  pending.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

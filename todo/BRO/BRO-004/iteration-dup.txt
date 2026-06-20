@@ -1,0 +1,40 @@
+BRO-004 Part 3 evidence — colour `diff:` duplicates a context line on a single-line insert
+Repro: `be --color diff:ABC.md` in $HOME/beagle (working ABC.md WIP), 2026-06-16.
+Captured RAW (cat -v), NEVER ANSI-stripped (stripping fuses inline tokens, hides the bug).
+
+THE ACTUAL CHANGE (one line inserted): a new bullet "**Raw bytes**" is inserted
+between the context bullets "**C-string-literal slice**" and "**Iteration**".
+
+PLAIN (`be --plain diff:ABC.md`) — CORRECT: one `+` line, Iteration is context:
+     - **Stack buffer — `a_pad(T, name, len)`**, not raw `T name[len]`.
+     - **C-string-literal slice — `a_cstr(name, "lit")`**.
+    +- **Raw bytes** -- `a_raw(alias, val)`, `a_rawc(alias, val)`
+     - **Iteration — `$for` / `$rof` / `$eat`**, `sUsed1` / `sUsed`,
+       `sShed` (S.md). No raw `*p++`, `ptr + N`, `end - start`.
+
+COLOUR (`be --color diff:ABC.md`) — FLAWED: the "Iteration" line is rendered TWICE,
+once removed (bg 48;5;224) and once inserted (bg 48;5;194), around the added line:
+    ^[[90m- ^[[32m**C-string-literal slice M-bM-^@M-^T `a_cstr(name, "lit")`**^[[90m.^[[0m
+    ^[[90;48;5;224m- ^[[32m**Iteration M-bM-^@M-^T `$for` / `$rof` / `$eat`**^[[90m,^[[32m ^[[35m`sUsed1`...   <- REMOVED (bg 224)
+    ^[[90;48;5;157m- ^[[32m**Raw bytes** ^[[90m-- ^[[35m`a_raw(alias, val)`^[[90m,^[[32m ^[[35m`a_rawc(alias, val)`^[[0m   <- ADDED (bg 157)
+    ^[[90;48;5;194m- ^[[32m**Iteration M-bM-^@M-^T `$for` / `$rof` / `$eat`**^[[90m,^[[32m ^[[35m`sUsed1`...   <- INSERTED (bg 194)
+
+bg 217/224 = removed shade, 157/194 = added shade. The unchanged "Iteration" bullet
+carries BOTH a removed (224) and an inserted (194) background — it is duplicated.
+
+ROOT SUSPECT: bro's colour block-grouping / LCS aligned the inserted "Raw bytes"
+bullet against the FOLLOWING context bullet "Iteration" (both share the `- **X — `...`
+shape), modelling a clean INSERT as a 1→2 REPLACEMENT (old "Iteration" -> new
+"Raw bytes" + "Iteration"), so the shared "Iteration" line is emitted on both sides.
+Plain's unified-diff alignment keeps "Iteration" as context. Render path only (bro /
+dog/HUNK); producers untouched. Same family as BRO-004 Part 1/2 (colour line dup /
+mis-alignment), distinct site.
+
+MINIMAL REPRO (self-contained, for the test):
+  old:  - **C-string-literal slice — `a_cstr(name, "lit")`**.
+        - **Iteration — `$for` / `$rof` / `$eat`**, `sUsed1` / `sUsed`,
+  new:  - **C-string-literal slice — `a_cstr(name, "lit")`**.
+        - **Raw bytes** -- `a_raw(alias, val)`, `a_rawc(alias, val)`
+        - **Iteration — `$for` / `$rof` / `$eat`**, `sUsed1` / `sUsed`,
+  expect (colour): one added "Raw bytes" row; "Iteration" appears ONCE (context),
+  never with a removed (224) background.

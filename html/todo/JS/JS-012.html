@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-012</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-012 <a href="">structural</a>: test / fuzz / bench near-absent; <code>test.js</code> always <code>exit(0)</code> so CTest can't see a FAIL</h1>
+<p>
+<code>js/</code> has one CTest invocation and a thin <code>test.js</code>, no C++ harness / fuzz / bench, and the test exits 0 even on failure — violating CLAUDE.md §3/§8. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>CMakeLists registers ONE test (<code>jabc --eval &quot;test.run()&quot;</code>); <code>test.js</code> covers only</li>
+</ul>
+<div>
+<p>
+<code>test.is</code> + one ASCII <code>Encode</code> length; NO C++ harness, NO fuzz target, NO bench, NO <code>WITH_FUZZ</code>/<code>WITH_ASAN</code>/<code>WITH_LOAD</code> (violates CLAUDE.md §3/§8).
+</p>
+</div>
+<ul>
+<li><code>test.js</code> always <code>exit(0)</code> even on FAIL (<code>test.js:71-75</code>) → CTest cannot detect a</li>
+</ul>
+<div>
+<p>
+failing test.
+</p>
+</div>
+<ul>
+<li><code>WITH_JS</code>-gated WIP; this is the meta-ticket that makes JS-002..011 verifiable.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Table-driven C++ coverage of the convert/utf8 boundary, a fuzz target, a</li>
+</ul>
+<div>
+<p>
+round-trip bench, and a harness that exits non-zero on failure.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Follow the project <code>test/</code>/<code>fuzz/</code>/<code>bench/</code> pattern and <code>WITH_*</code> build dirs.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Add a table-driven <code>test.cpp</code> (rows: input bytes, expect len, expect</li>
+</ul>
+<div>
+<p>
+throw; empty / NUL / astral / invalid-UTF-8); a libFuzzer <code>fuzz/</code> target for convert/utf8 (corpus <code>$HOME/Corpus/JABC_UTF8</code>); a <code>file.write</code>/<code>read</code> pipe round-trip (catches JS-002); make the harness exit non-zero on failure.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Add <code>test.cpp</code> table for convert/utf8 boundaries.</li>
+<li>] Add the libFuzzer target + corpus dir.</li>
+<li>] Add the <code>file.write</code>/<code>read</code> pipe round-trip.</li>
+<li>] Make <code>test.js</code> (and the harness) exit non-zero on FAIL.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(open — filed 2026-06-16 from the js/ 7-lens review)</li>
+</ul>
+</body>
+</html>

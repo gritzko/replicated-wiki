@@ -1,0 +1,41 @@
+#   PTR tickets: pointer-discipline / slice-safety audit
+
+A 2026-06-15 per-directory audit (8 investigators, each reading [ABC] + `S.md`/`B.md`/`INDEX.md` first) flagged three smell classes that violate CLAUDE.md §1/§10 and [ABC]: raw `void*` with no typed wrapper, `ptr+len` / `ptr+end` pairs standing in for a slice, and offset/pointer arithmetic outside a bounds-checked typed-slice function. They group into 8 dir-themed, behavior-preserving tickets below — one worktree per dir, cleared via the [Issues] loop, ~6 at once. Several smells recur across dirs; fix them the same canonical way everywhere (see Cross-cutting). `abc/` (PTR-001) and `woof/` (PTR-007) are load-bearing — gate the diff before landing, never autoland abc.
+
+##  Active tickets
+
+ -  [PTR-001] — abc/: `BSDDiff` slice→cursor teardown, `URIMergePath` manual RFC parse + static `Buf[4096]`, TLV unaligned cast-writes, ANSI OSC parse. **GATED — surface diff, never autoland.**
+ -  [PTR-002] — dog/: ULOG pokes, `MDT`/`MKDT` unify, `HUNK` `hk_line`, `IGNO`/`DELT`, `DEF` bufs. **LANDED `67c65e31`**.
+ -  [PTR-003] — keeper/: WIRE `wh128` run-scan → `wh128sFindGE`, buffer pokes, `keep_read_full`, sha slices (`a_rawc`). **LANDED `e918e44d`**.
+ -  [PTR-004] — graf/: `DAGParents` subtraction, `weave_set_*`, sha-hex, slice ptr-arith (a$→a_pad, cell-assign→`*Mv`). **LANDED `76b87497`**.
+ -  [PTR-005] — sniff/: sha-hex decode 11×, `memcmp`→`sha1Eq`/`u8csEq`, `parse_tree`/`sort_entries` raw arrays (+ enabling `dog/ULOG.h` `ulogrec`/`ulogreccs` slice family). **LANDED `b71eba2a`** (3-way-merged onto POST-017's `sniff/POST.c`; 304/304).
+PTR-006 (spot/ void* slab, base-ptr binds, fixed bufs) CLOSED 2026-06-16 — WON'T FIX
+(no value; churn not justified on the hot search path).
+ -  [PTR-007] — bro/ + woof/: raw `u8 *WOOF.pool` (root cause forcing ~6 arith sites), `BRODispatchFragment(char*)` manual parse. **woof gates before landing.**
+ -  [PTR-008] — mark/ + js/ + beagle/: execvp argv offset-math (3× dup), hand Fork/Join, `MKDTLineMarker` out-ptr, js typed-array `+len`. **PARTIAL:** MKDT checkbox→`u8csHasPrefix` (bounds-safe) landed `9bfb0157`. The rest never landed — its worktree was a stale (pre-PTR-005) tangle that reverted landed work, now DISCARDED; remaining scope (blockquote/list HasPrefix still raw on trunk, `MKDTLineMarker` out-ptr→slice 4-file unit, mark/js/beagle ptr-discipline) needs a FRESH rework against trunk if pursued.
+ -  [PTR-009] — abc/URI: deleting the two static `Buf[4096]`. **LANDED `b0455595`** (abc sub `5f84502a`): ruled Candidate A with a `u8s out` param — `URIAbsolute`/`URIRelative` take caller-owned `out` (callers pass `u8bIdle(buf)`), result views the written prefix via `u8gLeftC`; `remove_dot_segments` is now a `PATHu8sDrain` walk. Resolves PTR-001's URIMergePath/static-Buf item.
+
+##  Cross-cutting (apply the same canonical fix in every dir)
+
+ -  sha-hex decode `{sha.data, sha.data+20}` / `{v[0], v[0]+40}` → `sha1FromHex` + `a_head`/`a_rest` (CODE-016 funnel).
+ -  `memcmp` for equality → `sha1Eq` / `u8csEq` / `u8csHasSuffix`.
+ -  buffer-internals poke `((T**)buf)[2] = …` → `u8bFed` / `u8bShed` / typed reset-to-mark (never index a buffer's cells).
+ -  hand-rolled Fork/Join `before=IdleHead; …feed…; {before,after}` → `u8sFork` / `u8sJoin` (or capture a gauge).
+ -  separator scan `while (p<e && *p!='/') p++` → `u8csFind` + `a_head`/`a_rest`.
+ -  `void *ctx` callback contexts are the sanctioned ABC closure idiom — NOT in scope; do not churn them.
+
+##  Sessions
+
+ -  PTR-001..008 unbooked — claim a range here before starting a worktree.
+
+[PTR-001]: PTR-001.mkd "abc/ pointer-arith teardown (GATED)"
+[PTR-002]: PTR-002.mkd "dog/ buffer pokes, dup scanners, ptr+len"
+[PTR-003]: PTR-003.mkd "keeper/ wh128 run-scan, buffer pokes, sha-hex"
+[PTR-004]: PTR-004.mkd "graf/ DAGParents subtraction, weave_set ptr+len"
+[PTR-005]: PTR-005.mkd "sniff/ sha-hex decode, memcmp, raw arrays"
+[PTR-006]: PTR-006.mkd "spot/ void* slab, base-ptr binds, fixed bufs"
+[PTR-007]: PTR-007.mkd "bro/+woof/ raw pool arena, manual fragment parse"
+[PTR-008]: PTR-008.mkd "mark/+js/+beagle/ argv offset-math, Fork/Join"
+[PTR-009]: PTR-009.mkd "abc/URI static Buf[4096] = public-API design fork (GATED)"
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

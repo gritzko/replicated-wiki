@@ -1,0 +1,49 @@
+#   JS-005 [HIGH]: `JS_FILES` fd-table custody — GC-root leak, double-unprotect, std-stream close, table leak
+
+The `JS_FILES` fd→object table mishandles JSC protect/unprotect and `close()`,
+leaking GC roots, double-unprotecting stdio, and closing the process std streams.
+Flagged by the lifecycle + custody lenses (high confidence). Method: [Issues].
+
+##  Input
+
+### Context
+ -  (a) `JABCioMakeFileObject` (`io.cpp:46-48`) does `JS_FILES[fd]=obj;
+    JSValueProtect` unconditionally — on fd reuse the prior protected object is
+    overwritten with no `Unprotect` → permanent GC-root leak + stale object/fd.
+ -  (b) `JABCioUninstall` (`io.cpp:514-540`) unprotects `JABCio_STD[0..2]` AND the
+    `JS_FILES` loop unprotects the same stdio objects again (double-unprotect) AND
+    `JABCioCloseFile` `close()`s fds 0/1/2 — closing the process std streams.
+ -  (c) `JS_FILES = malloc()` (`io.cpp:453`) is never freed.
+ -  `WITH_JS`-gated WIP, but custody bugs corrupt long-running JS sessions.
+
+### Goals
+ -  No GC-root leak on fd reuse; stdio unprotected once; process std streams stay
+    open; the table is freed on uninstall.
+
+### Constraints
+ -  Unprotect any existing slot before overwrite; unprotect stdio exactly once; skip
+    `close()` for fds 0/1/2; `free(JS_FILES)` on uninstall.
+
+##  WIP
+
+### Design decisions
+ -  (open) Guard the slot overwrite, make `JABCioCloseFile` skip 0/1/2, dedup the
+    stdio unprotect between `JABCio_STD` and the table loop, free the table.
+
+### TODOs
+ -[ ] Repro-first: open + close enough files to force an fd reuse and assert the old
+      object is unprotected; uninstall and assert stdout/stderr still write.
+ -[ ] Apply the four custody fixes; verify under ASAN/LSAN.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `08df5879`** (2026-06-16): guard the slot-overwrite unprotect in
+    `JABCioMakeFileObject`, skip `close()` for fds 0/1/2 in `JABCioCloseFile`,
+    dedup the stdio unprotect (null `JS_FILES[0..2]` before the close-loop), and
+    `free(JS_FILES)` on uninstall; C++ harness now drives io install/uninstall
+    and asserts std fds survive + table freed (red-before/green-after, ASAN/LSan
+    clean). (a) fd-reuse GC-root balance is logic-verified; (b)+(c) test-verified.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

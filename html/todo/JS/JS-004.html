@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-004 <a href="">HIGH</a>: <code>len-1</code> / <code>factlen-1</code> <code>size_t</code> underflow on empty / zero-length strings</h1>
+<p>
+<code>JSStringGetUTF8CString</code> returns 0 on an empty string or failure; the <code>-1</code> sites then underflow <code>size_t</code> to a huge value. Flagged by all 7 lenses (highest confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>JSStringGetUTF8CString</code> returns 0 on empty/failure. Sites subtract 1 unguarded:</li>
+</ul>
+<div>
+<p>
+<code>convert.cpp:24-25</code> (<code>*idle += factlen-1</code>), <code>JABC.hpp:52</code> &amp; <code>:64</code> (<code>varn[1] += len-1</code>), <code>io.cpp:430</code> (<code>u8sFeedn(..., len-1)</code>), <code>main.cpp:139</code> (<code>page[len-1]='\n'</code> → OOB write when <code>len==0</code>).
+</p>
+</div>
+<ul>
+<li><code>utf8.cpp:39</code> already has the correct guard (<code>if (fact&lt;1) return BADARG</code>) —</li>
+</ul>
+<div>
+<p>
+that pattern just needs to be applied at every site.
+</p>
+</div>
+<ul>
+<li><code>convert.cpp</code> is on the DEAD rdx path (unwired in <code>main.cpp:40-42</code>), but</li>
+</ul>
+<div>
+<p>
+<code>JABC.hpp</code>/<code>io.cpp</code>/<code>main.cpp</code> sites are live.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>Empty / zero-length strings flow through every path without <code>size_t</code> underflow</li>
+</ul>
+<div>
+<p>
+or OOB access.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Guard <code>len &gt;= 1</code> before subtracting, mirroring the existing <code>utf8.cpp:39</code> check.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Apply the <code>fact&lt;1 → BADARG</code>/early-return guard at each listed <code>-1</code> site.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: push an empty string through each path (<code>Encode</code>, <code>JABC.hpp</code> arg</li>
+</ul>
+<div>
+<p>
+  marshal, <code>io.cpp:430</code>, <code>main.cpp</code> page write); assert no crash under ASAN.
+</p>
+</div>
+<ul>
+<li>] Add the length guard at every site.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>bd3a9c67</code></strong>* (2026-06-16): guarded <code>len &gt;= 1</code> before <code>len - 1</code> at the</li>
+</ul>
+<div>
+<p>
+two LIVE sites — <code>io.cpp</code> <code>JABCioFileMap</code> (extracted <code>JABCioMapBuildPath</code>, now returns SNOROOM on <code>len == 0</code> instead of feeding a SIZE_MAX-underflowed, silently-discarded <code>u8sFeedn</code>) and <code>main.cpp</code> <code>JABCReport</code> <code>page[len - 1]</code> (<code>if (len &lt; 1) len = 1;</code> removes the <code>page[-1]</code> OOB write). C++ harness row <code>run_mmap_underflow_repro</code> drives the path builder with <code>len==0/1/N+1</code> (RED before: <code>len==0</code> returned OK; GREEN after; ASAN/LSan clean). The <code>main.cpp</code> OOB is logic-verified (a 0-length JSC conversion is not deterministically forceable from a real JSString with a PAGESIZE buffer).
+</p>
+</div>
+<ul>
+<li>DEFERRED to JS-014: <code>convert.cpp</code> (off-build) and the <code>JABC.hpp</code></li>
+</ul>
+<div>
+<p>
+<code>JABC_FN_ARG_*</code> macro <code>-1</code> sites (unused/pruned there).
+</p>
+</div>
+</body>
+</html>

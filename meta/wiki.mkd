@@ -1,0 +1,34 @@
+#   Concept wiki
+
+    -- Victor Grishchenko
+
+The idea of a project wiki is to explain key concepts of the project, their context, constraints and connections (4C). The format must be brief enough so a person/agent *can* in principle be instructed to read all of the wiki. Less timeless content should go into [/meta/Todo] or other pockets. 
+
+  - Wiki page format is [/wiki/StrictMark], made greppable (no hard wrap). 
+  - A page opens with an intro section containing context-concept-constraints-and-connections summary.
+  - Each section carries a one-line header, a short summary, and a few bulletpoints. 
+  - Line-budget is counted in 64-char lines:
+     1. top intro 8 lines, 
+     2. section intro 4,
+     3. bulletpoint 2,
+     4. nested bulletpoint 1 line.
+
+##  Pages
+
+Each page covers exactly one concept and is named for it; the file is that name plus `.mkd`. Wiki pages live flat in one directory, so any page is reachable by name alone. Other pockets (tickets, skills) are reachable as e.g. `[/todo/POST/POST-123]` links.
+
+ -  One concept per page: if a page grows two distinct ideas, split it into two pages and link them.
+ -  [README] is the entry page; every page should be reachable from it by following links.
+ -  Pages that are exclusively human-editable get marked with `Hand written` under the title or with `-- John A. Smith` if single-author (indent 4 spaces).
+ -  Code comments linking to wiki is encouraged.
+
+##  Greppable lines
+
+Wiki pages must be greppable: each line reads on its own, carrying enough context to make sense when `rg` pulls it from the page. `rg` prints the filename too, so a bullet need not repeat the page name; write standalone claims and link inline.
+
+ -  Self-contained: each bullet is a full claim with its own context, not a fragment continuing the summary or a prior bullet.
+ -  Use inline shortcut links: link with a bare `[Page]` or `[/pocket/Page]`, definition is optional (at the footer of section or page).
+ -  Avoid an `it`/`this`/`the above` that points at another line.
+ -  No See-also block: a trailing link list greps as context-free noise — fold links into the prose where relevant.
+
+

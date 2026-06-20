@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-008</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-008 <a href="">HIGH when wired</a>: number marshalling precision — i64 truncation, NaN/Inf mis-routing, float→int UB</h1>
+<p>
+The convert/rdx number path truncates 64-bit ints through a JS double and mis-routes NaN/Inf; <code>POLAddTime((int)ms)</code> is float→int UB. Convert path is DEAD (rdx unwired) — fix before wiring. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>(a) <code>convert.cpp:97</code> <code>JSValueMakeNumber(ctx, top-&gt;i)</code> truncates <code>i64</code></li>
+</ul>
+<div>
+<p>
+(<code>RDX.h:204</code>) above 2^53 → must use BigInt.
+</p>
+</div>
+<ul>
+<li>(b) <code>convert.cpp:65-73</code> number import uses <code>floor(d)!=d</code>, which mis-routes NaN</li>
+</ul>
+<div>
+<p>
+(→ float branch) and ±Inf (→ int branch); must gate on <code>isfinite</code> first.
+</p>
+</div>
+<ul>
+<li>(c) <code>io.cpp:219-222</code> <code>POLAddTime((int)ms)</code> is float→int UB for NaN/Inf/negative/</li>
+</ul>
+<div>
+<p>
+<code>&gt;INT_MAX</code>.
+</p>
+</div>
+<ul>
+<li><code>convert.cpp</code> is the DEAD rdx path (unwired in <code>main.cpp:40-42</code>); <code>io.cpp:219</code></li>
+</ul>
+<div>
+<p>
+timer is live. Priority: fix before the rdx path is wired.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>64-bit ints survive the round trip; NaN/Inf route correctly; the timer rejects</li>
+</ul>
+<div>
+<p>
+non-finite / out-of-range delays.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>BigInt for 64-bit ints; <code>isfinite</code> + explicit range guards before any <code>(int)</code></li>
+</ul>
+<div>
+<p>
+cast.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Emit/parse 64-bit ints as BigInt; classify with <code>isfinite</code> first; range-</li>
+</ul>
+<div>
+<p>
+check <code>ms</code> before the cast.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first (once convert is wired or via a unit harness): a value &gt; 2^53,</li>
+</ul>
+<div>
+<p>
+  NaN, +Inf, -Inf, and <code>setTimeout(NaN)</code> each marshal/route correctly.
+</p>
+</div>
+<ul>
+<li>] Apply the BigInt + <code>isfinite</code> + range guards.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>Convert/rdx chain currently unwired — pair with the JS-014 gate-or-remove call.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>71e5aaf8</code></strong>* (2026-06-16): live <code>io.cpp</code> <code>JABCioWakeIn</code> now guards</li>
+</ul>
+<div>
+<p>
+the <code>double</code>-&gt;<code>int</code> timer delay (<code>isfinite(ms) &amp;&amp; 0 &lt;= ms &lt;= INT32_MAX</code>) before <code>POLAddTime((int)ms)</code>, throwing a clean exception on NaN/±Inf/ negative/<code>&gt;INT_MAX</code> and scheduling no timer; the dead <code>(JSObjectRef)args[0]</code> cast was dropped.  Repro: C++ harness <code>run_wake_range_repro</code> drives the bad values (red before: +Inf/-Inf/negative/&gt;INT_MAX leaked through with no exception) and a valid ms=5 (accepted) — contract-verified, ASAN-clean. <code>io.now()</code> boxes ms (<code>ns/POLNanosPerMSec</code>) through a <code>double</code>: lossless for integer ms up to 2^53 — acceptable, left as-is.
+</p>
+</div>
+<ul>
+<li>DEFERRED to rdx re-wiring (out of build, same as JS-004): <code>convert.cpp:97</code></li>
+</ul>
+<div>
+<p>
+<code>JSValueMakeNumber(ctx, top-&gt;i)</code> i64 truncation -&gt; must become BigInt; and <code>convert.cpp:65-73</code> <code>floor(d)!=d</code> NaN/Inf mis-routing -&gt; must gate on <code>isfinite</code> first.  <code>convert.cpp</code> is removed from the build (rdx unwired), so these can't be fixed/tested live.
+</p>
+</div>
+<ul>
+<li>(open — filed 2026-06-16 from the js/ 7-lens review)</li>
+</ul>
+</body>
+</html>

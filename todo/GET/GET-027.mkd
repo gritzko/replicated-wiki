@@ -1,0 +1,64 @@
+#   GET-027: `be get be://` clone mangles object hashlet → WIRECRPT
+
+`be get be://localhost/beagle?/dogs` (independent-store clone) resolves
+the right tip but then fetches the wrong object: the wire object request
+uses a hashlet with a stray leading `0`, shifted one nibble, so it asks
+for a non-existent id → `KEEPNONE` → `WIRECRPT`. The object is present
+and intact locally (`be commit:?<sha>` reads it), so the source store is
+healthy — the wire request/transfer path is broken. Blocks `be://`
+independent clones; relates to [GET-009].
+
+##  Input
+
+### Context
+ -  Repro: empty cwd, `be get be://localhost/beagle?/dogs` → `be: subdir
+    clone — shard at ~/.be/beagle`, then `Error: WIRECRPT`.
+ -  Error detail: `sniff: object not found: hex=cb94e64e7a5e83c4b46c3ce0d4f737516bfb9bab
+    hexlen=15 hashlet=0cb94e64e7a5e83c ... keep_err=KEEPNONE`.
+ -  `hashlet=0cb94e64e7a5e83c` = leading `0` + the first 15 nibbles of the
+    real sha `cb94e64e7a5e83c4…` — an off-by-one nibble shift, not data loss.
+ -  Object is present locally: `be commit:?cb94e64e` prints the commit, so
+    the source has it; only the wire object request is mangled.
+ -  Same "extra char in a sha" shape as the `?#?<sha>` row that
+    `be put '?#<sha>'` records on a branch reset — possibly a shared
+    hashlet encoder off-by-one (verify; do not assume).
+
+### Goals
+ -  `be get be://` transfers the full object closure; the wire object
+    request carries the exact 40-hex sha, no leading-nibble shift.
+ -  A repro test that reproduces the leading-`0` mangle, then the fix.
+
+### Constraints
+ -  `be://` here tunnels over ssh (no daemon; only `:22` listens) — test
+    with `WITH_SSH=ON`, `WITH_INET=OFF` ([[build-with-ssh-not-inet]]).
+
+##  WIP
+
+### Design decisions
+ -  Lead to trace: the wire object-request hashlet encoder, AND the
+    `be put '?#<sha>'` recorder that emits `?#?<sha>` — check whether both
+    route through one hashlet/sha encoder with an off-by-one. Also rule out
+    the recently-added `SHA1u8sFeedHashlet` (GET-026) if it feeds either path.
+
+### TODOs
+ -[ ] Repro (hermetic, WITH_SSH=ON): `be get be://` against a store whose
+      tip is a freshly-posted commit → WIRECRPT + mangled hashlet.
+ -[ ] Trace the off-by-one to its encoder; check the `be put` `?#?<sha>` path.
+ -[ ] Fix; full closure clones clean; `be put '?#<sha>'` records `?#<sha>`.
+ -[ ] Land + ctest WITH_SSH=ON green.
+
+### Blockers and bummers
+ -  None — the live store is intact; this is a transport-side defect.
+
+##  Outcome
+ -  LANDED `a8fa2e87`. The "off-by-one hashlet" hypothesis was WRONG —
+    `0cb94e64e…` is a correct `%016llx`-padded value, not mangled. TWO
+    independent bugs, both fixed: (1) server `keeper/WIRE.c` tripped on a
+    degenerate **zero-length pack bookmark** (GET-025-era re-index) → shipped
+    a 12-byte empty pack → `WIRECRPT`; now skips zero-len bookmarks. (2)
+    `sniff/PUT.c` `PUTSetBranch` prepended a stray `?` → the `?#?<sha>`
+    reset-row malformation; now records bare `?#<sha>`. +2 tests; 391/391.
+    Live `~/.be/dogs` keeps the stray bookmark (server now tolerant).
+
+[GET-009]: GET-009.mkd "efficient be:// sync: reachability upload-pack + GC"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

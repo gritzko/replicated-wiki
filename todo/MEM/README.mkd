@@ -1,0 +1,29 @@
+#   MEM tickets: memory-safety audit
+
+Active tickets from the 2026-06-05 whole-codebase memory-safety audit; the full per-defect digest (severity, file, one-liner for all 45) lives in [MEM]. Each entry below is one open ticket — a landed one (verify with `be log | grep MEM-NNN`) drops off. The 10 below remain; the 6 JSC-blocked `js` defects (MEM-007/032/033/034/035/039) were dropped as stale — superseded by the landed JABC review (JS-002..014), with `js/convert.cpp` removed as dead code. The fix-and-land method is [Issues].
+
+##  Active tickets
+
+ -  [MEM-010] — CURL unchecked alloc null-deref plus easy-handle and slist leaks (abc/CURL.c).
+ -  [MEM-019] — graf `call()` early-return skips mmap/handle cleanup (graf/MERGE.c, MAP.c, LOG.c, REBASE.c).
+ -  [MEM-021] — abc latent low-severity bounds/overflow hardening (SKIPfeed, MMAP resize, DNSNameText, utf8).
+ -  [MEM-023] — tree-walk recursion holds a 1MB buffer per level with no depth cap (keeper/KEEP.c, WALK.c).
+ -  [MEM-024] — push-side recursive walk holds a 1MB mmap per frame; errors swallowed (keeper/WIRECLI.c).
+ -  [MEM-025] — `first_name` slice dangles into the compacted advert buffer (keeper/WIRECLI.c).
+ -  [MEM-027] — `patch_walk` does unbounded BASS carving (~29MB/level), exhausting the arena (sniff/PATCH.c).
+ -  [MEM-031] — WOOFApiOpen leaks dogs/buffers on a later open failure (woof/CONN.c).
+ -  [MEM-041] — sniff error-path resource leaks in PATCH blob-write and POST commit.
+ -  [MEM-042] — keeper REFSResolve leaks the ULOG map on a long URI; KEEPGetRemote double-error rarena leak.
+
+[MEM-010]: MEM-010.mkd
+[MEM-019]: MEM-019.mkd
+[MEM-021]: MEM-021.mkd
+[MEM-023]: MEM-023.mkd
+[MEM-024]: MEM-024.mkd
+[MEM-025]: MEM-025.mkd
+[MEM-027]: MEM-027.mkd
+[MEM-031]: MEM-031.mkd
+[MEM-041]: MEM-041.mkd
+[MEM-042]: MEM-042.mkd
+[MEM]: MEM.mkd "the memory-safety audit digest"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

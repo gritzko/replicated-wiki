@@ -1,0 +1,16 @@
+#   Index files
+
+Index files serve as an overview/index for a particular dir of a codebase. Must-read when editing, but mostly useful to get a brief overview of the API and the leads into the codebase, without reading all of the headers. Every production module dir with public API must have an index.
+
+  - Document format: intro, then a section per each of the dir's modules with an intro and a bulletpoint list of the key entries (types, functions).
+  - Module intro: specify the mission of the module, e.g. `Sx.h - function templates for typed slices: length, copy, search, subslices, etc. Typed functions replace pointer arithmetics, void* use and other ills. Do sanity and bounds-checking where necessary`.
+  - List entry: a one-liner for a type or function, e.g. `*csMv(a, b) - function template, assign slice b to a (as pointers, no data copy)`. 
+  - No need to specify args and types formally (read header for that); just give the overview/goal/context
+  - Additional explanatory text and drawings can go into per-file docs, e.g. `abc/S.md` for `abc/Sx.h` and `abc/S.h`. Section intro may link to those.
+  - Section intros and bulletpoints must be greppable (no line wrap).
+  - Line-budget is counted in 64-char lines:
+     1. top intro 8 lines, 
+     2. section intro 4,
+     3. bulletpoint 2,
+     4. nested bulletpoint 1 line,
+     5. max 12 bulletpoints per module, key types/functions.

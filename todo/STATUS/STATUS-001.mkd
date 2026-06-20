@@ -1,0 +1,59 @@
+#   STATUS-001: `be status!` extended + `status:<path>/` sub-scope
+
+Two status refinements on the shared ROWS banner ([BE-005]). `be status!`
+(≡ `be status --force`, verb-bang) is **extended** status: the file rows
+PLUS the state of all tracked branches + remotes (uri→hash) — rehoming
+`SNIFFGetSummary`'s body, orphaned when [GET-026] makes bare `be get` a
+checkout. `be status:<path>/` scopes the report to ONLY that path's
+submodule, not the whole worktree.
+
+##  Input
+
+### Context
+ -  `be status` / bare `be` show file status via `sniff_status_work`
+    (`SNIFF.exe.c:451`), one `status:` ROWS hunk. No branch/remote rows.
+ -  `SNIFFGetSummary` (`GET.c:1697`) is the only producer of the
+    branches/remotes (uri→hash) overview; [GET-026] removes its caller.
+ -  Verb-bang is wired (`DOG_BANG_VERB`/`cli.bang`); `be status!` debangs
+    to the verb-bang, conveyed as `--force` to the sniff status worker.
+ -  `be status:<path>/` is a path-scoped status projector (`SNIFF.exe.c:1269`
+    handles the `status:` scheme); subs mount under the parent wt.
+
+### Goals
+ -  `be status!` appends tracked-branch + remote tip rows (uri→hash) to the
+    `status:` table when the verb-bang/`--force` is set; plain `status`
+    stays file-only.
+ -  `be status:abc/` reports ONLY the `abc` submodule's status (relay its
+    child report), not the parent worktree.
+
+### Constraints
+ -  Reuse the [BE-005] ROWS banner; fold `SNIFFGetSummary`'s rows in, no
+    second output path. `sniff/` only; no `abc/`.
+
+##  WIP
+
+### Design decisions
+ -  `sniff_status_work` keys on `--force`/bang: emit the extra branch/remote
+    rows (from `KEEPEachTip`/`KEEPEachRemote`) into the same table.
+ -  Path-scoped status with a sub-mount path relays the sub's own status
+    (SUBS path), suppressing the parent's rows — a sub-scope gate.
+
+### TODOs
+ -[ ] Repro: `be status!` lists branch/remote uri→hash rows; plain
+      `be status` does not (table-driven, color & --tlv).
+ -[ ] `sniff_status_work`: `--force`/bang appends branch+remote rows
+      (rehome `SNIFFGetSummary`; then delete it).
+ -[ ] Repro + impl: `be status:abc/` shows only the `abc` sub.
+ -[ ] Wiki note for `be status!` and `status:<path>/`; `ctest -j16` green.
+
+### Blockers and bummers
+ -  None yet.
+
+##  Outcome
+ -  LANDED `bc5c0bd4` — `be status!` (bareword-bang → `--force` via
+    `BE.cli.c`) appends tracked branch+remote uri→hash rows; `SNIFFGetSummary`
+    deleted (rehomed to `status_emit_tips`); `be status:<sub>/` already
+    routed via `BEProjectorRouteToMount` (now regression-guarded). 390/390.
+
+[BE-005]: ../BE/BE-005.mkd "umbrella: shared ROWS state banner"
+[GET-026]: ../GET/GET-026.mkd "orphans SNIFFGetSummary"

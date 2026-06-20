@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>POST-021</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>POST-021: git-scheme push (<code>be post</code>/<code>be put ssh://</code>) fails with BNOROOM</h1>
+<p>
+<code>be post ssh://localhost/src/dogs</code> and <code>be put --nosub ssh://localhost/src/dogs?/main</code> from a tree AHEAD of the git upstream fail the push outright: after recursing the abc submodule the parent push dies <code>fatal: the remote end hung up unexpectedly</code> + <code>Error: BNOROOM</code> + <code>Error: BEDOGEXIT</code>, and the upstream is NOT advanced. <code>be head</code> against the same remote fetches fine, so the read side is healthy — only the send/receive (push) path is broken. Locally-committed work is stranded: it cannot be published, which blocks the fix-and-land loop (isolated agents can't clone a base that includes it). Distinct from <a href="POST-020.html">POST-020</a> (cosmetic stderr on this same path, already landed).
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+A tree N commits ahead of its git remote cannot push; the wire dies mid-send.
+</p>
+<ul>
+<li>Repro: in <code>/home/gritzko/beagle.new</code> (cur <code>25fb62bd</code> DOG-003, a clean ff 8 commits</li>
+</ul>
+<div>
+<p>
+ahead of <code>ssh://localhost/src/dogs?/main</code>), run <code>be post ssh://localhost/src/dogs</code> or <code>be put --nosub ssh://localhost/src/dogs?/main</code>.
+</p>
+</div>
+<ul>
+<li>Output: the abc submodule push runs (synthetic <code>?.dogs/</code> → git default branch,</li>
+</ul>
+<div>
+<p>
+lists ABC-004/PTR-009 + <code>add abc/BIT.h</code> …), then <code>post: 0 change(s)</code>, then <code>fatal: the remote end hung up unexpectedly</code> / <code>Error: BNOROOM</code> / <code>BEDOGEXIT</code>.
+</p>
+</div>
+<ul>
+<li>Contrast: <code>be head ssh://localhost/src/dogs?/main</code> fetches OK (<code>Total 0 (delta 0)…</code>)</li>
+</ul>
+<div>
+<p>
+and correctly lists the 9 ahead commits — the READ path is healthy.
+</p>
+</div>
+<h3>Goals</h3>
+<p>
+<code>be post</code> / <code>be put</code> to an ssh/git remote must complete the ff-push without BNOROOM.
+</p>
+<ul>
+<li>The remote ref advances to the local tip; a re-run <code>be head</code> shows 0 ahead.</li>
+<li>Repro test: push a tree a few commits ahead of a git remote, assert it advances</li>
+</ul>
+<div>
+<p>
+(mirror the <code>git-receive-pack</code> drop-in harness, <code>keeper/KEEP.cli.c</code>).
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>ABC idioms; ssh/git remotes use <code>--nosub</code> (submodules manual). ff-only, never forced.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+(pending root-cause)
+</p>
+<h3>TODOs</h3>
+<ul>
+<li>] Find the BNOROOM raiser on the SEND path. Leads: <code>keeper/KEEP.c:742</code></li>
+</ul>
+<div>
+<p>
+  (<code>if (u8bIdleLen(out) &lt; outsz) return BNOROOM</code> — a fixed-cap out buffer), the   git push send in <code>keeper/WIRE.c</code> / <code>keeper/KEEP.exe.c</code> (receive-pack peer) /   <code>keeper/KEEP.cli.c</code>. BNOROOM is an abc buffer overflow → a send/pkt buffer is   likely undersized for the pack stream (cf. the <code>dog/WEAVE.c</code> rms <code>NOROOM</code> fixed   in DOG-003 — same undersized-buffer class).
+</p>
+</div>
+<ul>
+<li>] Check whether the MULTI-LINE commit message on <code>25fb62bd</code> trips the wire encoder</li>
+</ul>
+<div>
+<p>
+  (work.mkd: wire messages &quot;may be multi-line once the parser allows&quot;); if so fix   the encoder, or enforce the 1-line/≤64-char commit rule and re-test.
+</p>
+</div>
+<ul>
+<li>] Check the submodule-recursion interaction (the abc sub-push precedes the failing</li>
+</ul>
+<div>
+<p>
+  parent push; does the parent inherit a spent buffer / bad state?).
+</p>
+</div>
+<ul>
+<li>] Repro-first (CLAUDE.md §17): a failing push test, then fix.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Complete breakage of git-scheme publishing. The DOG line is stranded local-only on</li>
+</ul>
+<div>
+<p>
+<code>beagle.new</code>; DIS-043 and onward can't land via the shared remote until fixed.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,58 @@
+#   GET-028: `be` execs a stale `keeper` helper → opaque ZINFFAIL clone
+
+`be get ssh://host/repo?/branch` aborts mid-ingest with `KEEPIngestStream
+failed: ZINFFAIL` / `WIRECLFL` even on a healthy remote (all 19250 objects
+transfer). The ingest CODE is fine — current source ingests the pack clean.
+Root cause is a build gap: `be` execs a SEPARATE `keeper` binary, but the
+`be-cli` CMake target declares no dependency on `keeper-cli` (nor `spot`/
+`graf`/`sniff`). `ninja be` recompiles the shared keeplib objects yet never
+relinks the `keeper` exe, so iterating on `be` runs a NEW `be` against an OLD
+`keeper` whose ingest predates a landed fix. Relates to [GET-009].
+
+##  Input
+
+### Context
+ -  Repro: `be get ssh://localhost/src/dogs?/main` → counts/compresses 19250
+    objects, then `be: KEEPIngestStream failed: ZINFFAIL`, `Error: WIRECLFL`.
+ -  `strace -f -e execve` shows `be` execs `build/bin/keeper`, which execs
+    `ssh` + `git upload-pack`; the failing ingest is wholly in the keeper child.
+ -  Instrumenting both `ZINFFAIL` returns in `dog/git/ZINF.c` and rebuilding
+    ONLY `be` never fired — proof the ingest runs in the un-rebuilt keeper exe.
+ -  `ninja keeper` (relink from the current keeplib objects) → clone succeeds,
+    27 entries checked out, exit 0; pristine source (diagnostics reverted) green.
+
+### Goals
+ -  `ninja be` co-builds every dog binary `be` execs (keeper, spot, graf,
+    sniff) so a partial build can't ship a version-skewed helper.
+ -  Clone `be get ssh://localhost/src/dogs?/main` lands a full worktree, exit 0.
+
+### Constraints
+ -  Build/verify WITH_SSH=ON, WITH_INET=OFF ([[build-with-ssh-not-inet]]); the
+    clone uses ssh-localhost upload-pack.
+ -  CMake-only change; do NOT touch the (already-correct) ingest code.
+
+##  WIP
+
+### Design decisions
+ -  `be-cli` links keeplib for in-proc calls but spawns the dog EXES at run
+    time; those spawn targets were unmodeled build deps. Add
+    `add_dependencies(be-cli keeper-cli spot-cli graf-cli sniff-cli)` in
+    `beagle/CMakeLists.txt` (all four exist when `beagle/` is configured — the
+    top CMakeLists adds it after them). The dog clis already depend on their
+    own libs, so co-building keeps them current.
+
+### TODOs
+ -[v] Add the `add_dependencies` line to `beagle/CMakeLists.txt`.
+ -[v] Verify: touch `keeper/KEEP.c`, `ninja be` → relinks `bin/keeper` + `bin/be`.
+ -[v] Verify clone green: `be get ssh://localhost/src/dogs?/main` exit 0, wt full.
+ -[ ] Land; full ctest WITH_SSH=ON (change is build-ordering-only, no code path).
+
+### Blockers and bummers
+ -  None — the remote store/pack are intact and the ingest fix already landed;
+    only the helper binary was stale.
+
+##  Outcome
+ -  (pending land)
+
+[GET-009]: GET-009.mkd "efficient be:// sync: reachability upload-pack + GC"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

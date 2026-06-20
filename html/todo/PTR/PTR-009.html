@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PTR-009</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PTR-009: abc/URI static Buf<a href="">4096</a> needs an API change (carved from PTR-001)</h1>
+<p>
+PTR-001 split out the two <code>abc/URI.c</code> static <code>u8 Buf[4096]</code> because deleting them is a real DESIGN FORK, not a mechanical refactor: <code>URIMergePath</code>/<code>URIRelativePath</code> return slices that VIEW into the static buffer and the caller (<code>URIAbsolute</code>/<code>URIRelative</code>, public alias <code>n</code>) does NOT copy them out — <code>abs-&gt;path</code> keeps pointing into the buffer after return. <code>a_carve</code> can't replace them: BASS rewinds at the <code>call()</code> boundary, so a carve inside the callee dangles the returned slice. GATED — abc is core, surface the diff.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>abc/URI.c:301</code> <code>static u8 URIMergePathBuf[4096]</code> — <code>URIMergePath</code> (<code>:305</code>) memcpy's base-dir+rel into it, runs RFC-3986 remove_dot_segments with <code>in/in_end/out</code> cursors (<code>in+=3</code>, <code>*out++</code>, <code>out[-1]</code>), and returns <code>{Buf, out}</code> into <code>result</code> (= <code>abs-&gt;path</code>). Sole caller <code>:444</code>.</li>
+<li><code>abc/URI.c:140</code> <code>static u8 URIRelPathBuf[4096]</code> — <code>URIRelativePath</code> (<code>:162</code>) builds <code>../</code>-climb + tail segments into it, returns <code>{Buf, out}</code> into <code>rel-&gt;path</code>. Sole caller <code>:253</code>.</li>
+<li>Both results outlive the call: <code>URIAbsolute</code>/<code>URIRelative</code> return with <code>abs-&gt;path</code>/<code>rel-&gt;path</code> STILL viewing the static buffer (no <code>u8csDup</code> out). Non-reentrant: a second call clobbers a live first result. External caller <code>sniff/SUBS.c</code> (<code>n(&amp;abs,&amp;dbase,&amp;rel)</code>) relies on the current contract.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Delete both static <code>Buf[4096]</code>; the computed path must live in caller-owned storage with a clear lifetime.</li>
+<li>Prefer an abc/PATH segment-walk (<code>PATHu8sDrainNE</code> + <code>a_carve</code>/gauge) over the <code>in/in_end/out</code> cursor for remove_dot_segments — no manual RFC parse in C (<a href="../rule/ABC.html">ABC</a>).</li>
+<li>Keep <code>URIMergePath</code>/<code>URIRelativePath</code>/<code>URIAbsolute</code>/<code>URIRelative</code> behavior byte-identical (abc/test/URI table + RESOLVEURItest stay green).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>GATED: abc is core + public (<code>n</code>) — surface the diff, never autoland; the chosen API shape needs human review.</li>
+<li>This is an API decision, not a free refactor: the scratch/result storage must be threaded from a caller that outlives the use, which changes the public <code>URIAbsolute</code>/<code>URIRelative</code> signature OR introduces a per-<code>uri</code> owned path buffer. Pick the shape WITH the maintainer before coding.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Candidate A: add a caller-provided <code>u8s scratch</code> (or <code>Bu8</code>) param to <code>URIAbsolute</code>/<code>URIRelative</code>, carve it at the top call site (SUBS.c, tests); callee feeds the computed path in, result views the caller's buffer. Ripples to <code>sniff/SUBS.c</code> + abc/test/URI.</li>
+<li>Candidate B: give <code>uri</code> its own owned path-scratch slot (struct grows) so the result can view <code>abs</code>'s own storage; revisits &quot;uri struct = 8 slices + separate text&quot; (URI-004) — likely rejected, but note it.</li>
+<li>Either way remove_dot_segments becomes a PATH-segment walk into a gauge, not the <code>out++</code>/<code>out[-1]</code> cursor.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li>] Agree the API shape (A vs B) with the maintainer BEFORE coding.</li>
+<li>] Repro-first: lock abc/test/URI + RESOLVEURItest outputs.</li>
+<li>] <code>URIMergePath</code> → PATH-segment remove_dot_segments into caller storage; drop <code>URIMergePathBuf</code>.</li>
+<li>] <code>URIRelativePath</code> → caller storage; drop <code>URIRelPathBuf</code>.</li>
+<li>] Thread the storage through <code>URIAbsolute</code>/<code>URIRelative</code> + update <code>sniff/SUBS.c</code> + tests.</li>
+<li>] Build + ctest + URI fuzz; surface diff for review.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Public-signature change collides with any open URI-00x work on <code>abc/URI.c</code>; coordinate before forking.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Ruled Candidate A, <code>u8s out</code> variant. Landed <code>b0455595</code> (abc sub <code>5f84502a</code>):</li>
+</ul>
+<div>
+<p>
+<code>URIAbsolute</code>/<code>URIRelative</code> take a caller-owned <code>u8s out</code> (callers pass <code>u8bIdle(buf)</code> over <code>a_pad</code>); the result VIEWS the written prefix via a gauge (<code>u8gOf</code>/<code>u8gFeed</code>/<code>u8csMv(result, u8gLeftC(g))</code>) so <code>out</code> must outlive it.
+</p>
+</div>
+<ul>
+<li>Both static <code>Buf[4096]</code> deleted; <code>remove_dot_segments</code> → <code>PATHu8sDrain</code></li>
+</ul>
+<div>
+<p>
+segment-walk; <code>merged</code> concat stays internal BASS <code>a_carve</code>. 397/397, ASAN-clean.
+</p>
+</div>
+</body>
+</html>

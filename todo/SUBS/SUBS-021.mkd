@@ -1,0 +1,85 @@
+#   SUBS-021: SHA leaks into the `<subproj>` slot on a re-posted sub dot-branch
+
+When a submodule POST targets an ALREADY-synthetic / detached-sha target, the
+synthetic dot-branch is mis-assembled: the commit SHA leaks into the `<subproj>`
+slot AND into the `#fragment`, producing a malformed ref
+`?<sha40>/.dogs#<sha40>/.dogs` instead of `?/<sub>/.<parent>#<sha>`. The
+correctly-formed branch `?/abc/.dogs` (with the `/`) is fine — the earlier
+"missing `/`" reading was a ripgrep-rendering misread (`2e`=`.`); the real bug
+is the SHA in the subproject slot. Method: [Issues].
+
+##  Input
+
+### Context
+ -  CORRECTION (2026-06-16 scan): the synthetic dot-branch is built CORRECTLY as
+    `?/<sub>/.<parent>` — `beagle/BE.cli.c:3069-3080` (`bepost_synth_child_uri`)
+    emits `/` then `.` (lines 3073-3074); the abc sub's good commits sit on
+    `?/abc/.dogs` in both `.be/abc/refs` and `abc/.be` (hexdump
+    `3f 2f 61 62 63 2f 2e 64 6f 67 73`). Spec [Submodules]:60-68 agrees. The
+    original "missing `/`" premise is INVALID.
+ -  REAL defect: one stray malformed row — `.be/abc/refs` `266168WPCD` (mirror
+    `abc/.be:26`): `post  ?<sha40>/.dogs#<sha40>/.dogs` — the `<subproj>` segment
+    is the 40-hex SHA, not the title `abc`, AND the `#fragment` carries
+    `<sha40>/.dogs` instead of a bare sha.
+ -  Suspected cause: a re-POST whose target is already synthetic/detached feeds a
+    detached-sha "project" into the subproj slot. Leads: `bepost_wt_project`
+    (`BE.cli.c:2954-2990`), the `lq`/`DOGQueryStripProject` arm (`:3010-3025`), the
+    `synth_view`/`msg_view` assembly (`:3159-3201`).
+ -  This stray row is the likely source of the abc sub's odd `be head` "2 ahead" /
+    `POSTDET` symptoms hit while landing [[ABC-003]] — NOT a branch-format bug.
+
+### Goals
+ -  The `<subproj>` slot is ALWAYS the project title (never a SHA) and the
+    `#fragment` a bare sha — on first post AND on a re-post of an already
+    synthetic/detached target.
+ -  A repro re-posting a sub with an already-synthetic/detached target, asserting
+    the recorded branch is `?/<sub>/.<parent>` with a bare-sha fragment.
+
+### Constraints
+ -  Behaviour-preserving for correctly-formed first posts. `beagle/`/sniff store
+    changes gate for review. Add the repro to the SUBS table-driven tests.
+ -  The single stray malformed ref in the REAL store (`~/beagle/.be/abc/refs`
+    `266168WPCD` + `abc/.be`) is a SEPARATE maintainer cleanup — the worker must
+    NOT touch `~/beagle` or its store; the good commits are independently reachable
+    on `?/abc/.dogs`, so dropping that row orphans nothing.
+
+##  WIP
+
+### Design decisions
+ -  ROOT CAUSE FOUND: NOT the POST composer (`bepost_synth_child_uri` is correct —
+    always emits `?/<sub>/.<parent>#<bare-sha>`). The leak is GET-side:
+    `sniff/GET.c::SNIFFGetURI` raw-hex fallback (~`:2213`) accepted ANY non-empty
+    `u->query` as a checkout target with no hex check. A `be get '?<sha40>/.<par>'`
+    missed REFSResolve, fell through, and the fallback wrote the query string
+    VERBATIM into BOTH the recorded query AND fragment → `?<sha40>/.par#<sha40>/.par`
+    (it "succeeded" only because the 40-hex prefix matched the pin via prefix lookup).
+ -  FIX: gate the fallback on **`DOGIsHashlet(u->query)`** (6..40 hex). A query
+    with path junk (`?<sha40>/.par`) is not a hashlet → clean `SNIFFFAIL`; clean
+    sha-PREFIX gets (`?abc1234`, README:64) still work. (NB: `DOGIsFullSha` —
+    used in the first pass — was WRONG; it requires 40/64 hex and would reject
+    every sha-prefix get.)
+
+### TODOs
+ -[v] Repro-first: `test/post/41-sub-synth-no-sha-in-subproj/` (hermetic `file://`)
+      — RED pre-fix (sha-in-subproj get accepted rc 0), GREEN post-fix (refused).
+ -[v] Root-caused: GET-side fallback, not the POST arm (above).
+ -[v] Fix: `sniff/GET.c` `DOGIsFullSha` gate; behaviour-preserving for real `?<40hex>`.
+ -[v] SUBS/post table-driven repro added; 299/299.
+ -[v] **Landed `8c69c16b`** (`be put`+`be post --nosub`; 299/299 before & after).
+ -[ ] (maintainer) drop the stray real-store rows; NOT from the wt.
+
+### Blockers and bummers
+ -  Separate, OUT OF SCOPE: `be get '?/<sub>/.<parent>'` (well-formed synthetic
+    re-attach) currently also fails — a reconcile-to-synthetic-branch issue; flag as
+    a follow-up, not fixed here.
+ -  [[ABC-003]] is NOT blocked by this (dot-branch well-formed; wt already attached).
+
+##  Outcome
+ -  **LANDED `8c69c16b`**: `sniff/GET.c` **`DOGIsHashlet`** gate (corrected from
+    `DOGIsFullSha`) + `test/post/41-sub-synth-no-sha-in-subproj` (malformed
+    `?<sha>/.par` refused AND a clean sha-prefix get still succeeds); 299/299 before
+    & after; canonical untouched. Follow-up still OPEN: `be get '?/<sub>/.<parent>'`
+    well-formed synthetic re-attach also fails (reconcile-to-synthetic-branch issue).
+
+[Submodules]: ../wiki/Submodules.mkd "submodule model + synthetic dot-branch spec"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

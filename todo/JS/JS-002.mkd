@@ -1,0 +1,52 @@
+#   JS-002 [CRIT]: `file.write(string)` / `io.log(string)` heap corruption — invalid free + uninitialised write
+
+`JABCutf8CopyStringValue` (`js/utf8.cpp:63-71`) advances the slice HEAD past the
+written bytes, so the caller writes the uninitialised tail and frees a
+non-allocation-base pointer. Flagged by 5 of 7 review lenses (very high
+confidence). Method: [Issues].
+
+##  Input
+
+### Context
+ -  `$u8alloc(into,max)` sets `into={base, base+max}` (`abc/Sx.h:491`: head=base),
+    then `JABCutf8CopyStringValue` does `into[0]+=fact` — advancing the HEAD past
+    the copied bytes, leaving `into={base+fact, base+max}`.
+ -  Caller `JABCioFileWrite` (`io.cpp:111`) does `write(fd, ta[0], $len(ta))` → it
+    writes from `base+fact` for `max-fact` bytes (the UNINITIALISED tail), not the
+    string. Then `$u8free` (`io.cpp:124`) frees `base+fact` — a non-base pointer →
+    heap corruption / invalid free.
+ -  `fact` includes the NUL terminator (off-by-one in the length too).
+ -  Severity unchanged by the `WITH_JS` gate: `file.write`/`io.log` are the live,
+    wired binding entry points, not the dead rdx path.
+
+### Goals
+ -  `file.write("hello")` writes exactly `hello` (5 bytes) and frees the real base.
+
+### Constraints
+ -  The copy helper must leave `into` as a DATA slice (term=`base+fact-1`, head
+    stays at `base`); the caller writes `[base, len)` and frees `base`. Use the
+    idiomatic ABC slice term-set, not a head advance.
+
+##  WIP
+
+### Design decisions
+ -  (open) Fix in `JABCutf8CopyStringValue`: set the slice TERM to the byte count
+    (excluding NUL), keep HEAD at base. Audit every caller for the head==base
+    assumption.
+
+### TODOs
+ -[ ] Repro-first: `file.write("hello")` into a pipe; assert the fd receives exactly
+      `hello` (5 bytes), no trailing garbage; run under ASAN to catch the bad free.
+ -[ ] Fix the copy helper to leave a base-anchored data slice; drop the NUL from len.
+ -[ ] Re-check `JABCioFileWrite` / `JABCioLog` write + free pair.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `5ee417eb`** (2026-06-16): `JABCutf8CopyStringValue` now keeps the
+    slice HEAD at the malloc base and sets TERM to `base+fact-1` (drops the NUL,
+    `fact==0`-guarded), so `file.write(string)` writes the real `[base,len)` and
+    `$u8free`s the real base; C++ pipe repro in `jabc_test.cpp` (red→green, ASAN).
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

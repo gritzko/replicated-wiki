@@ -8,3 +8,7 @@ vendor/
 # editor junk
 *.swp
 *~
+
+# beagle worktree store artifacts (local, machine-specific anchors)
+.be
+..be.idx

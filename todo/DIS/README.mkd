@@ -26,7 +26,7 @@ DIS collects spec↔implementation discrepancies that cut across verbs; a gap fo
  -  [DIS-040] — POSTCFLCT can't be de-falsed at the byte level; needs a provenance check, couples to POST-016.
  -  [DIS-042] — cur's divergent commit: `be patch <peer>` + `be post` replays onto peer, drops cur's bytes (Invariant 2).
  -  [DIS-044] — WEAVEMerge's RGA tie-break sorts concurrent siblings by raw commit-id DESC, not causally — real (non-monotonic) hashlets strand replace-edits / splice clean instead of conflicting (silent merge data-loss). Fixed: tie-break on the causal commit index + topo-deterministic commits[]; fuzzer off its monotonic-id oracle. Landed `5041ed18`.
- -  [DIS-045] — dog/WEAVE merge mis-anchors a blank line vs a code-line EOL (identical `\n` content) — `be-patch-15` step 2 merges wrong; a ~½ flake on graf, a hard fail on dog. The last case blocking [[DOG-005]]'s merge cut-over.
+ -  [DIS-045] — CLOSING: premise false. Engine already correct ([[DIS-043]] idh JOIN + [[DIS-044]] causal order removed both DIS-003 layers); no repro in 4.7M fuzz. Committed `711618fe` (pure teeth: WEAVE03 step-2 oracle + blank criss-cross cases + `W2_BLANK` fuzz; 322/322). `be-patch-15` 5/5 fail re-tasked to [[DOG-005]] — graf cut-over glue, not the engine.
 
 DIS-043 (dog/WEAVE concurrent-insert order path-dependent — criss-cross duplication;
 fixed with an RGA stable-order key: a per-token `'A'` anchor column + identity merge-JOIN

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLAME-006b</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BLAME-006b: <code>commit:?&lt;root&gt;</code> token-diffs the whole initial tree (O(repo), seconds)</h1>
+<p>
+Loading the parentless ROOT commit (<code>commit:?c7184818</code>) takes ~4.4s because it token-level weave-diffs the ENTIRE initial-import tree as all-INS, where a one-sided (vs-empty) diff should be a cheap raw all-add. Split from <a href="">[BLAME-006</a>] (the perf half). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Timing: root commit *<strong>4.35s / 3853 lines</strong><strong>; a typical commit </strong><strong>0.16s / 183</strong>*.</li>
+<li>Path: <code>be commit:?&lt;sha&gt;</code> (<code>beagle/BE.cli.c:332</code> + relay <code>:453-459</code>) runs graf</li>
+</ul>
+<div>
+<p>
+<code>diff:?&lt;sha&gt;</code>; <code>graf_first_parent_hex</code> returns GRAFNONE for the parentless root (<code>GRAF.exe.c:75</code>), so it falls to <code>GRAF.exe.c:505</code> → <code>GRAFDiffTreeRefs</code> (<code>graf/DIFFREF.c:564</code>) which TOKEN-diffs every one of the 291 initial-import files as all-INS (<code>@@ -1,0 +1,N @@</code>) — O(repo), tokenizing+weave-diffing all.
+</p>
+</div>
+<ul>
+<li>Semantically a root &quot;commit show&quot; IS the whole tree (diff vs empty); the win is</li>
+</ul>
+<div>
+<p>
+to make whole-tree all-INS CHEAP, not to change what's shown.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li><code>commit:?&lt;root&gt;</code> (and any one-sided / vs-empty diff) loads in time proportional</li>
+</ul>
+<div>
+<p>
+to the commit, not the repo — emit raw all-add without token-level weave diff when one side is empty.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Output unchanged (same all-add lines, same hunks); only the cost drops. graf</li>
+</ul>
+<div>
+<p>
+change gates for review. Add a timing/shape test.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>At the diff entry (<code>DIFFREF.c:564</code> / the WEAVE diff core), detect a one-empty-side</li>
+</ul>
+<div>
+<p>
+diff and short-circuit to a raw all-INS emit (skip tokenize+LCS) for each file.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro: time <code>be commit:?&lt;root&gt;</code> vs a normal commit; confirm O(repo) hot path</li>
+</ul>
+<div>
+<p>
+  in <code>GRAFDiffTreeRefs</code>.
+</p>
+</div>
+<ul>
+<li>] Fix: empty-side short-circuit (raw all-add) in the tree-diff/weave path.</li>
+<li>] Test: root/whole-tree commit-show is bounded; output byte-identical to before.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pairs with <a href="">[BLAME-006a</a>] (the correctness half) — independent; land separately.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>8d66369c</code></strong>* (FF child of <code>3dc19b0a</code>; msg `BLAME-006b: skip token-diff of</li>
+</ul>
+<div>
+<p>
+binary blobs`). Scan's &quot;291-file all-INS&quot; premise was wrong — the 4.35s was one
+</p>
+<ol>
+<li>MB binary (<code>dog/dogs.png</code>) tokenized in 3.17s. Fix (graf): <code>WEAVEFromBlobRm</code></li>
+</ol>
+<p>
+(one-sided/vs-empty short-circuit to raw all-add) + <code>diffref_is_binary</code> (git's NUL-in-first-8000 heuristic) so binaries are never token-diffed; root commit-show
+</p>
+<ol>
+<li>s→1.52s, text output byte-identical. Test: Case I in <code>beagle/test/be-diff-projector.sh</code>.</li>
+</ol>
+<p>
+302/302. NB landing: reconciled a <code>graf/DIFFREF.c</code> overlap with DIFF-002 (both survive, verified on trunk); the POSTCFLCT marker false-positive on <code>graf/WEAVE.c</code> required the documented <code>--force</code> conflict-scan bypass (see <a href="">[POST-006</a>]/<a href="">[POST-017</a>]).
+</p>
+</div>
+</body>
+</html>

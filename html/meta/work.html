@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>work</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>The parallel agent ticket-driven fix-and-land work loop</h1>
+<p>
+Issues are cleared by a fleet of background agents — one per ticket, each in its own isolated clone. The loop is: agree the fix, fork an agent, it repros-first and implements, then STOPS for a human to gate the commit; on approval it updates, re-tests, and fast-forward-posts. The method keeps many fixes in flight at once while every landed commit stays reviewed, tested, and ff-only.
+</p>
+<h2>One ticket per issue</h2>
+<p>
+Every issue is a numbered ticket e.g. <code>todo/TOPIC/TOPIC-001.mkd</code>, and the fix approach is agreed before any agent is forked.
+</p>
+<ul>
+<li>Tickets are <a href="../wiki/Plan.html">Plan</a>-shaped pages (Issues, Blockers, Planned, Landed); <code>DIS-NNN</code> for spec/code gaps, <code>GET-</code>/<code>POST-NNN</code> for verb-specific.</li>
+<li>Decide the fix first (the Planned section, or a design pass for open-ended ones), then fork — never on a vague idea.</li>
+<li>A spec-code discrepancy or a bug found mid-fix becomes its OWN ticket, never a silent patch (this session spawned POST-001/002, GET-002).</li>
+<li>Issue docs have size limits. Sizes count in 64-char lines (top intro 8 lines, section intro 4, bulletpoint 2).</li>
+</ul>
+<h2>One agent per ticket, in an isolated tree (worktree or clone)</h2>
+<p>
+Each agent gets its own tree WITH BEAGLE — either a store-backed worktree (cheap, shares the local <code>.be</code>) or a full independent clone — builds a debug tree there, and never touches another agent's files.
+</p>
+<ul>
+<li><code>mkdir $HOME/todo/&lt;TICKET&gt;</code>, then either (a) a *<strong>store-backed worktree</strong>* — <code>cd $HOME/todo/&lt;TICKET&gt;</code> and <code>be get file:///home/gritzko/.be?/beagle</code> (shares the global store, no full object copy), or (b) a *<strong>full clone</strong>* — <code>be get be://localhost?/beagle</code> (its own store + worktree). Debug build per <code>CLAUDE.md</code>; work only in that tree.</li>
+<li>Drive <code>be</code> with the known-good binary on <code>PATH</code>, not the clone's freshly-built one, for the clone/commit/post steps.</li>
+<li>Independent tickets run as concurrent background agents; disjoint files mean no collision while implementing.</li>
+</ul>
+<h2>Implement, stop, report — the human gates the commit</h2>
+<p>
+An agent repros the bug, fixes it, gets the suite green, then STOPS without committing and reports for a decision.
+</p>
+<ul>
+<li>Repro-first (<code>CLAUDE.md</code> §17): write a failing test, confirm it fails, then fix; the repro and full <code>ctest</code> must end green.</li>
+<li>The agent pauses at the commit boundary and reports root cause, fix (file:line), and test result; it does not post on its own.</li>
+<li>The human says &quot;commit&quot; (land it) or &quot;iterate&quot; (another pass); a real design fork makes the agent stop and ask, never guess.</li>
+<li>Commit message is 1 line max (64 chars), must start with the ticket code</li>
+<li>Any Beagle bugs during the session should be filed as tickets (with maximum context added, see <a href="../../meta/todo.html">todo</a>)</li>
+<li>Moronic 10-line comments better be avoided. The budget is 4 lines, better less. Just mention the ticket for further detail.</li>
+</ul>
+<h2>Commit and ff-post, serialized</h2>
+<p>
+On approval the agent updates onto current trunk, re-tests, commits, and fast-forward-posts — one post at a time.
+</p>
+<ul>
+<li><code>be get --nosub</code> to update first, re-run the suite, then <code>be post</code>; the push is ff-only and NEVER forced.</li>
+<li>may also use <code>be patch</code> in either direction to recoincile the changes; never do manual <code>cp</code>, patching or merging.</li>
+<li>Post one ticket at a time: two concurrent posts race the same base and the loser is non-FF — re-land it, don't force.</li>
+<li>Git-scheme (<code>ssh:</code>) remotes pass <code>--nosub</code> (submodules are manual there); messages may be multi-line once the parser allows.</li>
+<li>Once a ticket is merged back into the main repo, the ticket's worktree can be removed to free disk space.</li>
+</ul>
+<h2>Reconcile against landed work</h2>
+<p>
+Because tickets land while others are in flight, each post rebases onto the current tip and merges any file two tickets both touched.
+</p>
+<ul>
+<li>The update is usually a clean fast-forward; an overlapping file gets a 3-way merge keeping every landed change plus the new one.</li>
+<li>The green suite on the merged tree is the gate; a red result or an ambiguous merge stops the agent to report, never force.</li>
+<li>Keep each changeset minimal and file-disjoint where possible so reconciles stay clean.</li>
+</ul>
+<h2>Keep the board current</h2>
+<p>
+<code>todo/README.mkd</code> lists all the active topics and what's going on there; <code>todo/TOPIC/README.mkd</code> lists active tickets (all bulletpoint 2 lines per entry). A fully-landed ticket gets removed from README.mkd, a closed topic from <code>todo/README.mkd</code>.
+</p>
+<h2>Hazards seen this session</h2>
+<p>
+A handful of traps recurred; each cost a stop-and-report, and each has a standing workaround.
+</p>
+<ul>
+<li>Clone shape varies — a plain git checkout has no beagle baseline to <code>be post</code> from; land such work onto a fresh beagle clone.</li>
+<li>A stray <code>/tmp/.be</code> poisons store discovery; tests use the shared hermetic repo-setup lib, never a bare <code>.be</code>.</li>
+<li><code>POSTCFLCT</code> false-fires on a <code>//</code> comment quoting a marker string; verify no real markers, then <code>--force</code> that one scan only.</li>
+<li>Never bypass the URI parser with hand-rolled string handling — fix the grammar; manual parsing is forbidden (<code>CLAUDE.md</code>).</li>
+</ul>
+</body>
+</html>

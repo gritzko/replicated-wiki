@@ -4,7 +4,6 @@ Discrepancies in `dog/ULOG.*` — the append-only `<ts>\t<verb>\t<uri>` event lo
 
 ##  Active tickets
 
- -  [ULOG-001] — **LANDED `9cfa9639`.** Root cause: `be` *amplified* a torn ULOG into total loss — a NUL at byte 0 made `ulog_scan_log` read the log as empty, then `ULOGClose`→`FILETrimBook`→`ftruncate(0)` (`abc/FILE.c:945`) destroyed the surviving bytes (wtlog+refs are both ULOGs; `.keeper` packs are off this path, hence objects survived the 2026-06-09 incident). Fix: `ulog_scan_log` refuses a mid-content NUL with non-NUL bytes ahead (new `ULOGTORN`) and `ULOGOpenBooked` restores the original on-disk size on refusal — the torn log is left byte-for-byte for out-of-band repair, never zeroed. Regression `dog/test/ULOG.c` (torn-first-byte/torn-mid; fail pre-fix, pass post-fix). NB the *initial-NUL trigger* (ENOSPC / kill-mid-write / clone) was not pinned — H3 concurrent-race did NOT repro, H2 9p ruled out (all ext4). Follow-up candidates: clone of an empty/elided-refs store writes a 0-byte `refs` + `be get` HOME-escape; latent `O_TRUNC` seed at `sniff/SUBS.c:410/420`.
+No open ULOG tickets; the initial-NUL trigger (what writes the leading NUL) remains unpinned.
 
-[ULOG-001]: ULOG-001.mkd "wtlog/refs zeroed — enumerate the scenarios"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

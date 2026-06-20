@@ -1,0 +1,64 @@
+#   BLAME-006a: blame skips a deleted file instead of folding an empty layer (root mis-attribution)
+
+`be blame:` attributes lines to the ROOT commit for a file that was DELETED then
+RE-ADDED, because the blame weave SKIPS the delete instead of folding an empty
+(delete) layer — so the old tokens never die and the readd's structurally-equal
+tokens (titles, blank lines) inherit the root commit's seq. Split from
+[[BLAME-006]] (the correctness half). Method: [Issues].
+
+##  Input
+
+### Context
+ -  Repro: `be blame:ABC.md` pins 5 pieces to `?c7184818#initial` (root). `ABC.md`
+    was a DIFFERENT doc at root, DELETED at `006b9039` (18Nov24 reorg), RE-ADDED as
+    the current doc at `8948262e` (22May, its true add commit, owns 20/28). The 5
+    root-pinned pieces are line-1 H1 + 4 blank lines before `##` headers — content-only
+    RAPHash (`BLAME/WEAVE.c:502,510`) COLLIDES across the delete/readd.
+ -  Root cause: `graf/BLAME.c:480` (`if (dr==BLAME_DESC_ABSENT) continue;`) + twin
+    `:492` — when the path is absent at a commit, `GRAFFileWeave` SKIPS it instead
+    of folding an empty layer, so old tokens stay alive; the readd content folds and
+    the WEAVE EQ keep-seq branch (`WEAVE.c:579-586`) matches new title/blank tokens
+    to the still-alive root tokens → they inherit root's seq.
+
+### Goals
+ -  A delete is folded as an explicit empty (all-delete) layer so tokens DIE at the
+    delete commit → a readd is a clean all-INS at the readd commit; no root leak.
+ -  `be blame:ABC.md` attributes all pieces to `8948262e`+ (or their real authors),
+    none to root.
+
+### Constraints
+ -  Behaviour-preserving for files that were never deleted: `GRAFblameident` /
+    `GRAFblameruns` byte-identical. graf change gates for review.
+
+##  WIP
+
+### Design decisions
+ -  Reuse the existing all-delete path (`WEAVE.c:534-540`, `nlen==0`): at
+    `BLAME.c:480/492`, on `BLAME_DESC_ABSENT`, fold an EMPTY version (all tokens
+    deleted) rather than `continue`.
+
+### TODOs
+ -[v] Repro-first: a hermetic delete-then-readd file; assert blame attributes the
+      readd commit, not root (RED pre-fix). → `graf/test/blame-readd.sh`.
+ -[v] Fix the skip-on-absent to fold an empty layer.
+ -[v] `ctest` green incl. `GRAFblameident` (unaffected attributions byte-identical).
+ -[ ] Gate + land.
+
+### Blockers and bummers
+ -  Pairs with [[BLAME-006b]] (the perf half) — independent; land separately.
+
+##  Outcome
+ -  FIX-READY (`$HOME/todo/BLAME-006a`, stopped at commit boundary). Both absent
+    points in `graf/BLAME.c::GRAFFileWeave` (~`:483-528`, `:569`): on
+    `BLAME_DESC_ABSENT`/fetch-miss, if the file was alive in the last folded layer
+    (`have_prev`), set `is_delete` + reset `*cur_blob` to empty instead of skipping;
+    the empty blob flows through `WEAVEFromBlob` → empty `wnu` → the existing
+    `nlen==0` all-delete path (`WEAVE.c:564-570`), so live tokens die at the delete
+    and the readd is a clean all-INS. Guards: skip delete-on-empty; reset `prev_n=0`
+    after a delete (early-stop can't false-match a stale chain); still skips when the
+    file was never present. Both descent paths (index-served + `GRAF_BLAME_NOINDEX`
+    keeper-inflate) give identical correct output. New `graf/test/blame-readd.sh`
+    (`GRAFblamereadd`, table-driven top-level + subdir, RED→GREEN). Full `ctest`
+    **300/300** (+1), `GRAFblameident` byte-identical. Awaiting gate to land.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

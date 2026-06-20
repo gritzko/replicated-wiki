@@ -1,0 +1,87 @@
+#   DOC-001: rework all INDEX.md to the meta/index.mkd format
+
+Rework every production-module-dir `INDEX.md` to match [index]: a top intro,
+then ONE SECTION PER `.h` file — each a short mission intro + a ≤12-bullet list
+of the module's KEY types/functions (one-liner each), sections grouped by
+layer/theme. Explanatory tables/drawings move OUT of the INDEX into per-file
+`.md` docs (e.g. `abc/S.md`), linked from the section intro; those `.md` docs
+are created/expanded as part of this work. Docs-only, but every entry must be
+verified against the real header. Method: [Issues].
+
+##  Input
+
+### Context
+ -  Current INDEX.md files are flat module tables (e.g. `abc/INDEX.md` is a
+    `| Header | Description |` table, module-level only, no per-entry detail) —
+    not the [index] format.
+ -  [index] (settled 2026-06-16): intro (≤8 lines) → a SECTION PER `.h` file:
+    module intro (≤4 lines, the mission) + a bullet list of KEY entries
+    (types/functions), one-liner each (≤2 lines), MAX 12 bullets per module.
+    Template headers list the `*`-form (e.g. `*csMv`), not each instantiation.
+ -  Q&A decisions (2026-06-16): section PER `.h` FILE (companions NOT grouped);
+    inline explanatory tables/diagrams (e.g. abc boundary-movers) MOVE to per-file
+    `.md` docs and link from the section intro; DOC-001 ALSO creates/expands those
+    `.md` docs; sections GROUPED BY LAYER/THEME (foundation→containers→io/net→app).
+
+### Goals
+ -  Every production module dir with public API has an `INDEX.md` in [index] form:
+    intro + layer-grouped per-`.h` sections, each mission + ≤12 key type/function
+    one-liners, accurate to the header.
+ -  Explanatory prose/tables/diagrams live in per-file `.md` docs (created/expanded
+    here), linked from the section intro; the INDEX stays intro + sections + bullets.
+
+### Constraints
+ -  Scope = production module dirs (+ API subdirs): abc, dog (+git, +tok), keeper,
+    graf, sniff, spot, bro, woof, mark, js, beagle. SKIP pure test/fuzz fixture dirs.
+ -  Line budget ([index]): top intro 8, section intro 4, bullet 2, nested 1; ≤12
+    bullets/module. Verify every entry against the real header — no invented APIs.
+ -  abc/ is core: its INDEX + `.md` docs gate for review (docs-only, still surface).
+
+##  WIP
+
+### Design decisions
+ -  Per-dir parallel execution (like the CODE/PTR sweeps): one worktree per dir,
+    ~6 at once; abc is the largest (~70 headers → ~70 sections).
+ -  Pick the ≤12 "key" entries per module by reading the header for its entry-point
+    types/functions; the rest stays in the header (the INDEX is leads, not a dump).
+
+### TODOs
+ -[ ] Per dir: rewrite `INDEX.md` to intro + layer-grouped per-`.h` sections
+      (mission + ≤12 key entries); move tables/diagrams to per-file `.md`, link them.
+ -[ ] Create/expand the per-file `.md` docs that receive moved content.
+ -[ ] Verify every entry against its header; hold the [index] line budget.
+ -[ ] (abc) gate the diff for review; land the rest per [Issues].
+
+### Blockers and bummers
+ -  Big-dir effort (abc ~70 sections) — parallelize per dir; ≤12/module is the cap
+    that keeps any one INDEX from ballooning.
+
+##  Outcome
+ -  **LANDED 2026-06-17.** All 11 production-dir `INDEX.md` reworked to the [index]
+    format (intro + per-`.h` sections, ≤12 key one-liner entries, layer-grouped) and
+    UNWRAPPED to one greppable physical line per block within the codepoint budget
+    (head 64 / bullet 128 / section-intro 256 / top-intro 512), verified by the `mark`
+    linter. Commits: 10 parent dirs `8bd51f9b`, parent abc-pin `1a5d0cbf`, abc sub
+    `4222dfab` (on synthetic branch `?/abc/.dogs`). abc gate: reviewed, zero symbols
+    dropped; glosses corrected (the failed run's `*Z`-as-"sentinel" is now the `a<b`
+    comparator). DESCOPED (user decision "trim to fit"): the per-file `.md` docs that
+    would HOLD moved detail were NOT created — over-budget bullets were trimmed to
+    terse leads instead (heaviest loss in the prose `.c`-unit sections of woof/mark/
+    beagle). A future ticket can relocate that detail into `*.md` docs.
+ -  **CALIBRATION FAILED 2026-06-16 (abc, discarded).** A single-pass worker reworked
+    `abc/INDEX.md` to the format (9 layers, 60 per-`.h` sections, 104→446 lines) but the
+    quality was BS: (1) entries crammed 4-6 symbols per bullet with a 2-3-word CATEGORY
+    label → unreadable (couldn't tell what any one symbol does); (2) the glosses were
+    FACTUALLY WRONG — e.g. `wh128Z`/`u*Z` described as a "sentinel" when it is the ordering
+    COMPARATOR (`a<b`); the worker pattern-matched names instead of reading bodies. Its
+    "verified every entry" only checked that NAMES EXIST, not that descriptions are correct.
+    LESSON: an LLM writing per-symbol glosses from header NAMES hallucinates meanings. Any
+    redo MUST (a) derive each gloss from the symbol's actual DEFINITION (signature + body),
+    one symbol (or tight pair) per line with a plain "what it does" gloss, genuinely
+    SELECTIVE (the ~12 leads, not all-compressed), and (b) run an INDEPENDENT adversarial
+    verify pass that re-reads each symbol's definition and refutes/fixes any gloss that
+    doesn't match the code — name-existence checking is NOT enough. Otherwise: defer (a dull
+    flat index beats a wrong one).
+
+[index]: ../../meta/index.mkd "INDEX.md format spec"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

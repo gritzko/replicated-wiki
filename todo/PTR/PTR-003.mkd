@@ -1,0 +1,49 @@
+#   PTR-003: keeper/ wh128 run-scan, buffer pokes, sha-hex
+
+The 2026-06-15 audit found keeper/ casts typed `wh128cs` runs back to raw element pointers (three duplicated copies), pokes buffer IDLE-heads by index, reads via `void*`+offset, and re-slices 40-hex shas by hand. Behavior-preserving, one worktree; hermetic store tests must stay green.
+
+##  Input
+
+### Context
+ -  `keeper/WIRE.c:165-167,203-205,273-274` — `wh128cp base=(wh128cp)raw[0]; term=(wh128cp)raw[1]; for(…e++)` and `len=(wh128cp)raw[1]-base`. Three near-identical copies: `wire_pack_bookmark`, `wire_bookmark_at`, `wire_locate_sha`.
+ -  `keeper/UNPK.c:201`, `keeper/KEEP.c:253,1482` — `((u8**)w->buf_a)[2]=…` / `((u8**)out)[2]+=width` / `((kv64**)k->packs)[2]=de-1` hand-set the buffer IDLE-head (the "never poke buffer internals" anti-pattern).
+ -  `keeper/KEEP.c:2436-2448` — `keep_read_full(int fd, void *buf, size_t n)` with `read(fd, (char*)buf+got, n-got)`; raw `void*`+offset bypasses the FILE.h/POL.h wrappers.
+ -  `keeper/SUBS.c:60-74` & `keeper/REFADV.c:90-93` — manual `/` and `?` separator scans (`while (s<e && *s!=c) s++` then `{s+1, e}`).
+ -  `keeper/PROJ.c:51,75,408,466,481,502,607` & `keeper/KEEP.c:1317,1374,1398` — `{value[0], value[0]+40}` / `{value[0]+40, value[1]}` sha-hex slices; `PROJ.c:466` `*(value[1]-1)` last-byte deref.
+ -  `keeper/KEEP.c:87-97` — `(char const*)name[0]+SEQ_W` + `memcmp(tail, KEXT, …)` ext-match; seq slice `{name[0], name[0]+SEQ_W}`.
+
+### Goals
+ -  Consolidate the three WIRE run-scans onto the typed `wh128cs` accessor already used at `KEEP.c:666`/`RESOLVE.c:184`, plus one shared `wh128csBSearch` (also folds the open-coded `run[1]-run[0]` searches at `KEEP.c:669,937`/`RESOLVE.c:185`).
+ -  Buffer pokes → `u8bFed`/`u8bShed` and a typed `kv64b` remove-at; no `[2]` writes, no raw `kv64*` compaction walk.
+ -  `keep_read_full` → a slice-based full-read draining into `u8s` (callers feed `hdr`/`body` buffer IDLE slices).
+ -  Separator scans → `u8sFind`/`u8csFind` + `a_rest`.
+ -  sha-hex → `a_head`/`a_rest` + `sha1FromHex`; `PROJ.c:466` → `u8csLast`; `KEEP.c:87` → `a_tail`+`u8csEq`/`u8csHasSuffix`.
+
+### Constraints
+ -  Behavior-preserving; hermetic `.be` store tests + keeper fuzzers green.
+ -  `UNPK.c:456` `mmap(MAP_SHARED|MAP_ANONYMOUS)` is legitimate cross-`fork()` IPC memory — leave as-is.
+ -  `void *ctx` callback params (REFS/KEEP/WALK/WIRECLI `*_cb`, `unpk_emit_fn`) are the sanctioned idiom — out of scope.
+
+##  WIP
+
+### Design decisions
+ -  The three buffer `[2]` pokes are the priority (they directly break the "never poke buffer internals" rule); then consolidate WIRE's triple-dup run-scan onto the existing typed accessor.
+
+### TODOs
+ -[ ] Repro-first: lock outputs on the keeper test tables (wire/proj/resolve).
+ -[ ] Buffer `[2]` pokes (UNPK/KEEP ×3) → `u8bFed`/`u8bShed`/typed remove-at.
+ -[ ] WIRE 3× raw run-scan → shared typed `wh128cs` accessor + `wh128csBSearch`.
+ -[ ] `keep_read_full` → slice full-read.
+ -[ ] SUBS/REFADV separator scans → `u8csFind`.
+ -[ ] sha-hex 40-slices → `sha1FromHex`+`a_head`/`a_rest`; `PROJ.c:466`→`u8csLast`.
+ -[ ] Build + ctest; report done vs skipped.
+
+### Blockers and bummers
+ -  WIRE/KEEP/RESOLVE share the byte-sorted-run search — land the shared helper once; touches three files, keep them in one commit.
+
+##  Outcome
+
+ -  pending.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

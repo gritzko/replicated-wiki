@@ -1,0 +1,41 @@
+#   ABC-003: `UTF8_LEN[byte>>4]` byte-length table is shifted (multibyte over-counts)
+
+`abc/UTF8.h` line 47's `static u8 UTF8_LEN[16]` — the byte-length lookup indexed by `lead >> 4`, used by `utf8sDrain1utf8` and by **every bro renderer** (`bro/BRO.c` has five `n[ch>>4]` call sites for row width / wrap) — is **off by one slot**, so every multibyte lead byte reports the WRONG length. A 3-byte UTF-8 char (em-dash `—` = `e2 80 94`, lead `>>4` = `0xE`) returns **4** not 3, so a renderer walking bytes over-consumes the following byte. In `bro_row_end_pass` that byte is the line's `\n`: the row never breaks there, so the multibyte-ending line and the NEXT line render as ONE row, and the next line ALSO gets its own index row — a **duplicated line** in colour mode. This is the root cause of [[BRO-004]]'s CLI repro (`be --color diff:ABC.md | cat` duplicated 4 lines that each ended a paragraph with `—`). abc/core change — maintainer-reviewed. See [Issues], [CLAUDE], [[BRO-004]].
+
+##  Issues
+The table is shifted; every multibyte lead byte mis-counts.
+
+ -  Current: `{1,1,1,1,1,1,1,1, 2,2,2,2, 3,3, 4}` (only 15 inits; slot 15 defaults 0). Indexed by `lead >> 4`: 2-byte lead `0xC/0xD`→**3** (want 2); 3-byte lead `0xE`→**4** (want 3); 4-byte lead `0xF`→**0** (want 4); continuation `0x8..0xB`→**2** (want 1).
+ -  Correct: `{1,1,1,1,1,1,1,1, 1,1,1,1, 2,2, 3, 4}` — ASCII/continuation `0x0..0xB`→1, `0xC..0xD`→2, `0xE`→3, `0xF`→4.
+ -  Symptom: a line ending in a 3-byte char (`—`, `…`, box-drawing, CJK) over-runs its `\n`; `bro --color` then duplicates the following line and merges row spans. Plain mode (`bro --plain`, verbatim text dump) is unaffected — only width-walking colour render hits it.
+ -  Reach: `utf8sDrain1utf8` (abc) + 5 `n[ch>>4]` sites in `bro/BRO.c` (`bro_row_end`, `bro_row_end_pass`, the colour emit loops). Any multibyte width math is wrong.
+
+##  Blockers
+abc/core so maintainer-reviewed. Existing `abc/test/UTF8.c` (`ln`) passes today — it does not exercise `UTF8_LEN` directly, so it never caught this.
+
+##  Planned
+One correct table + a direct test.
+
+ -  Fix the literal to `{1,1,1,1,1,1,1,1, 1,1,1,1, 2,2, 3, 4}` (one line in `abc/UTF8.h`).
+ -  Repro-first ([CLAUDE] §17): add a table case to `abc/test/UTF8.c` asserting `UTF8_LEN[b>>4]` == the true encoded length for one lead byte of each class (`0x41`→1, `0xC3`→2, `0xE2`→3, `0xF0`→4) AND a `utf8sDrain1utf8` round-trip over a `—`-terminated line.
+ -  Verified locally: applying the fix makes `be --color diff:ABC.md | cat` match `--plain` (no duplicated lines) and keeps full `ctest` green (286/286).
+
+##  Outcome
+ -  **LANDED into the abc sub** — abc-sub commit `02a23dc3` (on synthetic
+    `?/abc/.dogs`) + parent pin `cb71e65b`. The one-line table fix
+    (`{…,1,1,1,1, 2,2, 3, 4}`) + a table-driven `UTF8test2` in `abc/test/UTF8.c`
+    (8 cases: ASCII / 2-byte Я Ж / 3-byte — カ 漢 / 4-byte 😀 🚀; drains via
+    `utf8sDrain1utf8`, re-decodes via `utf8sDrain32`). RED→GREEN confirmed (old
+    table exited 74 `<NODATA` on multibyte over-count; fixed exits 0); all 42 abc
+    binaries pass.
+ -  Landing note: a sub-only change lands with the DEFAULT `be post -m` (fans into
+    the sub mount, commits on the dot-branch, bumps the parent pin); `--nosub`
+    returns POSTNONE for an abc-only change (it opts OUT of the sub fan-out).
+ -  NB: [[BRO-004]] Part 2's incoherence was ISOLATED to a separate bro row-emit bug
+    (landed `2e271665`), NOT this table — so the "root cause of BRO-004" framing above
+    overstated it. ABC-003 is a real width-math bug in its own right (still wrong for
+    any multibyte width walk); just not BRO-004's cause.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[CLAUDE]: ../../CLAUDE.md "coding guidelines"
+[BRO-004]: ../BRO/BRO-004.mkd "colour diff render — the consumer of this bug"

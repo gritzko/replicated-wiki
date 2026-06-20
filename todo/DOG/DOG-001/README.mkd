@@ -1,0 +1,83 @@
+#   DOG-001: rewrite WEAVE as a columnar, HUNK-compliant `dog/WEAVE` (umbrella)
+
+`graf/WEAVE` is the token-level file-history engine (SCCS-weave: one interleaved-delta TLV per file, birth-id `(seq,pos)` per token). It is graf-only, its on-disk form needs a 7-buffer BASS decode on every op, and its merge aligns POSITIONALLY (the [DIS-003] root cause). Rework it as a columnar, [HUNK]-compliant `dog/WEAVE` — `weave{text,toks,ins,rms,commits}` — reusable by every dog and keyed on real commit ids. Full API + wire form in [api]. This is the umbrella; work lands via [DOG-002]..[DOG-005].
+
+##  Input
+
+### Context
+ -  Today: `graf/WEAVE.{c,h}` (~1300 LoC) — interleaved `T`/`R` TLV, decoded
+    into 7 parallel BASS arrays (`WEAVE_DECODE`/`wdec`) on every op.
+ -  Identity is a GLOBAL topo `seq` the caller must assign equally on both
+    merge sides; the SHA-keyed topo-sort is non-total → the [DIS-003] flake.
+ -  Consumed only by graf (GET/REBASE/BLAME/DIFFREF/LOG); nothing else can
+    weave, though the wire form is already HUNK-adjacent (`text`+`tok32`).
+ -  The runtime decode (`wdec`: text + tok end-offsets + seq/pos + R-set pool)
+    is ALREADY the columnar shape this rework makes canonical.
+
+### Goals
+ -  One `dog/WEAVE`: parsed view `weave{text,toks,ins,rms,commits}` over a
+    HUNK-compliant blob; zero-copy `WEAVEParse`, no per-call decode.
+ -  Identity = `(commits[ins], per-commit ordinal)`, `commits[i]` a stable
+    `u64` = high 64 bits of the commit sha1 — the [DIS-003] robust fix.
+ -  Builders `WEAVENext` (linear fold) + `WEAVEMerge` (identity interleave);
+    `WEAVEProduce` reproduces ANY past rev as scoped-alive bytes.
+ -  `dog/`-layer so sniff/keeper/spot/bro can weave too, not just graf.
+
+### Constraints
+ -  `tok32` offset is 24-bit → 16 MiB cap on a weave's cumulative text; files
+    over it drop to a coarse blob-level fallback (shared with [DIFF-007]).
+ -  `commits[0]` = spine/root; reserved high `u64`s replace the old
+    `WEAVE_WT_SRC`/`WEAVE_CFLCT_SRC` sentinels.
+ -  Parent edges are NOT stored: a rev's `scope` (ancestor closure) is supplied
+    by graf's DAG, mapped through `commits[]` — same split as today.
+ -  No `abc/` API change without review; the diff core relocates via [DOG-002].
+
+##  WIP
+
+### Design decisions
+ -  SoA columnar IS the format (drop interleaved TLV + the 7-buffer decode);
+    `'X'`/`'K'` sub-records stay byte-identical to HUNK so a weave projects to
+    a hunk for free. Outer `'W'` container adds `'I'`/`'M'`/`'C'`.
+ -  `pos` dropped, recomputed as the per-commit ordinal in weave order (both
+    merge sides enumerate a shared commit's tokens identically — keeps "two
+    a's of aa" distinct).
+ -  `tok32` side reused as two bits {in,rm}; `custom` bit = multi-remover flag.
+    `in`-off ⇒ spine inserter; `rm` reads 1 (or count+N if custom) from `rms`.
+ -  Scope (active-commit set) is a BITMAP over `commits[]` (bit i = slot i
+    active, bit 0 = spine always set) — classification is a bit-test, no
+    `WEAVEsetfn`. Built once per op from a `u64cs` of active hashlets at the
+    DAG boundary (`WEAVEScope`). `WEAVEMerge` replaces `WEAVEApply`.
+ -  Replay is sequential (topo order): `WEAVENext` diffs the new blob against
+    the running weave's alive view — NO `base_scope` arg. Forks fold via
+    `WEAVEMerge`; an "evil merge" is `WEAVEMerge` then `WEAVENext`.
+ -  The chain DOG-002..005 lands SEQUENTIALLY in one worktree (each gates the
+    next), not as parallel isolated clones.
+
+### TODOs
+ -[ ] [DOG-002] relocate `BRAM`+`NEIL` to `dog/` (prereq: dog/ can't dep up).
+ -[ ] [DOG-003] core: format + `Parse/Next/Merge/Produce` + cursor + tests.
+ -[ ] [DOG-004] emit: `Emit{Diff,Full,Merged}`+`Alive`/`Produce` + cap fallback.
+ -[ ] [DOG-005] graf cut-over; delete `graf/WEAVE`; update both INDEX.md.
+ -[ ] Retire-on-land: [GET-001] (decode-per-call), [DIS-003] (positional merge),
+      [DIFF-007] (outtoks overflow), [MEM-036]/[MEM-040] (TLV-builder OOB/leak).
+
+### Blockers and bummers
+ -  [DOG-003]..[DOG-005] gate on [DOG-002] (layering) landing first.
+ -  Cross-weave `u64` identity assumes no high-64-bit sha collision within one
+    file's commit set; guard with a `must()` on table insert.
+
+##  Outcome
+ -  (open)
+
+[api]: api.mkd "proposed dog/WEAVE API + on-wire format"
+[DOG-002]: ../DOG-002.mkd "relocate BRAM+NEIL diff core into dog/"
+[DOG-003]: ../DOG-003.mkd "dog/WEAVE core"
+[DOG-004]: ../DOG-004.mkd "dog/WEAVE emit + scope + cap"
+[DOG-005]: ../DOG-005.mkd "graf cut-over; delete graf/WEAVE"
+[DIS-003]: ../../DIS/DIS-003.mkd "WEAVEMerge token identity is positional"
+[GET-001]: ../../GET/GET-001.mkd "weave merge exhausts BASS (decode-per-call)"
+[DIFF-007]: ../../DIFF/DIFF-007.mkd "diff:<largefile> silently empty"
+[MEM-036]: ../../MEM/MEM-036.mkd "WEAVE EDL fallback raw writes overflow"
+[MEM-040]: ../../MEM/MEM-040.mkd "WEAVEDecInit leaks partial mmaps"
+[HUNK]: ../../../wiki/Dog.mkd "the hunk wire format (dog layer)"
+[Graf]: ../../../wiki/Graf.mkd "the graf dog (history + merge)"

@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GET-021</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GET-021: a worktree silently diffs against an advanced cur it was never materialized to; <code>be status</code> must warn when stale</h1>
+<p>
+A worktree's <code>be diff</code>/<code>be status</code> baseline is its cur POINTER, but a selective <code>be post</code> (and an incremental <code>be get</code>) can advance cur past commits that changed files NOT in the worktree's working set — leaving those files stale on disk while cur's tree already has the new content. <code>be diff</code> then renders a SPURIOUS reverse-diff (disk-old vs cur-new) and <code>be status</code> flags <code>mod</code>/<code>mis</code> for files the user never touched, with NO hint the worktree is behind. A worktree should diff against the rev its files were actually PRODUCED FROM, and <code>be status</code> should WARN when that produced-from rev ≠ the branch tip. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (this session, <code>~/beagle</code>): sibling worktrees landed commits into the</li>
+</ul>
+<div>
+<p>
+shared store (e.g. BLAME-006a <code>fa09701f</code> changed <code>graf/BLAME.c</code>, 849→882 lines), never touching <code>~/beagle</code>'s disk. A later SELECTIVE <code>be post</code> from <code>~/beagle</code> (staging only 3 unrelated <code>graf/{GRAF,LOG}</code> files) rebased cur onto <code>fa09701f</code> → <code>f6bea1c5</code>, and a <code>get ?#f6bea1c5</code> did not re-materialize the sibling-landed files. Result: <code>~/beagle/graf/BLAME.c</code> on disk = the OLD 849-line file (12 fix-markers), cur <code>f6bea1c5</code>'s tree = the NEW 882-line file (22 markers).
+</p>
+</div>
+<ul>
+<li>Symptom: <code>be diff</code> shows <code>graf/BLAME.c</code> + <code>graf/test/CMakeLists.txt</code> as edits the</li>
+</ul>
+<div>
+<p>
+user never made (a REVERSE-diff: disk behind cur), and <code>be status</code> lists them <code>mod</code>/<code>mis</code> — indistinguishable from real WIP. Hit twice this session (also the <code>~/todo/ABC-003</code> worktree). Repeatedly read as &quot;the worktree is broken&quot;.
+</p>
+</div>
+<ul>
+<li>LANDMINE: <code>be put graf/BLAME.c</code> + post from this state would COMMIT the stale</li>
+</ul>
+<div>
+<p>
+old file and silently REVERT the sibling-landed fix.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li><code>be diff</code> (and <code>be status</code>) in a worktree baselines against the rev the working</li>
+</ul>
+<div>
+<p>
+files were actually materialized from — not a cur pointer that was advanced past them — so stale-but-unedited files are NOT shown as user changes.
+</p>
+</div>
+<ul>
+<li>When the worktree's cur ≠ the branch tip, <code>be status</code> PREPENDS a commit-difference</li>
+</ul>
+<div>
+<pre><code>    status:
+     post 49039f36  11:42  GET-020: …            ← ahead (local, unposted)
+     miss 3dc19b0a  12:40  DIFF-002: …           ← behind (in tip, not here)
+     10:29  mod ABC.md
+     ? 1212 ok, 1 mod   (behind 1, ahead 1)
+</code></pre>
+<p>
+block (before the per-file rows), one row per differing commit — <code>post</code> for AHEAD (local commits not in tip → would be posted), <code>miss</code> for BEHIND (tip commits not local → missing here) — mirroring how <code>get</code>/<code>post</code>/<code>head</code> report ahead/behind. Shape:
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Don't regress the legitimate <code>mod</code>/<code>mis</code> reporting of real working-set edits.</li>
+<li>Prefer not to widen every post/get into a full re-checkout if a cheaper</li>
+</ul>
+<div>
+<p>
+detect-and-warn (compare cur's tree-of-changed-paths vs disk) suffices; but a complete materialization on cur-advance is the alternative (cousin of <a href="">[GET-018</a>] atomic checkout / <a href="">[GET-020</a>] incomplete checkout, and <a href="">[GET-017</a>] ref-advance).
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>CHOSEN (2026-06-16, user): DETECT-and-show. <code>be status</code> renders the cur-vs-tip</li>
+</ul>
+<div>
+<p>
+commit difference as <code>post</code> (ahead) / <code>miss</code> (behind) rows ABOVE the file rows — reuse the EXISTING ahead/behind enumeration, not a re-roll: <code>be head</code>'s local <code>?br</code> ahead/behind path (<code>beagle/BE.cli.c:1538</code>, via <code>GRAFHead</code>/<code>GRAF.exe.c:535</code>) already computes the two commit sets; status just needs to emit them as <code>{verb=post|miss, uri=commit:?&lt;sha&gt;}</code> hunk rows (clickable, like <code>log:</code> rows now are). NB: the help already claims &quot;Bare <code>be</code> = status (current branch, ahead/behind, dirty)&quot; (<code>BE.cli.c:89</code>) — so the intent is documented; only the per-commit LIST is unimplemented. This is a spec/impl gap as much as a feature.
+</p>
+</div>
+<ul>
+<li>Materialization (the stale-FILE half) is secondary/optional here: showing the</li>
+</ul>
+<div>
+<p>
+<code>miss</code> commits already warns the user to <code>be get</code>; fully re-checking-out on cur-advance is the heavier alternative (cousin of <a href="">[GET-018</a>]/<a href="">[GET-020</a>]).
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: a hermetic two-worktree store — wt-B lands a commit, wt-A is left</li>
+</ul>
+<div>
+<p>
+  behind; assert <code>be status</code> in wt-A prepends a <code>miss &lt;sha&gt; …</code> row (and a <code>post</code>   row when wt-A is also ahead), and that the row count clears after <code>be get</code>.
+</p>
+</div>
+<ul>
+<li>] Wire <code>be head</code>'s local ahead/behind commit sets (<code>BE.cli.c:1538</code>/<code>GRAFHead</code>)</li>
+</ul>
+<div>
+<p>
+  into <code>be status</code> output as <code>post</code>/<code>miss</code> <code>commit:?&lt;sha&gt;</code> hunk rows above the   file rows; keep file-status reporting unchanged.
+</p>
+</div>
+<ul>
+<li>] (optional/secondary) re-materialize stale cur-delta files so <code>be diff</code> stops</li>
+</ul>
+<div>
+<p>
+  showing phantom reverse-diffs — or document that <code>miss</code> rows + <code>be get</code> cover it.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Needs the worktree's true materialization base tracked/derivable separately from</li>
+</ul>
+<div>
+<p>
+the cur pointer (or a tree-vs-disk compare). Pairs with <a href="">[GET-017</a>]/<a href="">[GET-018</a>].
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>ef8901fa</code></strong>* (FF child of <code>addd5a9c</code>; 309/309; 6 files): <code>be status</code> PREPENDS the</li>
+</ul>
+<div>
+<p>
+cur-vs-tip commit block — <code>post</code> rows (ahead) / <code>miss</code> rows (behind), newest-first, clickable <code>commit:?&lt;sha&gt;</code> — above the file rows, with <code>(behind N, ahead M)</code> in the summary; cleared after <code>be get</code>, up-to-date output byte-identical. Reused SNIFF's OWN DAG walk (no cross-process orchestration): <code>GETStatusCommitDiff(cur,tip,…)</code> + <code>GETLocalBranchTip</code> (empty branch → trunk <code>?</code> REFS row, the fix that makes trunk worktrees work) in <code>sniff/GET.c</code>; <code>status_emit_commit_diff</code> in <code>sniff/SNIFF.exe.c:386</code>; <code>miss</code> verb palette slot in <code>dog/ULOG.c</code>. New <code>beagle/test/be-status-ahead-behind.sh</code> (RED→GREEN). *<strong>309/309</strong>*. Awaiting gate. Msg: <code>GET-021: be status shows ahead/behind commit rows</code>. (This is the detect-and-show half; per-file stale-materialization is the secondary, left to a follow-up — the <code>miss</code> rows already warn the user to <code>be get</code>.)
+</p>
+</div>
+</body>
+</html>

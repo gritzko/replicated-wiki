@@ -1,0 +1,55 @@
+#   JS-011 [MED]: UTF-8 correctness — `Encode` carries a spurious NUL; `Decode` is a no-op (no inbound validation)
+
+`JABCutf8Encode` includes the trailing NUL in the typed-array length, and
+`JABCutf8Decode` is an empty stub — so there is NO inbound UTF-8 validation at all.
+Method: [Issues].
+
+##  Input
+
+### Context
+ -  `JABCutf8Encode` typed-array length includes the trailing NUL (`test.js:66`
+    asserts `"hello"` → byteLength 6) → every encoded buffer carries a spurious +1
+    NUL, and U+0000 is indistinguishable from the terminator.
+ -  `JABCutf8Decode` (`utf8.cpp:28-33`) is a no-op stub returning `undefined` → no
+    rejection of overlong forms, lone surrogates, truncated multibyte, or bad
+    continuation bytes.
+ -  `WITH_JS`-gated WIP; `Encode` is exercised by `test.js`.
+
+### Goals
+ -  `Encode("hello")` byteLength is 5 (NUL trimmed); `Decode` validates and rejects
+    malformed UTF-8.
+
+### Constraints
+ -  Trim the NUL from `Encode`'s length; implement `Decode` with explicit malformed-
+    input rejection.
+
+##  WIP
+
+### Design decisions
+ -  (open) Drop the terminator from `Encode`'s reported length; write a real
+    validating `Decode`. Fix the `test.js:66` expectation to 5.
+
+### TODOs
+ -[ ] Repro-first: `Encode("hello").byteLength === 5`; `Decode` rejects each bad
+      sequence below.
+ -[ ] Trim the NUL; implement validating `Decode`.
+ -[ ] Fuzz seeds: `C0 80` (overlong NUL), `ED A0 80` (lone surrogate), `E2 82`
+      (truncated 3-byte), `F4 90 80 80` (> U+10FFFF).
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `041e4bd5`** (2026-06-16): `JABCutf8Decode` now validates inbound
+    UTF-8 via abc's `utf8sValid`/`utf8sDrain32` (rejects overlong forms, lone
+    surrogates, truncated multibyte, bad continuation, > U+10FFFF) and decodes
+    valid bytes to a UTF-16 JS string; `JABCutf8Encode` trims the trailing NUL
+    so the typed-array byteLength is the real UTF-8 byte count (`"hello"`→5).
+    The Encode-NUL change was applied (NOT deferred): `test.js`:67 and the
+    generated `test.js.c` blob were synced 6→5 in lockstep, and the C++
+    harness `ROWS` byteLengths dropped by one — `JABCtest` stays green. C++
+    repro rows added to `js/test/jabc_test.cpp` (`run_utf8_decode_repro`):
+    red with the stub/incl-NUL code, green after. ASAN/LSan clean (only the
+    suppressed JSC-internal singleton leak). All 3 JABC ctests pass.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,52 @@
+#   POST-018: post/put confirmations through the shared banner
+
+`be post` and `be put` print their confirmations as raw `fprintf` to
+stderr — `sniff: commit <hex>`, `N change(s)`, `staged N put row(s)`,
+and the post ambiguous-message picker — bypassing the shared ROWS state
+banner ([BE-005]). Route them through ROWS so post/put speak the same
+banner + `--tlv` model as get/status.
+
+##  Input
+
+### Context
+ -  `be post` commit confirmation is `fprintf(stderr, "sniff: commit <hex>")`
+    (`SNIFF.exe.c:815`); dry-run already uses ROWS (`POST.c:2338`).
+ -  `be put` only prints `sniff: staged %u put row(s)` (`PUT.c:1027`); its
+    per-file staged rows already stream via ROWS (`PUT.c:712`).
+ -  Post msg-picker lists candidates with raw `fprintf` (`POST.c:2439/2447`).
+ -  `N change(s)` summary tail (`POST.c:2345`) is a trailing stderr line.
+
+### Goals
+ -  `be post` emits a commit ROWS row (verb=post, clickable
+    `commit:?<sha>` — `ROWS_NAV_COMMIT` already exists) under the banner.
+ -  `be put` confirmation rides the same banner (count in the banner /
+    summary tail), not a bare stderr line.
+ -  The ambiguous-message picker renders as banner rows, not raw tabs.
+
+### Constraints
+ -  Depends on the [BE-005] ROWS banner core. `sniff/` only; no `abc/`.
+ -  Keep genuine error/diagnostic chatter on stderr — only the report
+    (data) lines move to the hunk stream.
+
+##  WIP
+
+### Design decisions
+ -  Reuse `ROWSu8bFeedRec` with `ROWS_NAV_COMMIT` (the tested
+    `?<sha>#<subject>` row) for the commit confirmation.
+ -  Put's count becomes the banner/summary, mirroring status's tail.
+
+### TODOs
+ -[ ] Repro: `be post`/`be put` emit a banner-headed hunk (commit row /
+      staged rows) in color & --tlv; no raw stderr report line.
+ -[ ] `SNIFF.exe.c:815`: commit confirmation → ROWS commit row.
+ -[ ] `PUT.c:1027`: staged count → banner/summary, not bare stderr.
+ -[ ] Post msg-picker (`POST.c:2439`) → banner rows.
+ -[ ] `ctest -j16` green.
+
+### Blockers and bummers
+ -  None yet.
+
+##  Outcome
+ -  (pending land)
+
+[BE-005]: ../BE/BE-005.mkd "umbrella: shared ROWS state banner"

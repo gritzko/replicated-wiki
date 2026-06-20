@@ -1,0 +1,46 @@
+#   JS-003 [HIGH]: JSC boundary not validated before use — ignored `exception`, NULL typed-array bytes ptr
+
+JS* calls set an `exception` out-param that is ignored before the code proceeds to
+the syscall, and a detached ArrayBuffer's NULL bytes ptr is deref'd. Flagged by
+3-4 of 7 lenses (high confidence). Method: [Issues].
+
+##  Input
+
+### Context
+ -  (a) `exception` out-param ignored, then the syscall runs anyway:
+    `JABCioFileWrite` (`io.cpp:97-111`), `JABCioFileRead` (`io.cpp:137-160`),
+    `JABCioNetConnect` (`io.cpp:374-376`), `JABCioStdio` (`io.cpp:385-392`),
+    `JABCutf8Encode` (`utf8.cpp:18`).
+ -  (b) `JSObjectGetTypedArrayBytesPtr` returns NULL for a detached/neutered
+    ArrayBuffer; `io.cpp:100-105` / `137-141` form `ta[1]=ta[0]+len` off NULL and
+    read/write-deref it → NULL-deref crash.
+ -  `WITH_JS`-gated WIP, but these are live binding entry points.
+
+### Goals
+ -  A thrown JS exception or a detached buffer is detected and aborts the op before
+    any syscall / deref.
+
+### Constraints
+ -  After each JS* call: `if (*exception) return undefined`. NULL-check the bytes
+    ptr before forming the ABC slice. No bypassing the existing throw plumbing.
+
+##  WIP
+
+### Design decisions
+ -  (open) Add post-call exception checks at every listed site; guard the bytes ptr
+    so a detached buffer throws (or returns undefined) rather than deref'ing NULL.
+
+### TODOs
+ -[ ] Repro-first: pass a detached ArrayBuffer (transferred/neutered) and a value
+      with a throwing `toString` into `file.write` / `file.read`; assert no crash.
+ -[ ] Add the exception + NULL-ptr guards at each listed site.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `07f858b7`** (2026-06-16): post-call `*exception` checks +
+    NULL bytes-ptr guards at file.write/read, net.connect, stdio, utf8.Encode;
+    detached-buffer (`b.transfer()`) repro now throws instead of write(NULL,0).
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

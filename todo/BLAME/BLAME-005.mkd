@@ -1,0 +1,68 @@
+#   BLAME-005: emit blame as per-commit hunks (header = commit, body = source)
+
+Blame today prepends a fixed-width gutter to every source line (`graf/BLAME.c`
+~line 757: `BLAME_HW` chars + an `L`-tok before each line), so the commit
+metadata **shares the line with the code**. That is the root of the bro
+breakage: the gutter is counted in the wrap width (wraps early), soft-wrap
+mangles the table, and the line can't be syntax-highlighted. Restructure the
+output into `dog/HUNK` hunks — one per commit-run — moving the metadata off the
+code line entirely. See [Projector], [Bro], [BLAME-004].
+
+##  Input
+
+### Context
+ -  Per-line gutter shares the source line → (a) wrong wrap width (counts the
+    gutter), (b) garbled table on soft-wrap, (c) no syntax highlighting, (d)
+    blame has no highlighting at all though it should.
+ -  A `hunk` is `{ ron60 ts; ron60 verb; u8cs uri; text + tok32 syntax tags }`
+    (`dog/HUNK.h`). That triple is the DATA; HOW it's drawn (header layout,
+    highlighting, wrap) is the SHARED bro renderer's job (`HUNKu8sFeedText/
+    Color/Html`), not the producer's. So blame's only job is to PRODUCE hunks.
+
+### Goals
+ -  Emit blame as a HUNK stream: each maximal run of consecutive lines sharing
+    one commit = **one content hunk** carrying `ts` = commit time, `verb`,
+    `uri` = the commit ref (`commit:?<sha>`, clickable via the existing
+    renderer), and the run's verbatim source as the hunk text + `tok32`
+    syntax tags.
+ -  Drop the per-line `BLAME_HW`+`L`-tok gutter entirely — the commit no longer
+    rides the source line, so the shared renderer can highlight/wrap the body
+    correctly (that's where the bro bugs get fixed, for ALL projectors).
+ -  Keep graf's blame walk (per-line attribution) — only regroup the emit.
+
+### Constraints
+ -  `blame:` stays graf-owned; output is a `dog/HUNK` stream. Presentation is
+    OUT OF SCOPE here — it belongs to the shared bro renderer.
+
+##  WIP
+
+### Design decisions
+ -  No header-style decision lives here: header layout / 1-line-run density /
+    colors are the shared renderer's presentation, not blame's. Blame emits
+    `{ts, verb, uri}`+body; the renderer draws it.
+ -  Streaming: emit each run-hunk as produced (don't accumulate the whole
+    file) — this also removes the fixed-`outbuf` overflow, so it **subsumes**
+    [BLAME-004] once landed (BLAME-004 is the minimal crash fix meanwhile).
+
+### TODOs
+ -[ ] Regroup graf's blame emit into per-commit-run content hunks
+      (`ts`/`verb`/`uri`=`commit:?<sha>` + source text + syntax `tok32`),
+      replacing the per-line `BLAME_HW`+`L`-tok gutter; stream per run.
+ -[ ] Test: `blame:` output is a hunk-per-run stream, each hunk's `uri`
+      resolving to its commit; large file (cf. [BLAME-004]) streams without
+      overflow.
+
+### Blockers and bummers
+ -  Producer half proceeds in parallel; the renderer half is [BRO-001] (done,
+    pending merge). This ticket makes blame produce well-formed hunks; the
+    banner/highlight polish rides BRO-001's shared-renderer work.
+ -  Coordinate with [BLAME-004] (the hunked emit is the durable fix; the
+    buffer grow/stream is the stopgap).
+
+##  Outcome
+
+[Projector]: ../../wiki/Projector.mkd "read-only verbless views"
+[Bro]: ../../wiki/Bro.mkd "the bro pager"
+[BLAME-004]: BLAME-004.mkd "blame BNOROOM on large files"
+[BRO-001]: ../BRO/BRO-001.mkd "shared hunk-renderer banner"
+[COMMIT-001]: ../COMMIT/COMMIT-001.mkd "commit: link via U tok32 click-target"

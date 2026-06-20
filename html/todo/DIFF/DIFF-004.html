@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-004: clickable difflet URIs — <code>diff:&lt;path&gt;?&lt;from&gt;..&lt;to&gt;#L&lt;n&gt;</code></h1>
+<p>
+Clicking a diff hunk's nav link (e.g. <code>diff:ast/BAST.c#L362</code>) gives &quot;be: no results&quot;.  The hunk's click-target URI is built with an EMPTY query (<code>graf/WEAVE.c</code> ~861/961: <code>HUNKu8sMakeURI(..,name,empty,line)</code> → <code>diff:&lt;path&gt;#L</code>), so clicking runs *<strong>wt-vs-base</strong>* (<code>beagle/BE.cli.c:251</code>) — empty for a committed file.  <code>diff:</code>'s range form <code>?from#to</code> spends the fragment on <code>&lt;to&gt;</code>, leaving no room for <code>#L</code>.  The <code>weave</code> verb already takes a <code>..</code> range in the QUERY (<code>graf/GRAF.exe.c:483-493</code>), freeing the fragment.  Adopt that for <code>diff:</code>: clickable difflets become <code>diff:&lt;path&gt;?&lt;from&gt;..&lt;to&gt;#L&lt;n&gt;</code>.  Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Nav-URI is the per-hunk <code>U</code> click target bro renders; today it omits the</li>
+</ul>
+<div>
+<p>
+version → wt-vs-base → &quot;no results&quot; on a committed file (pre-existing; DIFF-003 <code>eaa75793</code> made file diffs worth clicking, exposing it).
+</p>
+</div>
+<ul>
+<li><code>diff:</code> range = <code>?from#to</code> (query=from, *<strong>fragment=to</strong>*) — no room for <code>#L</code>.</li>
+</ul>
+<div>
+<p>
+<code>weave file?from..to</code> (GRAF.exe.c:483-493) puts both refs in the query.
+</p>
+</div>
+<ul>
+<li>Repro: <code>be diff:graf/WEAVE.c#L100</code> → empty; <code>be diff:graf/WEAVE.c?&lt;from&gt;..&lt;to&gt;</code></li>
+</ul>
+<div>
+<p>
+(range in query) leaves the fragment free for <code>#L</code>.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li><code>diff:</code> accepts <code>?&lt;from&gt;..&lt;to&gt;</code> (range via <code>..</code> in the query); the fragment</li>
+</ul>
+<div>
+<p>
+is the line anchor <code>#L&lt;n&gt;</code> (jump), not the range <code>to</code>.
+</p>
+</div>
+<ul>
+<li>Diff hunks emit clickable nav URIs <code>diff:&lt;path&gt;?&lt;from&gt;..&lt;to&gt;#L&lt;hunk_line&gt;</code>;</li>
+</ul>
+<div>
+<p>
+clicking opens the file-scoped (whole-file, DIFF-003) diff at that line.
+</p>
+</div>
+<ul>
+<li>wt-vs-base hunks keep <code>diff:&lt;path&gt;#L&lt;n&gt;</code> (no query — correct, file is dirty).</li>
+<li>Commit-show (<code>diff:?&lt;sha&gt;</code> → <code>GRAFDiffTreeRefs(parent,sha)</code>) per-file nav =</li>
+</ul>
+<div>
+<p>
+<code>diff:&lt;path&gt;?&lt;parent&gt;..&lt;sha&gt;#L&lt;n&gt;</code>.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Reuse the <code>weave</code> verb's <code>..</code> split (GRAF.exe.c:483-493) — do NOT reinvent.</li>
+<li>Guard the bare <code>?..</code> parent-branch relative form (<code>URI.mkd:42</code>): the split</li>
+</ul>
+<div>
+<p>
+must not fire on a relative <code>..</code>/<code>?./x</code> ref.
+</p>
+</div>
+<ul>
+<li>Producer/renderer split: graf emits the URI (data); bro owns the click +</li>
+</ul>
+<div>
+<p>
+<code>#L</code> jump (existing fragment handling).  <code>abc/</code> untouched.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions (settled with user 2026-06-15)</h3>
+<ul>
+<li>URI form <code>diff:&lt;path&gt;?&lt;from&gt;..&lt;to&gt;#L&lt;n&gt;</code> chosen over <code>?from#to:L&lt;n&gt;</code> (the</li>
+</ul>
+<div>
+<p>
+<code>#sym:L</code> overload) — it matches the live <code>weave</code> form and keeps the fragment purely a line anchor.  Legacy <code>?from#to</code> may stay as a fallback when the query has no <code>..</code> (back-compat), but <code>..</code> is the canonical range.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: <code>test/diff/12-difflet-click</code> — assert (a)</li>
+</ul>
+<div>
+<p>
+  <code>diff:&lt;path&gt;?&lt;from&gt;..&lt;to&gt;#L&lt;n&gt;</code> resolves to the file's range diff (whole   file, far unchanged line + change present) and (b) a tree/commit diff's   per-file hunk URI is the <code>?from..to#L</code> form, NOT the empty-query form, in   Plain/TLV.  Confirm red first.
+</p>
+</div>
+<ul>
+<li>] Parse: <code>diff:</code> query with <code>..</code> → split <code>from</code>/<code>to</code> (reuse GRAF.exe.c</li>
+</ul>
+<div>
+<p>
+  483-493), route to the range diff; fragment = line anchor.  Guard <code>?..</code>.
+</p>
+</div>
+<ul>
+<li>] Nav-URI: thread a <code>u8cs navver</code> (<code>&lt;from&gt;..&lt;to&gt;</code>) GRAFDiffTreeRefs /</li>
+</ul>
+<div>
+<p>
+  GRAFWeaveDiff → GRAFDiff2Layer → WEAVEEmitDiff/WEAVEEmitFull; the FLUSH   macros build <code>scheme + name + &quot;?&quot; + navver</code> then <code>HUNKu8sMakeURI(empty   path, sym, line)</code> for <code>#L</code>.  wt-vs-base callers pass empty navver.
+</p>
+</div>
+<ul>
+<li>] Spec/usage: update <code>URI.mkd</code> (<code>diff:?a..b</code> + <code>#L</code>) and the GRAF diff</li>
+</ul>
+<div>
+<p>
+  usage string.  Keep <code>weave</code> behaviour unchanged.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Signatures to extend: <code>GRAFDiff2Layer</code> (DIFFREF.c:136 / GRAF.h:335),</li>
+</ul>
+<div>
+<p>
+<code>GRAFDiffTreeRefs</code> (GRAF.h:326), <code>GRAFWeaveDiff</code> (BLAME.c / GRAF.h:301), <code>GRAFDiffWtFile</code>/<code>WtTree</code> (GRAF.h:324-325), <code>WEAVEEmitDiff</code>/<code>Full</code> (WEAVE.h:180/190) — wide but mechanical.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>Landed <code>7317bb48</code>: shared <code>graf_query_range()</code> factors the <code>weave</code> <code>..</code></li>
+</ul>
+<div>
+<p>
+split (guards relative <code>?..</code>/<code>?./x</code>); <code>diff:</code> takes <code>?&lt;from&gt;..&lt;to&gt;</code> as the canonical range, fragment kept free for <code>#L&lt;n&gt;</code> (legacy <code>?from#to</code> = no-<code>..</code> fallback). <code>navver</code> (<code>from..to</code>) threaded GRAFDiffTreeRefs/GRAFWeaveDiff → GRAFDiff2Layer → WEAVEEmitDiff/Full so hunks emit <code>diff:&lt;path&gt;?&lt;from&gt;..&lt;to&gt;#L</code>; wt-vs-base + <code>cat:</code> pass empty → bare <code>#L</code>. Test <code>12-difflet-click</code>; 374/374.
+</p>
+</div>
+</body>
+</html>

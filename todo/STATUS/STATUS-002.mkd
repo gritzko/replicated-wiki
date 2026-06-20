@@ -1,0 +1,68 @@
+#   STATUS-002: `be status` ignores only the sub's own `.gitignore` — needs hierarchical (cwd→$HOME) compounding
+
+`be status:<sub>/` floods with `unk` for paths the repo-root `.gitignore` should exclude (`build-*/`, `*.o`, `CMakeFiles/`, …): the relayed sub-scan `IGNOLoad`s only the SUBMODULE's own `.gitignore`, which `abc` lacks, so the parent's patterns never reach the sub's paths. Bare `be` collapses a sub to one summary row (no flood) — that's the "intermittent". Fix: hierarchical `.gitignore` resolution — load every `.gitignore` from the classified path's directory UP to `$HOME` (or `/` if outside `$HOME`) and COMPOUND them, crossing submodule boundaries, the way nested git ignores stack. NO hardcoded directory names. See [Sniff].
+
+##  Input
+
+### Context
+ -  Repro (deterministic; same on PATH `be` and a fresh build — NOT skew): build
+    the `abc` sub (makes `abc/build-debug/{CMakeCache.txt,*.o,…}`), then
+    `be status:abc/` → ~15 `unk abc/build-debug/...` rows.
+ -  `be status:<sub>/` relays into the sub's worktree; its `SNIFFOpen`/`IGNOLoad`
+    reads only the SUB's own `.gitignore` (absent for `abc`), so the repo-root
+    `.gitignore` never governs the sub's paths.
+ -  Bare `be` collapses the sub to one summary row → no flood (the "intermittent").
+ -  POST-020 (`8c7f5f3a`) REFUTED: `sniff/SNIFF.c`/`CLASS.c`/`dog/git/IGNO.c`/
+    `ULOG.c` are byte-identical to parent `d8fec51a`; the bug is pre-existing /
+    structural (since submodule projector recursion), not a regression.
+ -  The repo-root `.gitignore` already lists every flooded pattern — it just
+    isn't consulted from inside the sub.
+
+### Goals
+ -  Hierarchical `.gitignore`: classifying a path loads every `.gitignore` from
+    its directory up to `$HOME` (or `/` if not under `$HOME`) and COMPOUNDS them
+    (git precedence: nearer/deeper rules add or override; `!` negation honored).
+ -  The chain CROSSES submodule boundaries, so a parent repo's `.gitignore`
+    governs nested sub paths — this is what fixes the `abc/build-debug` flood.
+ -  No hardcoded dir names; `build`/`Corpus`/etc. are excluded ONLY because the
+    real `.gitignore`s in the chain list them.
+
+### Constraints
+ -  ROLL BACK the prior stop-gap (unconditional `build*/`/`Corpus/` ignore in
+    `IGNOMatch`): `Corpus` is not special — restore pattern-only matching.
+ -  Honor git pattern semantics (anchoring, dir-only trailing `/`, `!` negation,
+    precedence) across the compounded chain.
+ -  Terminate the walk at `$HOME` (or `/`); cache the chain per directory so the
+    status walk doesn't reload `.gitignore`s for every leaf.
+
+##  WIP
+
+### Design decisions
+ -  REJECTED (the prior worker's landed-in-tree fix, to be rolled back):
+    `igno_is_build`/`Corpus` special-case in `IGNOMatch` — a hardcoded dir
+    blacklist, not ignore resolution.
+ -  CHOSEN: an `.gitignore` STACK loaded leaf-dir → `$HOME`/`/`; `IGNOMatch`
+    consults it nearest-first with git precedence; built once per directory
+    (cached), not per leaf.  Localize in `dog/git/IGNO` + the `sniff/SNIFF`
+    open/scan that drives it (incl. the `be status:<sub>/` relay).
+
+### TODOs
+ -[ ] Roll back the prior fix: drop `igno_is_build*`/`Corpus` from `dog/git/IGNO.c`,
+      revert the test that pinned it; `IGNOMatch` pattern-only again.
+ -[ ] Implement the chain: load+stack `.gitignore` from the path's dir up to
+      `$HOME`/`/`; compound with git precedence; cache per directory.
+ -[ ] Wire into the status walk so sub subtrees inherit the parent chain.
+ -[ ] Repro-first test (hermetic): a sub subtree with a PARENT-ONLY `.gitignore`
+      → build artifacts ignored; plus a `!`-negation / precedence case. ctest green.
+
+### Blockers and bummers
+ -  Prior worker flagged the STATUS-002 worktree `/` at 100% disk (built via a
+    tmpfs symlink).  Watch disk on the rerun.
+
+##  Outcome
+ -  (open; prior build/Corpus stop-gap rejected, to be rolled back.)
+
+[Sniff]: ../../wiki/Sniff.mkd "the sniff dog (worktree status/apply)"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines — repro-first"
+[STATUS-001]: STATUS-001.mkd "be status! extended + status:<path>/ sub-scope"
+[Issues]: ../../meta/work.mkd "the parallel fix-and-land loop"

@@ -5,7 +5,7 @@ Index of Beagle's open work: one topic per dir, each holding numbered [Plan]-sha
 ##  Active topics
 
  -  [BE] — dispatcher CLI front-end; open: BE-003 (uniform error line, needs a ruling), BE-006 (one failed push prints 5 stacked Error/raw lines → collapse to one → [[BE-003]]). BE-007 (root out ROWS — `HUNKu8sFeedRow` ULOG→HUNK serializer, no types; fixed POST-022) landed `1a006d08`, retiring BE-005.
- -  [DIS] — cross-cutting spec/impl discrepancies; open incl. DIS-045 (dog/WEAVE merge mis-anchors blank vs code EOL — last blocker for [[DOG-005]] merge cut-over). DIS-043 (RGA criss-cross) `8eece3f3` + DIS-044 (causal tie-break) `5041ed18` landed.
+ -  [DIS] — cross-cutting spec/impl discrepancies; DIS-045 CLOSING (premise false — engine already correct via DIS-043/044; teeth committed `711618fe`, `be-patch-15` fail re-tasked to [[DOG-005]]). DIS-043 (RGA criss-cross) `8eece3f3` + DIS-044 (causal tie-break) `5041ed18` landed.
  -  [MEM] — memory-safety audit (digest `MEM/MEM.mkd`); 10 open (6 JSC-blocked `js` ones dropped as stale — superseded by the landed JS work).
  -  [KEEP] — keeper object pool / walks / wire; KEEP-001 (converge 4 tree-walkers → `KEEPWalkTree`) landed `0eb0afab`, KEEP-002 landed `8f7233c3`.
  -  [GIT] — pack-log format & sync; open: GIT-001 (umbrella — all impl children landed; only the PackLog wiki reconcile remains). GIT-002/003/004/005/007/008 landed; GIT-006 dropped; GIT-009 (fresh-remote `.be` blob → fsck) landed `c4955e5b`.
@@ -15,7 +15,7 @@ Index of Beagle's open work: one topic per dir, each holding numbered [Plan]-sha
  -  [BLAME] — blame perf + output; open: BLAME-001, BLAME-003 (needs a ruling).
  -  [PTR] — pointer-discipline / slice-safety audit; open (all gated): PTR-001 (abc), PTR-007 (woof). PTR-009 (URI API → `u8s out`) landed `b0455595`. The blockquote/list HasPrefix + `MKDTLineMarker` out-ptr rework was DISCARDED (stale PTR-005-reverting tangle) — needs fresh rework if wanted; PTR-006 CLOSED (won't fix).
  -  [DIFF] — the `diff:` view; open: DIFF-005 (single-file whole-file context — needs a UX ruling), DIFF-007 (`diff:<largefile>` silently empty — outtoks overflow).
- -  [DOG] — shared dog-layer reworks; DOG-002 (relocate BRAM+NEIL) landed `0a7d0e55`, DOG-003 (columnar `dog/WEAVE` core + fuzzer) landed `25fb62bd` (criss-cross split to DIS-043, landed `8eece3f3`). Open: DOG-004 (emit — WIP), DOG-005 (graf cut-over). Retires GET-001, DIS-003, DIFF-007 on land.
+ -  [DOG] — shared dog-layer reworks; DOG-002 (relocate BRAM+NEIL) landed `0a7d0e55`, DOG-003 (columnar `dog/WEAVE` core + fuzzer) landed `25fb62bd` (criss-cross split to DIS-043, landed `8eece3f3`). Open: DOG-004 (emit — WIP), DOG-005 (graf cut-over — RE-SCOPED: engine proven correct by DIS-045, fix the `WEAVEApply` closure-replay glue to match the shared-base 3-way model for ancestor-skip; `be-patch-15` 5/5). Retires GET-001, DIS-003, DIFF-007 on land.
  -  [ABC] — core library primitives; open: ABC-004 (add `abc/BIT.h` — `u1` bit type + bitmap slice/buffer + word-parallel set algebra; fixes the broken `BitUnset`, backs DOG-001's `weavescope`). ABC-001/002/003 landed.
  -  [STATUS] — the `be status` view (reopened); open: STATUS-002 (`be status` lists `.gitignore`d build artifacts as `unk` intermittently, inside a submodule subtree). STATUS-001 landed.
 

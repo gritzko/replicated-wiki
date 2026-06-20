@@ -11,16 +11,68 @@ The recursed submodule diff bypasses the parent's pager and lands on the bare te
  -  Likely cause: the sub `be diff` recursion (the relay) writes to the inherited terminal fd instead of the parent's pager stdin, so the parent diff and the sub diff travel two separate channels.
  -  Secondary (track separately if distinct): `be status` reports "1165 ok" (clean) in the same worktree though the abc sub worktree is dirty — a dirty submodule worktree is not surfaced at the parent.
 
+##  WIP (2026-06-16 — part-b DOES share the channel bug; "no results" localized)
+
+Reanimated: the [DIFF-001] part-b `diff:?<sha>` recursion shares this exact bug,
+surfaced by clicking a **submodule pin-only** commit in `be log:`.
+
+ -  Repro: `be log:` → click `cb71e65b` (the ABC-003 abc pin bump; parent diff is
+    ONLY the `abc <old>..<new>` gitlink line, all content in the abc sub) → bro shows
+    **"be: no results"**. The diff itself is correct: plain `be diff:?cb71e65b` = 74
+    lines (gitlink line + the abc `UTF8.h`/`UTF8.c` content); `be --tlv diff:?cb71e65b`
+    = 6006 bytes carrying that content. So the diff CHAIN (commit→.gitmodules→pin→sub
+    diff) is deterministic and CORRECT — the break is downstream, at the pager.
+ -  "no results" localized to **`bro/BRO.c:2568-2574`**: on a left-click of a `U`-tagged
+    nav URI, `BROForkBe` (`:2506`) runs `execlp(be,"be","--tlv",uri)` (`:2538`), drains
+    the child via `bro_drain_tlv` (`:2560`), then `new_nhunks = bro_nhunks - hunks_save;
+    if (new_nhunks == 0) { bro_flash(st,"be: no results"); }`. So for a sub-pin `diff:?<sha>`
+    the forked child's TLV deterministically yields **ZERO renderable hunks** in bro —
+    the sub-recursion's content crosses the TLV/pager boundary in a framing bro drops
+    (same root as the working-tree case: the sub diff is on a channel the parent pager
+    doesn't fold into its hunk list).
+ -  CLICK-PATH MITIGATION (done, uncommitted in main wt): `be log:` rows now emit
+    `commit:?<sha>` instead of `diff:?<sha>` (`graf/LOG.c:214` → new `GRAFPackUriCommitSha`,
+    `graf/GRAF.c`/`.h`). Commit-show always has a header hunk, so the CLICK no longer
+    bottoms out to "no results". This does NOT fix the underlying bug: directly invoking
+    `be diff:?<sub-pin-commit>` (or working-tree `be diff` over a sub-dirty wt) still
+    renders empty in the pager — that is THIS ticket.
+
 ##  Blockers
-None known. Localized to the `be diff` / `diff:` submodule-recursion + pager wiring — the same recursion [DIFF-001] part-b adds for `diff:?<sha>`; confirm whether part-b shares this channel bug.
+None known. Localized to the `be diff` / `diff:` submodule-recursion + pager wiring — the same recursion [DIFF-001] part-b adds for `diff:?<sha>`; CONFIRMED part-b shares this channel bug (above). Fix once for both the working-tree `be diff` and the `diff:?<sha>` paths.
 
 ##  Planned
 Route the recursed sub diff into the same pager stream as the parent diff.
 
  -  Repro-first ([CLAUDE] §17): a test asserting `be diff` in a sub-dirty worktree emits the sub's content diff on the SAME stdout stream as the parent (tty/pager parity with the already-correct non-tty stream), with no split between pager and terminal.
  -  Pass the parent's diff output (pager pipe / stdout fd) down through the sub-diff relay instead of letting the child inherit the bare terminal, like the other recursing verbs.
- -  Reconcile with [DIFF-001] part-b: if its `diff:?<sha>` recursion uses the same relay, fix once for both.
- -  Decide the pager-empty UX: when the parent diff is empty but a sub diff exists, the pager should show the sub diff, never "nothing!".
+ -  Reconcile with [DIFF-001] part-b: CONFIRMED same relay — fix once covers both the
+    working-tree `be diff` AND `be diff:?<sub-pin-commit>` (e.g. `cb71e65b`).
+ -  Decide the pager-empty UX: when the parent diff is empty but a sub diff exists, the pager should show the sub diff, never "nothing!" / "no results".
+ -  Repro to add: `be diff:?<sub-pin-commit>` piped vs through the pager — assert the sub
+    content reaches bro's hunk list (`new_nhunks > 0` at `bro/BRO.c:2568`), not just the
+    child's stdout bytes. Instrument `bro_drain_tlv` to see why the sub-relay TLV folds to
+    zero hunks.
+
+##  Outcome
+ -  **FIX-READY** (`$HOME/todo/DIFF-002`, stopped at commit boundary). ROOT CAUSE was
+    NOT the sub-relay framing — it was **`graf/DIFFREF.c:451` `diffref_emit_gitlink`**,
+    the one diff emitter that wrote the gitlink line `<path> <old>..<new>` via raw
+    `fprintf(stdout,…)`, bypassing the canonical `GRAFHunkEmit → HUNKu8sFeedOut` channel.
+    In `--tlv` that raw text LEADS the stream un-enveloped (before the `H` records);
+    bro's `bro_drain_tlv` (`bro/BRO.c:2560` → `dog/HUNK.c:187 HUNKu8sDrain → TLVu8sDrain`)
+    parses the leading `c` (0x63) as a short-form TLV, the `t==HUNK_TLV` gate fails, the
+    loop breaks at offset 0 → `new_nhunks==0` (`bro/BRO.c:2568`) → "be: no results".
+    Manifestation #1 (working-tree sub-dirty) was already clean (prior `BERunPipeSubs`);
+    only this gitlink-fprintf remained.
+ -  FIX: `diffref_emit_gitlink` builds the line into an `a_pad` buffer (slice helpers,
+    no ptr-arith; empty side → empty hex) and emits it as a text-only `hunk` via
+    `GRAFHunkEmit` — all modes share the one channel (TLV wraps it in `H`; plain/color
+    render identical text). `--nosub` still suppresses; empty-parent-but-sub-changed now
+    renders the sub diff in the pager. RED repro in `test/diff/08-sub-pin-bump-gitlink`
+    (pin-bump TLV → bro: 0 bytes pre-fix, 203 post-fix). Files: `graf/DIFFREF.c`,
+    `test/diff/08…/run.sh`, `test/diff/INDEX.md`. Full `ctest` **302/302**. **LANDED
+    `3dc19b0a`** (FF child of `f6bea1c5`; msg `DIFF-002: emit gitlink line as a hunk,
+    not raw fprintf`).
 
 [DIFF-001]: DIFF-001.mkd "diff: recurse into submodules + render gitlink/pin changes"
 [Verbs]: ../../wiki/Verbs.mkd "the verbs hub"

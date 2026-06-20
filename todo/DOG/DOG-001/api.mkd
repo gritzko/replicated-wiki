@@ -1,0 +1,108 @@
+#   dog/WEAVE — proposed API and on-wire format
+
+    Attached design note for [DOG-001]. Volumous detail lives here, not in the
+    ticket sections. The header `dog/WEAVE.h` lands per this sketch in [DOG-003].
+
+##  The model
+
+A weave is one file's whole DAG history as **structure-of-arrays**, byte-compatible with HUNK's `text`+`toks`. The current interleaved-TLV form plus its 7-buffer runtime decode (`wdec`) collapse into a single canonical columnar form; `struct weave` is a zero-copy parsed view over a serialized blob, and the builders write a fresh blob into a caller-owned `u8s` (resource-at-top, CLAUDE §5).
+
+```c
+typedef struct {
+    u8cs    text;     // every token's bytes, concatenated in weave order
+    tok32cs toks;     // one tok32/token: tag + {in,rm} bits + custom + end-offset
+    u8cs    ins;      // blocked-ZINT: one inserter index per in-bit token
+    u8cs    rms;      // blocked-ZINT: remover index(es) per rm-bit token
+    u64cs   commits;  // index -> commit id (hi64 of sha1); commits[0] = spine
+} weave;
+```
+
+##  tok32 in a stored weave
+
+`tok32` = `tag(5) | custom(1) | side(2) | offset(24)`. In stored-weave mode the 2-bit side is two independent bits and `custom` is repurposed:
+
+ -  `in` bit (side&1): token has an explicit inserter → read 1 ZINT from `ins`.
+ -  `in` off: inserter is the spine `commits[0]` (no `ins` entry).
+ -  `rm` bit (side&2): token is dead → read from `rms`.
+ -  `custom` bit: multiple removers (only with `rm`): read count N, then N idx.
+ -  `tok32Offset` = end offset into `text`; bytes = `text[prev_off .. off)`.
+
+So side `0`=alive spine, `1`=alive insert, `2`=removed spine, `3`=born-then-removed. At emit the same `toks` get side rewritten to display eq/in/rm per the scope — the structure never needs re-tokenizing. `pos` is NOT stored; it is the per-commit ordinal in weave order, recomputed when needed (merge alignment).
+
+##  On-wire (HUNK-compatible)
+
+Own outer container `'W'` reusing HUNK's sub-record letters so renderers/tooling interoperate (a separate type avoids HUNKu8sDrain rejecting unknown sub-records inside `'H'`):
+
+ -  `'X'` text bytes — identical to `HUNK_TLV_TXT`.
+ -  `'K'` tok32[] LE — identical to `HUNK_TLV_TOK`.
+ -  `'I'` blocked-ZINT inserter indices (one per in-bit token).
+ -  `'M'` blocked-ZINT remover indices (+ inline counts for multi).
+ -  `'C'` commit table: blocked-ZINT of `u64` ids, in fold order.
+
+`{X,K}` being byte-identical means a weave projects to a `hunk` for free, so `HUNKu8sFeedOut` and the `diff:`/`cat:` renderers work unchanged. `WEAVEParse` pre-expands `ins`/`rms` into BASS `u64` columns for O(1) per-token access while the wire stays compact.
+
+##  API
+
+```c
+// codec
+ok64 WEAVEParse    (weave *w, u8csc blob);        // zero-copy view
+ok64 WEAVESerialize(u8s into, weave const *w);    // builders usually write direct
+
+// headline builders — write a fresh serialized weave into `into`
+ok64 WEAVENext (u8s into, weave const *w, u8csc new_blob, u8csc ext, u64 commit);
+ok64 WEAVEMerge(u8s into, weave const *a, weave const *b, u64 merge_commit);
+
+// sequential scan (decodes ins/rms in lockstep with toks)
+void WEAVECurInit(weavecur *c, weave const *w);
+b8   WEAVECurNext(weavecur *c);   // exposes text, inserter, removers[], alive
+
+// scope = active-commit BITMAP over commits[] (bit i = slot i active).
+// Built once per op from a u64cs of active hashlets at the DAG boundary;
+// bit 0 (spine/root) is always set. Token classify = a bit-test on its
+// inserter/remover index — no per-token lookup.
+typedef u8cs weavescope;   // bit buffer (abc/BUF.h BitAt); bit i = commits[i]
+ok64 WEAVEScope(u8b into, weave const *w, u64cs active);  // BitSet active slots
+
+// produce / emit over scopes
+ok64 WEAVEProduce   (weave const *w, weavescope scope, u8b out);  // any past rev
+ok64 WEAVEAlive     (weave const *w,                   u8b out);  // tip fast path
+ok64 WEAVEEmitDiff  (weave const *w, u8cs name, weavescope from, weavescope to,
+                     HUNKcb cb, void *ctx);
+ok64 WEAVEEmitFull  (weave const *w, u8cs name, u8cs scheme, weavescope from,
+                     weavescope to, HUNKcb cb, void *ctx);
+ok64 WEAVEEmitMerged(weave const *w, weavescope const *groups, u32 ngroups,
+                     u8b out);
+```
+
+##  Producing any past rev
+
+Content at rev R = walk `toks` in weave order and emit `text[tok]` for every token whose **inserter bit set in scope(R)** and **no remover bit set in scope(R)**, where `scope(R)` is the bitmap of R's ancestor closure over `commits[]` (built from R's active hashlets via `WEAVEScope`). This is exactly today's `weave_scope_alive` single-predicate classifier; "produce a rev" is the `to`-only degenerate of a diff. `WEAVEAlive` is the hot tip case (rm-bit-clear scan, no set lookups). The weave alone cannot compute `scope(R)` (no parent edges stored) — graf's DAG supplies the ancestor `u64` ids, mapped through `commits[]`, as today. Fast path: with `commits[]` in fold order, a linear rev's scope is a prefix test (`index ≤ k`); only a cross-branch rev after a merge needs the full ancestor set.
+
+##  WEAVENext / WEAVEMerge
+
+ -  **Next** diffs `WEAVEAlive(w)` against tokenized `new_blob` (RAPHash +
+    relocated BRAM/NEIL): survivors keep identity, deleted survivors gain
+    `commit` as a remover (`rm`, `custom` if multi), new tokens insert with
+    inserter=`commit` anchored before the next survivor — today's
+    `weave_diff_core`, emitting columns not TLV.
+ -  **Merge** walks A and B by `(commit-id, per-commit ordinal)`: a token in
+    both emits once with remover set = UNION (dead in either ⇒ dead); a
+    side-only run splices in; colliding concurrent runs order by **commit-id**
+    (total, deterministic — no timestamp tie-break). This is the
+    shared-sequence merge [DIS-003] prescribes; conflict markers stay
+    render-time-only in `WEAVEEmitMerged`.
+
+##  Old → new mapping
+
+ -  `WEAVEFromBlob`/`…Rm`               → `WEAVENext` on an empty weave.
+ -  `WEAVEDiff`/`DiffCarry` + `weavedec`→ `WEAVENext` (columnar = the carried
+    decode; [GET-001] dissolves).
+ -  `WEAVEApply` + `WEAVEsetfn` closure → `WEAVEMerge` / scope bitset.
+ -  `WEAVE_DECODE`/`wdec` (7 BASS bufs) → `WEAVEParse` (zero-copy).
+ -  `WEAVEEmit*` `WEAVEsetfn` ctx       → `weavescope` bitmap over commits[].
+ -  positional `WEAVEMerge`             → identity-keyed merge ([DIS-003] fix).
+
+[DOG-001]: README.mkd "umbrella ticket"
+[DOG-003]: ../DOG-003.mkd "dog/WEAVE core"
+[DIS-003]: ../../DIS/DIS-003.mkd "WEAVEMerge token identity is positional"
+[GET-001]: ../../GET/GET-001.mkd "weave merge exhausts BASS"

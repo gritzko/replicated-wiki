@@ -1,0 +1,49 @@
+#   DOG-002: relocate the diff core (`BRAM`+`NEIL`) from `graf/` into `dog/`
+
+`dog/WEAVE` ([DOG-001]) must sit in the `dog/` layer, below the verb dogs, but the weave diff core it needs — `graf/BRAM` (banded Myers) and `graf/NEIL` (edit-list canonicalize/cleanup/shift) — lives in `graf/`, ABOVE `dog/`. Move both down to `dog/` (or `abc/` if fully generic) WITHOUT behaviour change, so `dog/WEAVE` has no upward dependency. Pure relocation; the rewrite itself is [DOG-003].
+
+##  Input
+
+### Context
+ -  `graf/WEAVE.c` includes `graf/BRAM.h` + `graf/NEIL.h`; `WEAVEDiff`/`Apply`
+    call `BRAMu64s` and `NEILCanon`/`Cleanup`/`Shift`.
+ -  `BRAM`/`NEIL` are generic edit-list machinery over `abc/DIFF` gauges with
+    no keeper/graf-state dependency — candidates for `dog/` or `abc/`.
+ -  `dog/INDEX.md` defines dog as "between abc and the verb dogs"; a
+    graf→dog include would invert that layering.
+
+### Goals
+ -  `BRAM`+`NEIL` headers/impl live at `dog/` (or `abc/`), behaviour
+    byte-identical; graf keeps compiling via the new include path.
+ -  No call-site logic change; `graf blame`/`diff`/`merge` output unchanged
+    (`GRAFblameident` byte-for-byte).
+
+### Constraints
+ -  If a unit pulls graf/keeper state, SPLIT it rather than dragging a
+    dependency down; verify includes are abc-only first.
+ -  No `abc/` surface change without review; prefer `dog/` when uncertain.
+
+##  WIP
+
+### Design decisions
+ -  Target `dog/` (peer of `dog/HUNK`); choose `abc/` only if includes are
+    100% abc. Move the matching tests too (`graf/test/{BRAM,NEIL}*`).
+ -  Update `CMakeLists.txt`, `graf/INDEX.md`, `dog/INDEX.md` in the same land;
+    rewrite include paths repo-wide via spot.
+
+### TODOs
+ -[ ] Confirm BRAM/NEIL include sets are abc-only (no graf/keeper symbols).
+ -[ ] Move headers+impl+tests to `dog/`; fix include paths repo-wide (spot).
+ -[ ] ctest green; `graf blame/diff/merge` byte-identical to pre-move.
+
+### Blockers and bummers
+ -  None expected; pure relocation. A hidden graf dep becomes its own ticket
+    and a unit split, never a layer inversion.
+
+##  Outcome
+ -  (open)
+
+[DOG-001]: DOG-001/README.mkd "umbrella: WEAVE → dog/ rewrite"
+[DOG-003]: DOG-003.mkd "dog/WEAVE core"
+[Graf]: ../../wiki/Graf.mkd "the graf dog"
+[Issues]: ../../meta/work.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>index</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>Index files</h1>
+<p>
+Index files serve as an overview/index for a particular dir of a codebase. Must-read when editing, but mostly useful to get a brief overview of the API and the leads into the codebase, without reading all of the headers. Every production module dir with public API must have an index.
+</p>
+<ul>
+<li>Document format: intro, then a section per each of the dir's modules with an intro and a bulletpoint list of the key entries (types, functions).</li>
+<li>Module intro: specify the mission of the module, e.g. <code>Sx.h - function templates for typed slices: length, copy, search, subslices, etc. Typed functions replace pointer arithmetics, void* use and other ills. Do sanity and bounds-checking where necessary</code>.</li>
+<li>List entry: a one-liner for a type or function, e.g. <code>*csMv(a, b) - function template, assign slice b to a (as pointers, no data copy)</code>. </li>
+<li>No need to specify args and types formally (read header for that); just give the overview/goal/context</li>
+<li>Additional explanatory text and drawings can go into per-file docs, e.g. <code>abc/S.md</code> for <code>abc/Sx.h</code> and <code>abc/S.h</code>. Section intro may link to those.</li>
+<li>Section intros and bulletpoints must be greppable (no line wrap).</li>
+<li>Line-budget is counted in 64-char lines:</li>
+</ul>
+<div>
+<ol>
+<li>top intro 8 lines, </li>
+<li>section intro 4,</li>
+<li>bulletpoint 2,</li>
+<li>nested bulletpoint 1 line,</li>
+<li>max 12 bulletpoints per module, key types/functions.</li>
+</ol>
+</div>
+</body>
+</html>

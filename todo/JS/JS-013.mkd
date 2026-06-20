@@ -1,0 +1,51 @@
+#   JS-013 [LOW]: `js2c.js` generator escaping — unescaped backslash corrupts the emitted C string; no build-time regen
+
+`js2c.js` escapes `"` and `\n` but not backslash, so a literal `\` in JS source
+corrupts the emitted C string literal; identifiers aren't sanitised and the
+generated `.js.c` aren't regenerated at build. Method: [Issues].
+
+##  Input
+
+### Context
+ -  `js2c.js:11-12` escapes `"` and `\n` but NOT backslash (nor `\r`/`\t`) → a
+    literal `\` in JS (e.g. a regex `\d`) corrupts the emitted C string literal.
+ -  Identifiers aren't sanitised → a digit/`-` produces an invalid C identifier.
+ -  Generated `.js.c` are checked in with no build-time regeneration → silent drift
+    from the `.js` source.
+ -  `WITH_JS`-gated WIP; low severity (current `.js` sources happen to avoid `\`).
+
+### Goals
+ -  Any JS source (including regexes / control chars) emits a valid C string; the
+    generated `.js.c` track the `.js` at build.
+
+### Constraints
+ -  Escape `\` FIRST, then `"` / control chars; sanitise the identifier; regenerate
+    at build.
+
+##  WIP
+
+### Design decisions
+ -  (open) Reorder/extend the escape set; sanitise the C identifier; add a build-time
+    regen step.
+
+### TODOs
+ -[ ] Repro-first: feed a `.js` containing `\d` and a digit-leading name; assert the
+      emitted `.js.c` compiles and round-trips.
+ -[ ] Fix escaping order + identifier sanitising; wire build-time regen.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `23d71efc`** (2026-06-16): js2c.js now escapes `\` FIRST, then `"`,
+    then `\t`/`\r`/other C0 controls (`\xNN`), preserving the `\n"\n"` line-split;
+    the C identifier is sanitised (`[^A-Za-z0-9_]`→`_`, digit-leading gets a `_`
+    prefix). Verified by jabc-eval round-trip (backslash/regex/tab/CR/control/
+    digit-name cases all reconstruct the original bytes; buggy vs fixed shown for a
+    `\d`-input). Blobs (`io.js.c`/`test.js.c`) are NOT regenerated (node absent) and
+    stay byte-identical — they benefit only on the next node-driven regen; currently
+    correct only because the existing `.js` sources contain no bare backslashes.
+    Build-time regen step deferred (still needs node in the toolchain).
+ -  (filed 2026-06-16 from the js/ 7-lens review)
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

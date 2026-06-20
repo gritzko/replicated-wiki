@@ -32,11 +32,21 @@ Disambiguate identical-content tokens; make the fuzzer inject them.
     (confirmed red pre-fix).
 
 ##  Blockers
- -  Blocks [DOG-005]'s merge cut-over (last failing case). The diff/blame/cat/get
-    cut-over is byte-parity-clean; DOG-005 should be re-run fresh once this lands.
+ -  No longer blocks [DOG-005]. The premise (engine mis-anchors blank vs EOL)
+    is FALSE: [DIS-043] (idh JOIN) + [DIS-044] (causal order) already removed
+    both DIS-003 layers, so the blank-vs-EOL precondition cannot arise in the
+    post-DIS-044 engine. The `be-patch-15` 5/5 fail is graf cut-over GLUE, not
+    the engine — re-tasked into [DOG-005].
 
-##  Landed
- -  (open)
+##  Outcome
+ -  Close: ALREADY FIXED by [DIS-043]/[DIS-044]; engine pinned, fuzz widened,
+    NO repro. No engine change — the changeset is pure teeth: `dog/test/WEAVE03`
+    (patch/15 step-2 shared-base oracle, `08.lib.want_step2.c` byte-exact),
+    WEAVE01 `dis045_insert_blank`/`dis045_double_blank` criss-cross-over-blank
+    cases, and `dog/fuzz/WEAVE` `W2_BLANK` injection. 322/322 green; DIS-043/044
+    not regressed; ~4.7M fuzz execs with blank injection found no mis-anchor.
+ -  Committed `711618fe` ("DIS-045 WEAVE: blank/EOL merge teeth + step-2
+    oracle"); the `be-patch-15` repro lives on in [DOG-005].
 
 [DIS-003]: DIS-003.mkd "WEAVEMerge identity positional (insert-vs-blank flake)"
 [DIS-043]: DIS-043.mkd "RGA stable-order merge (landed 8eece3f3)"

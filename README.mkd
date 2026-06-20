@@ -1,20 +1,18 @@
-#   replicated.wiki
+#   Beagle wiki
 
-A blog on replicated data, version control, and the [RDX][r] data format.
-The reference pages live in the [wiki][w]; the posts are below.
+Beagle: git-compatible LLM-age source code management system.
+Project management docs.
 
- -  [23Mar2025 Escher and computer science][e]
- -  [2Jan2026 Arguments for a syncable data exchange format][a]
- -  [19Feb2026 Beagle the revision control system][1] (part [I][1], [II][2], [III][3])
- -  [24May2026 Three years with ABC (Abstractionless C)][c]
- -  [12May2026 Beagle: git, URIs and all the dirty words][u]
+ 1. [/meta] page format requirements for each parts, e.g. `meta/wiki.mkd`,
+ 2. [/wiki] defining concepts and connections within the project,
+ 3. [/todo] tickets, issues, todos, ordered by the topic,
+ 4. [/skill] processes and skills,
+ 5. [/blog] the project's blog,
+ 6. [/html] generated HTML.
 
-[r]: https://github.com/gritzko/c-rdx "RDX data format"
-[w]: wiki/Home.mkd "Beagle wiki"
-[e]: blog/escher.mkd
-[a]: blog/args.mkd
-[1]: blog/partI.mkd
-[2]: blog/partII.mkd
-[3]: blog/partIII.mkd
-[c]: blog/abc.mkd
-[u]: blog/uris.mkd
+What to read next:
+
+ 1. To explore code
+ 2. To create tickets
+ 3. To work on the code
+ 4. To build/run/fuzz/bench

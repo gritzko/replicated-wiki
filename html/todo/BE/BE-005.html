@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-005: unify verb output via the shared ROWS/HUNK state banner</h1>
+<p>
+<code>be</code>'s verb reports must all speak ONE output model: stream color to a tty, compose ONE <code>H</code> hunk per (sub)module for <code>--tlv</code>, each headed by a pale-yellow *<strong>state banner</strong>* — built through ROWS, never per-site <code>fprintf</code> or a pasted <code>THEME_BANNER</code>. Today only the per-file tables comply; the summaries / confirmations (<code>be get</code>, post/put, <code>status!</code>) still print raw. This is the umbrella; per-verb wiring lands as the child tickets <a href="../GET/GET-026.html">GET-026</a>, <a href="../STATUS/STATUS-001.html">STATUS-001</a>, <a href="../POST/POST-018.html">POST-018</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>ROWS (<code>dog/ROWS.c</code>) is the shared builder: <code>status</code> opens it with</li>
+</ul>
+<div>
+<p>
+<code>uri=&quot;status:&quot;</code> + <code>ROWS_BATCH</code> → one banner hunk (<code>SNIFF.exe.c:457</code>).
+</p>
+</div>
+<ul>
+<li>The get checkout opens ROWS with <code>empty_uri</code> + <code>ROWS_MODE_KEYED</code>;</li>
+</ul>
+<div>
+<p>
+<code>rows_stream_one</code> (<code>ROWS.c:172</code>) zeroes ts/verb/uri → flat, NO banner.
+</p>
+</div>
+<ul>
+<li>The banner IS the hunk header, single-sourced via <code>HUNKu8sFeedBanner</code></li>
+</ul>
+<div>
+<p>
+keyed on the hunk's <code>uri/verb/ts</code> and the global <code>HUNKMode</code>.
+</p>
+</div>
+<ul>
+<li>Verb-bang already wired (<code>DOG_BANG_VERB</code>/<code>cli.bang</code>); <code>be x!</code> ≡</li>
+</ul>
+<div>
+<p>
+<code>be x --force</code> — the <a href="../STATUS/STATUS-001.html">STATUS-001</a> extended toggle.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>ONE model for every verb report: ROWS table, state-banner header,</li>
+</ul>
+<div>
+<p>
+<code>HUNKMode</code>-keyed (color stream on tty / one <code>H</code> hunk on <code>--tlv</code>).
+</p>
+</div>
+<ul>
+<li>Streaming ROWS emits the module banner ONCE before the first row (and</li>
+</ul>
+<div>
+<p>
+on an empty result) — so KEYED (get/clone) matches BATCH (status).
+</p>
+</div>
+<ul>
+<li>Per-verb wiring split into <a href="../GET/GET-026.html">GET-026</a>, <a href="../STATUS/STATUS-001.html">STATUS-001</a>, <a href="../POST/POST-018.html">POST-018</a>; each</li>
+</ul>
+<div>
+<p>
+links back here and reuses the same ROWS banner path.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>No copy-pasted banner code at call sites — only the ROWS module-hunk</li>
+</ul>
+<div>
+<p>
+header. <code>dog/ROWS</code> + <code>sniff/</code> only; no <code>abc/</code> (<a href="">[abc-changes-need-review</a>]).
+</p>
+</div>
+<ul>
+<li>Preserve live streaming for big clones (KEYED); do NOT force BATCH.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Core change in <code>dog/ROWS.c</code>: a streaming table with a non-empty</li>
+</ul>
+<div>
+<p>
+<code>uri/verb/ts</code> emits its banner once (and on empty), vs zeroing it — the single enabler every child depends on.
+</p>
+</div>
+<ul>
+<li>Children supply only their banner uri + rows; the banner, mode-keying</li>
+</ul>
+<div>
+<p>
+and <code>--tlv</code> relay stay in ROWS/HUNK.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] <code>dog/ROWS.c</code>: streaming banner-once + emit-on-empty (the shared core).</li>
+<li>] <a href="../GET/GET-026.html">GET-026</a>: bare <code>be get</code> = default GET + resulting-state banner.</li>
+<li>] <a href="../STATUS/STATUS-001.html">STATUS-001</a>: <code>be status!</code> extended + <code>be status:&lt;path&gt;/</code> sub-scope.</li>
+<li>] <a href="../POST/POST-018.html">POST-018</a>: post/put confirmations through the banner.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None yet.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>(pending land)</li>
+</ul>
+</body>
+</html>

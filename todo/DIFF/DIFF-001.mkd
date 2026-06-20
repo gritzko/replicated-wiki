@@ -1,30 +1,82 @@
 #   DIFF-001: `be diff:` must recurse into submodules and render gitlink/pin changes
 
-`be diff:?<sha>` on a commit whose only change is a **submodule pin bump** shows NOTHING. A pin-bump commit's sole change is the sub's gitlink pointer (old-pin → new-pin), which the diff renderer does not emit, and `diff:` never recurses into the submodule to show what actually changed there — so the real work is invisible from the parent. Repro (in a worktree): `be diff:?29df3828` (the ABC-002 pin bump, abc `b8ed6277` → `d8656f41`) → empty output, even though the sub moved by a whole commit. `diff:` should render the gitlink change AND recurse into the sub to show its commit-range diff, the way [GET]/[POST]/[PATCH] already recurse. See [Verbs], [Submodules], [CLAUDE].
+`be diff:?<sha>` on a commit whose only change is a submodule pin bump shows
+NOTHING: the gitlink pointer move (old-pin → new-pin) is not rendered and
+`diff:` never recurses into the sub, so the real work is invisible from the
+parent.  `diff:` should render the gitlink change AND recurse, the way
+[GET]/[POST]/[PATCH] already do.
 
-##  Issues
-A gitlink-only commit diffs to nothing, and the sub's content is never reached.
+##  Input
 
- -  `be diff:?<sha>` on a pure pin-bump commit emits no output — the `<sub>` gitlink change (old pin → new pin) is not rendered as a diff line.
- -  `diff:` does not recurse into the submodule, so the actual changes between the old and new pins (the sub's commit-range diff) are never shown.
- -  Consequence: a parent commit that advances a sub by real work looks empty; review/audit of a pin bump is impossible from the parent.
- -  Surfaced verifying ABC-002 (`29df3828` bumps abc `b8ed6277`→`d8656f41`; the FILEErr change lives in the sub, invisible from `be diff:`).
+### Context
+ -  A pure pin-bump commit diffs to nothing: the `<sub>` gitlink change is not
+    emitted, and `diff:` never reaches the sub's content.
+ -  Consequence: a parent commit that advances a sub by real work looks empty;
+    review/audit of a pin bump is impossible from the parent.
+ -  Surfaced verifying ABC-002: `be diff:?29df3828` (bumps abc
+    `b8ed6277`→`d8656f41`; the FILEErr change lives in the sub) → empty output.
 
-##  Blockers
-None. Localized to the `diff:` renderer + the submodule-recursion the other verbs already do.
-
-##  Planned
-Render the gitlink change and recurse into the sub.
-
- -  **Part-a LANDED `ef0430da`.** Repro-first ([CLAUDE] §17): a test asserting `be diff:` on a pin-bump commit (a) emits a gitlink line `<sub> <old-pin>..<new-pin>` ✓ (`test/diff/08-sub-pin-bump-gitlink`); (b) shows the sub's content diff for that range — **still open**.
- -  **DONE (part-a):** render a submodule gitlink change as a diff entry (old-pin → new-pin) — `diffref_collect_visit` now collects `WALK_KIND_SUB` entries (`is_sub`) and emits `<path> <old40>..<new40>` instead of dropping them; validated vs the real ABC-002 bump (`be diff:?29df3828` → `abc b8ed6277..d8656f41`).
- -  Recurse `diff:` into the mounted submodule and emit the sub's diff between old and new pins (path-prefixed under the mount), mirroring `GET`/`POST`/`PATCH` sub recursion; honor `--nosub` to suppress.
- -  **Part-b DEFERRED (design fork, 2026-06-11).** The existing `BEProjectorSubs` fan-out re-runs the identical `diff:?<TIP>` in each sub, which has no `<TIP>` commit (emits the gitlink line then `KEEPNONE`); the content needs `diff:?<old-pin>#<new-pin>`, range data only graf (`DIFFREF.c`) computes. Two designs surfaced: **(A) graf-driven** — `diffref_emit_gitlink` recurses into the sub's keeper shard in-process, but graf has no mount discovery (that is `be`'s job), breaking graf's per-store boundary; **(B) be-driven relay** — graf signals the pins to `be`, which rewrites the child URI to `diff:?<old>#<new>` and relays via `BERelaySub` (reuses the [[DIFF-002]] channel fix), fitting the boundary at the cost of a new graf→be pin-range signal. Decision pending.
+### Goals
+ -  Render a submodule gitlink change as a diff entry `<path> <old40>..<new40>`.
+ -  Recurse `diff:` into the mounted sub and emit its commit-range diff
+    (path-prefixed under the mount), mirroring GET/POST/PATCH; `--nosub`
+    suppresses.
  -  Keep a non-sub `be diff:` unchanged.
+ -  Tests: assert (a) the gitlink line and (b) the sub's content diff for the
+    range.
+
+### Constraints
+ -  Localized to the `diff:` renderer + the sub-recursion the other verbs do.
+ -  Pin-range diff data is graf's (`DIFFREF.c`); submodule mount discovery is
+    `be`'s job — graf must not gain mount discovery (per-store boundary).
+
+##  WIP
+
+### Design decisions
+ -  **Part-b: option B chosen (be-driven relay, 2026-06-15).** `be` already
+    owns submodule mount discovery + child dispatch (`BEProjectorSubs` →
+    `BESubsHere` → `BERelaySub`); it merely replays the parent URI verbatim
+    per sub. The fix is **diff-specific** logic in `be`'s fan-out: for `diff:`,
+    rewrite each sub's child URI to `diff:?<old-pin>#<new-pin>` from the pin
+    pair graf already computes for the gitlink line (part-a). The relay stays
+    generic for every other projector.
+ -  **Why not A (graf-driven):** graf would need submodule mount discovery,
+    breaking its per-store boundary — discovery is `be`'s job. Rejected.
+ -  **Pin source: route #3 — structural via keeper (2026-06-15).**
+    SUPERSEDES the first impl's route #1 (scraping graf's rendered
+    `<sub> <old40>..<new40>` diff text — fragile, couples to render output).
+    Pins come from `keeper/SUBS.h KEEPSubsAt(tree)` (per-tree gitlink+path
+    enumeration, built on `dog/git/SUBS.h SUBSu8sParse`): `new` = subs at the
+    target commit's tree, `old` = subs at the base commit's tree, joined by
+    mount path (new-only ⇒ added/null old, old-only ⇒ deleted/null new). No
+    capture-pipe detour, no `bediff_parse_gitlinks`. Endpoints MUST match
+    graf's diff base (single sha → vs first-parent; `?a#b` → a vs b).
+
+### TODOs
+ -[v] **Part-a:** render the gitlink change (old-pin → new-pin) —
+      `diffref_collect_visit` collects `WALK_KIND_SUB` (`is_sub`) and emits
+      `<path> <old40>..<new40>`; test `test/diff/08-sub-pin-bump-gitlink`.
+ -[v] **Part-b (route #3):** `be`'s diff fan-out builds the per-sub pin map
+      from `KEEPSubsAt` over both endpoint trees and rewrites each bumped
+      sub's child URI to `diff:?<old>#<new>`; relay + path-prefix; `--nosub`.
+ -[v] Part-b test: `be diff:` on a pin-bump shows the sub's content diff
+      (`test/diff/08`); added-sub range (`test/diff/10`).
+
+### Blockers and bummers
+ -  None — fully landed.
+
+##  Outcome
+ -  Part-a LANDED `ef0430da` (gitlink line; validated vs the ABC-002 bump →
+    `abc b8ed6277..d8656f41`).
+ -  Part-b LANDED `018a59c4` — route #3 structural pins via `KEEPSubsAt`
+    (commit-show → first-parent; `?a#b` → a/b), `sha1hex` pins, owned
+    `path8b` paths, `URIMake`-built child URIs; graf untouched. 288/288 green.
+    DIFF-001 complete.
 
 [Verbs]: ../../wiki/Verbs.mkd "the verbs hub"
 [Submodules]: ../../wiki/Submodules.mkd "submodule recursion"
 [GET]: ../../wiki/GET.mkd "GET verb"
 [POST]: ../../wiki/POST.mkd "POST verb"
 [PATCH]: ../../wiki/PATCH.mkd "PATCH verb"
+[DIFF-002]: DIFF-002.mkd "diff: sub relay channel"
 [CLAUDE]: ../../CLAUDE.md "coding guidelines"

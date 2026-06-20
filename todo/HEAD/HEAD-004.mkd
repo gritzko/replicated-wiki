@@ -1,0 +1,62 @@
+#   HEAD-004: `be head be://` fetches subs from `.gitmodules` URL, not parent
+
+For a `be://` (beagle-scheme) remote, `be head` recursing into a submodule
+goes STRAIGHT to the sub's declared `.gitmodules` URL instead of fetching the
+sub from the SAME parent source first. `be head be://localhost/beagle` reached
+into `abc` and tried `https://github.com/gritzko/libabc.git` over ssh →
+`github.com:22` refused → `WIREUNRCH`, aborting the whole peek. A beagle parent
+keeps every sub in its own shard ([Submodules]/[submodule-parent-source-fetch]),
+so the parent source MUST be the primary candidate; the declared URL is a
+fallback used only when the parent has no copy. `be get` already forwards
+`--source` (GET-011); HEAD's recursion does not. Relates to [HEAD-003].
+
+##  Input
+
+### Context
+ -  Repro (from `~/todo/DIS-045`): `be head be://localhost/beagle` →
+    `be: head .`, `be: head abc`, then `ssh: connect to host github.com port 22:
+    Connection refused`, `remote https://github.com/gritzko/libabc.git is
+    unreachable`, `Error: WIREUNRCH`, `BEDOGEXIT` — the peek dies on a sub fetch.
+ -  The sub `abc`/`libabc` lives in the parent shard; `be://localhost/beagle`
+    can serve it. Going to github first is both wrong and fatal when offline.
+ -  `be get` forwards the in-flight source as `--source <src_uri>` so sniff's
+    SubMount builds the PRIMARY candidate from the same remote
+    (`beagle/SUBS.c:485-502`, GET-011). HEAD's sub recursion omits it.
+
+### Goals
+ -  `be head be://<parent>` resolves each sub's pin from the PARENT source
+    first; the `.gitmodules` URL is tried only if the parent lacks the objects.
+ -  A dead declared URL (github offline) does NOT fail the peek when the parent
+    can serve the sub — no `WIREUNRCH` abort.
+
+### Constraints
+ -  be-scheme parents only; a git-source parent keeps git's own recursion
+    (the `--source` flag is omitted when empty — `SUBS.c:488`).
+ -  Fallback order is parent-source → declared `.gitmodules` URL, in that order;
+    never the reverse ([submodule-parent-source-fetch]).
+
+##  WIP
+
+### Design decisions
+ -  (pending) HEAD's sub recursion should forward `--source <parent_uri>` the
+    way `BEGetSubMount` does, so the read-only peek mirrors `be get`'s primary-
+    candidate logic; confirm the head path that omits it (`be_recurse_capture`
+    / the HEAD leg of dispatch).
+
+### TODOs
+ -[ ] Repro hermetic (WITH_SSH=ON): be-parent with a sub whose declared URL is
+      dead; `be head be://` must still peek via the parent.
+ -[ ] Forward the parent source into HEAD's sub recursion; fallback on miss.
+ -[ ] Verify github-offline no longer aborts; declared-URL fallback still works.
+ -[ ] Land + ctest WITH_SSH=ON.
+
+### Blockers and bummers
+ -  Needs `WITH_SSH=ON` to exercise the ssh-localhost sub path
+    ([build-with-ssh-not-inet]); plain INET=OFF silently skips it.
+
+##  Outcome
+ -  (pending)
+
+[Submodules]: ../../wiki/Submodules.mkd "submodules live in the parent shard"
+[HEAD-003]: HEAD-003.mkd "be head hunk output is plain on a tty"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

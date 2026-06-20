@@ -22,6 +22,17 @@ One iterative, depth-capped, right-sized keeper walker; the three call sites pas
  -  Reuse canonical keeper/dog-git tree-descent helpers (`KEEPGetSize`, the `WALK_KIND_*` decode) — no fresh re-rolls. Keep the change behaviour-preserving and file-scoped to keeper.
  -  Repro/regression (repro-first, [CLAUDE] §17): a table-driven test exercising a deep tree (depth-cap), a wide tree (no arena exhaustion — the MEM-023/024 leak), and the `have`-set dedup short-circuit (a shared merge-history subtree visited once). Must pin the push round-trip (`WIREPush`) green so the live path is covered, unlike the dead `keep_walk_tree` today.
 
+##  Outcome
+ -  Landed `0eb0afab` on beagle.new (shape B, scope widened to 4 walkers per the
+    ruling): one `KEEPWalkTree(root, eager, visit, ctx)` (`WALK.h:66`, impl
+    `WALK.c:156`) — bounded `try()`-per-subtree recursion (keeps DFS pre-order +
+    per-sibling rewind exact), hard `WALK_MAX_DEPTH` cap, 64 KiB carve grown on
+    `BNOROOM` (single inflate, no `KEEPGetSize` double-probe). `WALK`/`WIRECLI`/`CLOSE`
+    re-expressed as visitors; have/close-set dedup → `WALKSKIP`. The fully-dead
+    `keep_walk_tree`/`KEEPPush`/`keep_walk_commit` chain deleted (zero-caller proven).
+    New `keeper/test/CLOSE.c`; 396/396, ASan/LSan clean. Delivers the unlanded
+    [[MEM-023]]/[[MEM-024]] safety goal (depth cap + right-size) without that gate.
+
 [Keeper]: ../wiki/Keeper.mkd "the keeper dog (object pool)"
 [CLAUDE]: ../../beagle/CLAUDE.md "coding guidelines — reuse, repro-first"
 [MEM-023]: ../MEM/MEM-023.mkd "tree-walk recursion holds a 1MB buffer per level"

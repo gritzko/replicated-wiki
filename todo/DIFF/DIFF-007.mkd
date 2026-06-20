@@ -1,0 +1,65 @@
+#   DIFF-007: `diff:<largefile>` silently EMPTY — `WEAVEEmitFull` outtoks overflow
+
+`be diff:<file>` on a large file produces NO output and exits 0. Root cause:
+`WEAVEEmitFull` carves a fixed 65536-token buffer and accumulates the UNION of
+base+wt weave tokens into one hunk; when that union exceeds 65536 the `u32bFeed1`
+returns NOROOM, which is swallowed (`ret=fo; goto cleanup`) → zero hunks emitted,
+exit 0. Real bug. Split from [[DIFF-005]]'s bare-diff re-investigation. Method:
+[Issues].
+
+##  Input
+
+### Context
+ -  Reproduced in `$HOME/todo/PTR-005`. `be diff:sniff/GET.c` (and `PATCH.c`,
+    `POST.c`) → EMPTY; smaller files render fine.
+ -  Measured threshold over all 17 changed files: EMPTY exactly when wt-tokens are
+    large — GET.c (35471), PATCH.c (31786), POST.c (48653) → ALL EMPTY; largest
+    WORKING = SNIFF.exe.c (20170), then SUBS.c (19266), PUT.c (18602), AT.c (16511).
+    Boundary sits between wt≈20K (works) and wt≈32K (empty) — matches the base∪wt
+    UNION hitting the 65536 cap.
+ -  Code: `WEAVEEmitFull` carves `a_carve(u32, outtoks, 1UL << 16)` = 65536
+    (`graf/WEAVE.c:1030`) and accumulates the union of base+wt tokens into ONE hunk;
+    the only flush (`WEAVE.c:1092`) is BYTE-based at `WEAVE_FULL_HUNK_MAX` (1 MB),
+    which a ~95 KB file never reaches. Once token count > 65536, `u32bFeed1(outtoks,…)`
+    returns NOROOM → `ret=fo; goto cleanup` (`WEAVE.c:1099-1101`) → no hunk, empty
+    output, NOROOM swallowed to exit 0.
+ -  Same files render fine in BARE `be diff:` because `WEAVEEmitDiff` flushes each
+    small hunk separately and never accumulates the whole file.
+ -  Red herring: `./build-debug/bin/be` (relative argv[0]) makes the sub-recursion's
+    `execvp` fail after `chdir` into the sniff mount (`beagle/SUBS.c:331`); absolute-path
+    invocation removes that message but the diff is STILL empty — the overflow is the
+    real cause.
+
+### Goals
+ -  `be diff:<largefile>` renders its full-file diff (or a bounded one) instead of
+    silently emitting nothing; the NOROOM is never swallowed into a success exit.
+
+### Constraints
+ -  graf/WEAVE change gates for review. Add a large-file (>65536-token) diff test that
+    asserts non-empty output.
+
+##  WIP
+
+### Design decisions
+ -  Two complementary fixes: (1) flush `WEAVEEmitFull` by TOKEN-count too (not only the
+    1 MB byte cap) so the buffer never overflows; (2) stop swallowing NOROOM — propagate
+    it so a truncated/failed diff is an error, not a silent exit 0.
+ -  Note: [[DIFF-005]] option-a (bound large files → `WEAVEEmitDiff`) would INCIDENTALLY
+    make GET.c/PATCH.c/POST.c render, masking this — but the swallowed-NOROOM and missing
+    token-flush should be fixed regardless.
+
+### TODOs
+ -[ ] Repro: `be diff:sniff/GET.c` empty; confirm token count > 65536 and NOROOM at
+      `WEAVE.c:1099`.
+ -[ ] Fix: token-count flush in `WEAVEEmitFull` + propagate NOROOM (no swallow).
+ -[ ] Test: a >65536-token file diff is non-empty (and errors instead of silently
+      empties on genuine overflow).
+
+### Blockers and bummers
+ -  Interacts with [[DIFF-005]] (option-a masks it) — fix independently anyway.
+
+##  Outcome
+ -  (open — scan in [[DIFF-005]])
+
+[DIFF-005]: DIFF-005/README.mkd "bare-diff re-investigation (parent scan)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

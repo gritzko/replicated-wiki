@@ -16,12 +16,8 @@
 <code>be put</code> is the reflog-write verb — stage files (into the <code>.be/wtlog</code> ULOG), set a branch tip, fast-forward a remote. Tickets here cover its reflog-edit correctness. The fix-and-land method is <a href="../../rule/Issues.html">Issues</a>.
 </p>
 <h2>Active tickets</h2>
-<ul>
-<li><a href="PUT-002.html">PUT-002</a> — *<strong>CRITICAL.</strong>* <code>be put ?#&lt;sha&gt;</code> can't reset a branch tip: a <code>POST_MIG</code> shared-ancestry walk refuses when the new sha doesn't reach the current tip within <code>POST_MIG_MAX</code> (a re-hashed/partially-indexed history bails), and neither <code>--force</code> nor the <code>!</code> bang bypasses the gate — contradicting &quot;PUT is unconstrained.&quot; A contaminated <code>?main</code> can't be rolled back through <code>be</code> at all (only hand-editing <code>refs</code> + dropping <code>.refs.idx</code>). A bare/<code>--force</code> tip-set must set the ref OUTRIGHT, no reachability walk.</li>
-</ul>
-<h2>Landed (breadcrumbs)</h2>
-<ul>
-<li><a href="PUT-001.html">PUT-001</a> — *<strong>LANDED <code>d628fd67</code>.</strong>* <code>be put &lt;sub&gt;/&lt;path&gt;</code> now relays into a mounted submodule's own staging: <code>BEActSubsPut</code> (<code>beagle/BE.cli.c:2914</code>) routes each path-form arg that lands in a mount through <code>BERelaySub</code> to the sub's <code>be put</code>, parent-bound paths fall through to <code>sniff put</code>; honors <code>--nosub</code>, staging stays wtlog-only. Regression <code>test/put/12-sub-path-scoped</code> (passes WITH_SSH). Related: <a href="">[DIS-034</a>] (<code>be put &lt;dir&gt;</code> trailing-slash) is a separate PUT path-classification gap.</li>
-</ul>
+<p>
+No open PUT tickets.
+</p>
 </body>
 </html>

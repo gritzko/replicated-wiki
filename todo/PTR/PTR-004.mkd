@@ -1,0 +1,50 @@
+#   PTR-004: graf/ DAGParents subtraction, weave_set ptr+len
+
+The 2026-06-15 audit found graf/ builds slices via the API then rips them apart by pointer subtraction (systemic in the DAG-parents path), passes hot R-set kernels as `ptr+len`, and reinvents `sha1FromHex`. Behavior-preserving, one worktree; blame/log/weave outputs stay byte-identical (`GRAFblameident`).
+
+##  Input
+
+### Context
+ -  `graf/DAG.c:470`, `graf/BLAME.c:413-418`, `graf/LOG.c:447` — `DAGParents` consumes a `wh64s` (advances `parents[0]`), so every caller saves `wh64 *base=parents[0]`, recovers N as `parents[0]-base`, and re-walks `for (p=base; p<parents[0]; p++)`. Systemic "build-then-rip" anti-pattern.
+ -  `graf/WEAVE.c:81,92,99` — `weave_rec_R(… u32 const *set, u32 n)`, `weave_set_eq(const u32*, u32 na, …)`, `weave_set_union(… const u32 *b, u32 nb, u32 *out, u32 cap, u32 *n)`: hot R-set kernel as bare `ptr+len` with separate `cap`/out-`n` (first arg already takes `u32cs aset`).
+ -  `graf/WEAVE.c:167-181` — `WEAVECurNext` walks a TLV body with `p=val[0], e=val[1]; p[0]; p+1+idl>e; {p+1, p+1+idl}`.
+ -  `graf/DAG.h:113-116` & `graf/DAG.c:364-365` — `{out->data, out->data+20}` / `{value[0], value[0]+40}` reinvent `sha1FromHex`; `DAGsha1FromHex` also takes `char const *hex40`.
+ -  `graf/GRAF.c:138-141` — `wh128cp base=(wh128cp)raw[0]; runs[..][1]=base+ (raw[1]-raw[0])/sizeof(wh128)`. `graf/INDEX.c:144` — `wh128bDataHead(queue)+head++` BFS queue.
+ -  `graf/LOG.c:271` `path[0]+=2`; `graf/INDEX.c:266`/`graf/LOG.c:687` `val[0]++`; `graf/GRAF.exe.c:143` `{q[0]+2, …}`; `graf/BLAME.c:811` `udata[0]+1`.
+
+### Goals
+ -  Give `DAGParents` an out-count or return the populated slice; callers iterate with `$for(wh64, p, parents)` / `wh64sLen` — no saved base, no subtraction, no `p<term` loop.
+ -  `weave_set_*` take `u32cs`/`u32s` slices (room/length implied), matching `weave_set_union`'s existing first arg.
+ -  `WEAVECurNext` via `u8csUsed1`/`u8csHead` + a typed length-prefixed drain (`ZINTu8sDrain128`); drop the manual `>e` guards.
+ -  Delete `DAGsha1FromHex`'s body → call `sha1FromHex`; signature → `u8csc hex`. Same for `DAG.c:364`.
+ -  `GRAF.c` runs via a typed `wh128sOfBytes`/cast helper (no `/sizeof`); `INDEX.c` queue via `wh128bAt(queue, head++)`.
+ -  Head bumps → `u8csUsed`/`u8csUsed1`; `{q[0]+2,…}` → `u8csUsed(q,2)`+`a_head`/`a_rest`; BLAME URI rest → `a_rest`.
+
+### Constraints
+ -  Behavior-preserving; `ctest -j16 --timeout 10` + graf fuzzers green; blame/log byte-identity via the existing ident tests.
+ -  `graf/NEIL.c` dense diff-kernel indexing (`buf[m++]`, `e32* + u32 n`, `NEILTokEq` slice subtraction) is a self-contained pre-sized inner kernel — out of scope.
+ -  `void *ctx` callbacks (REBASE/WEAVE/GET/BLAME/JOIN/MAP) are the sanctioned idiom — out of scope.
+
+##  WIP
+
+### Design decisions
+ -  Fix `DAGParents`' contract first (out-count/returned slice) — it removes the base-save + subtraction + raw loop at all three call sites in one change.
+
+### TODOs
+ -[ ] Repro-first: lock blame/log/weave outputs on existing tables.
+ -[ ] `DAGParents` return-slice/out-count + update DAG/BLAME/LOG callers.
+ -[ ] `weave_set_*` → `u32cs`/`u32s`.
+ -[ ] `WEAVECurNext` → slice + typed drain.
+ -[ ] sha-hex reinvention → `sha1FromHex` (DAG.h, DAG.c).
+ -[ ] GRAF/INDEX cast+`/sizeof` and BFS queue → typed access; head bumps → `u8csUsed`.
+ -[ ] Build + ctest; report done vs skipped.
+
+### Blockers and bummers
+ -  `DAGParents` is shared across DAG/BLAME/LOG — change the signature in one commit to keep all callers compiling.
+
+##  Outcome
+
+ -  pending.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

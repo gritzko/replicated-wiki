@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLAME-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BLAME-005: emit blame as per-commit hunks (header = commit, body = source)</h1>
+<p>
+Blame today prepends a fixed-width gutter to every source line (<code>graf/BLAME.c</code> ~line 757: <code>BLAME_HW</code> chars + an <code>L</code>-tok before each line), so the commit metadata *<strong>shares the line with the code</strong>*. That is the root of the bro breakage: the gutter is counted in the wrap width (wraps early), soft-wrap mangles the table, and the line can't be syntax-highlighted. Restructure the output into <code>dog/HUNK</code> hunks — one per commit-run — moving the metadata off the code line entirely. See <a href="../../wiki/Projector.html">Projector</a>, <a href="../../wiki/Bro.html">Bro</a>, <a href="BLAME-004.html">BLAME-004</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Per-line gutter shares the source line → (a) wrong wrap width (counts the</li>
+</ul>
+<div>
+<p>
+gutter), (b) garbled table on soft-wrap, (c) no syntax highlighting, (d) blame has no highlighting at all though it should.
+</p>
+</div>
+<ul>
+<li>A <code>hunk</code> is <code>{ ron60 ts; ron60 verb; u8cs uri; text + tok32 syntax tags }</code></li>
+</ul>
+<div>
+<p>
+(<code>dog/HUNK.h</code>). That triple is the DATA; HOW it's drawn (header layout, highlighting, wrap) is the SHARED bro renderer's job (<code>HUNKu8sFeedText/ Color/Html</code>), not the producer's. So blame's only job is to PRODUCE hunks.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>Emit blame as a HUNK stream: each maximal run of consecutive lines sharing</li>
+</ul>
+<div>
+<p>
+one commit = *<strong>one content hunk</strong>* carrying <code>ts</code> = commit time, <code>verb</code>, <code>uri</code> = the commit ref (<code>commit:?&lt;sha&gt;</code>, clickable via the existing renderer), and the run's verbatim source as the hunk text + <code>tok32</code> syntax tags.
+</p>
+</div>
+<ul>
+<li>Drop the per-line <code>BLAME_HW</code>+<code>L</code>-tok gutter entirely — the commit no longer</li>
+</ul>
+<div>
+<p>
+rides the source line, so the shared renderer can highlight/wrap the body correctly (that's where the bro bugs get fixed, for ALL projectors).
+</p>
+</div>
+<ul>
+<li>Keep graf's blame walk (per-line attribution) — only regroup the emit.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li><code>blame:</code> stays graf-owned; output is a <code>dog/HUNK</code> stream. Presentation is</li>
+</ul>
+<div>
+<p>
+OUT OF SCOPE here — it belongs to the shared bro renderer.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>No header-style decision lives here: header layout / 1-line-run density /</li>
+</ul>
+<div>
+<p>
+colors are the shared renderer's presentation, not blame's. Blame emits <code>{ts, verb, uri}</code>+body; the renderer draws it.
+</p>
+</div>
+<ul>
+<li>Streaming: emit each run-hunk as produced (don't accumulate the whole</li>
+</ul>
+<div>
+<p>
+file) — this also removes the fixed-<code>outbuf</code> overflow, so it *<strong>subsumes</strong>* <a href="BLAME-004.html">BLAME-004</a> once landed (BLAME-004 is the minimal crash fix meanwhile).
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Regroup graf's blame emit into per-commit-run content hunks</li>
+</ul>
+<div>
+<p>
+  (<code>ts</code>/<code>verb</code>/<code>uri</code>=<code>commit:?&lt;sha&gt;</code> + source text + syntax <code>tok32</code>),   replacing the per-line <code>BLAME_HW</code>+<code>L</code>-tok gutter; stream per run.
+</p>
+</div>
+<ul>
+<li>] Test: <code>blame:</code> output is a hunk-per-run stream, each hunk's <code>uri</code></li>
+</ul>
+<div>
+<p>
+  resolving to its commit; large file (cf. <a href="BLAME-004.html">BLAME-004</a>) streams without   overflow.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Producer half proceeds in parallel; the renderer half is <a href="../BRO/BRO-001.html">BRO-001</a> (done,</li>
+</ul>
+<div>
+<p>
+pending merge). This ticket makes blame produce well-formed hunks; the banner/highlight polish rides BRO-001's shared-renderer work.
+</p>
+</div>
+<ul>
+<li>Coordinate with <a href="BLAME-004.html">BLAME-004</a> (the hunked emit is the durable fix; the</li>
+</ul>
+<div>
+<p>
+buffer grow/stream is the stopgap).
+</p>
+</div>
+<h2>Outcome</h2>
+</body>
+</html>

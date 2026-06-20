@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+</head>
+<body>
+<h1>Active ticket board</h1>
+<p>
+Index of Beagle's open work: one topic per dir, each holding numbered <a href="../wiki/Plan.html">Plan</a>-shaped tickets cleared by the parallel <a href="../skill/Issues.html">Issues</a> fix-and-land loop. Each line below names a topic and its live state; per-topic detail lives in <code>todo/&lt;TOPIC&gt;/README.mkd</code>. A fully-landed ticket drops from its topic page; a closed topic drops from here. Landed history lives in <code>be log</code>.
+</p>
+<h2>Active topics</h2>
+<ul>
+<li><a href="BE/README.html">BE</a> — dispatcher CLI front-end; open: BE-003 (uniform error line, needs a ruling), BE-005 (umbrella: unify verb output via the shared ROWS state banner; children STATUS-001/POST-018).</li>
+<li><a href="DIS/README.html">DIS</a> — cross-cutting spec/impl discrepancies; 22 open (store layout, bang-model specs, weave/patch base-position bugs).</li>
+<li><a href="MEM/README.html">MEM</a> — memory-safety audit (digest <code>MEM/MEM.mkd</code>); 16 open, several <code>js</code> ones blocked on a JSC build.</li>
+<li><a href="KEEP/README.html">KEEP</a> — keeper object pool / walks / wire; open: KEEP-001 (converge the 3 tree-walkers), KEEP-002 (torn-index publish).</li>
+<li><a href="SUBS/README.html">SUBS</a> — submodule recursion; open: SUBS-013 (<code>git submodule add</code> parity), SUBS-014/015 (put/blob edge cases).</li>
+<li><a href="POST/README.html">POST</a> — commit-path gaps; open: POST-006 (POSTCFLCT false-fires on marker strings → <a href="">[DIS-040</a>]), POST-018 (post/put confirmations via the shared banner → <a href="">[BE-005</a>]).</li>
+<li><a href="GET/README.html">GET</a> — checkout / fetch / sync; open: GET-009 (be:// sync umbrella), GET-017 (→ <a href="">[DIS-039</a>]), GET-018 (atomic wt GET), GET-022 (no per-file checkout-from-rev — <code>be get path?rev</code> drops the path).</li>
+<li><a href="STATUS/README.html">STATUS</a> — the worktree status view; open: STATUS-001 (<code>be status!</code> extended branch/remote overview + <code>be status:&lt;path&gt;/</code> sub-scope → <a href="">[BE-005</a>]).</li>
+<li><a href="BLAME/README.html">BLAME</a> — blame perf + output; open: BLAME-001, BLAME-003 (needs a ruling).</li>
+<li><a href="PTR/README.html">PTR</a> — pointer-discipline / slice-safety audit; open (all gated): PTR-001 (abc), PTR-007 (woof), PTR-009 (URI API). The blockquote/list HasPrefix + <code>MKDTLineMarker</code> out-ptr rework was DISCARDED (stale PTR-005-reverting tangle) — needs fresh rework if wanted; PTR-006 CLOSED (won't fix).</li>
+<li><a href="JS/README.html">JS</a> — JABC (JavaScriptCore) bindings; JS-002..014 (the <code>js/</code> 7-lens review) ALL FIXED on branch <code>?/dogs/js</code> (14 commits, repro-tested green under WITH_JS+ASAN, <code>ctest -R JABC</code> 3/3) — *<strong>awaiting review + merge to trunk</strong>*; build first restored (drop dead <code>convert.cpp</code>/rdx, map <code>ABC_BASS</code>). Open: JS-001 (PROPOSAL — ABC containers in JS over JS-owned <code>ArrayBuffer</code>/<code>mmap</code>; awaiting a scope decision). Deferred to rdx re-wiring: convert.cpp i64→BigInt (JS-008) + its underflow sites (JS-004).</li>
+<li><a href="DIFF/README.html">DIFF</a> — the <code>diff:</code> view; open: DIFF-005 (single-file whole-file context — needs a UX ruling), DIFF-007 (<code>diff:&lt;largefile&gt;</code> silently empty — outtoks overflow).</li>
+</ul>
+</body>
+</html>

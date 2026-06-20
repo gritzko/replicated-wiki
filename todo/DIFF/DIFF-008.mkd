@@ -1,0 +1,78 @@
+#   DIFF-008: tree-diff silently truncates later files — per-file BASS scratch is never rewound in `graf_diff_tree_refs_inner`
+
+The per-file loops in `graf_diff_tree_refs_inner` call `GRAFDiff2Layer` with NO
+`call()`/`try()` frame: the `ok64` return is IGNORED, and `GRAFDiff2Layer`'s internal
+BASS scratch is not rewound between files. So scratch accumulates across the file
+list until `a_carve` returns NOROOM — and from then on every remaining file's diff
+SILENTLY FAILS and is dropped from the output. A big-blob file (or just enough
+files) thus truncates the tail of a `be diff:`/`commit:` tree diff with no error.
+Surfaced by [[BLAME-006b]] (a 9.5 MB binary starved the last file); its binary-skip
+MASKED the trigger but did not fix the root. Method: [Issues].
+
+##  Input
+
+### Context
+ -  `graf/DIFFREF.c::graf_diff_tree_refs_inner` (`:513`) — the added/changed-file loop
+    (`:555-589`) and the deletion loop (`:592-612`) each end in a BARE
+    `GRAFDiff2Layer(path, ext, old_data, new_data, NO, navver);` (`:588`, `:611`) —
+    the return is discarded, so a per-file NOROOM/failure is swallowed, not propagated.
+ -  `GRAFDiff2Layer` (`:155`) does `GRAFArenaInit` + the weave carves (e.g. the wt-base
+    wrapper `a_carve(u8, base_buf, 16<<20)` `:217`; `WEAVEEmitFull` carves the 65536
+    `outtoks` etc.). None of that is released between loop iterations — there is no
+    per-file `try()` rewind or `Bu8mark`/rewind. The code comment at `:370-372`
+    documents the failure mode: "carves 16 MB per file — until `a_carve` returns NOROOM
+    and the outer call frame unwinds."
+ -  Symptom (from [[BLAME-006b]]): on the root-tree diff, the LAST file
+    (`beagle/test/be-unknown-command.sh`) was silently truncated because the 9.5 MB
+    `dog/dogs.png` weave had exhausted the BASS. BLAME-006b's binary-skip removed THAT
+    trigger but a large-enough text set (or many files) still truncates the tail.
+
+### Goals
+ -  Each per-file diff runs inside its OWN BASS frame so its scratch is released before
+    the next file — scratch is bounded to one file's worth, not the cumulative tree.
+ -  A per-file `GRAFDiff2Layer` failure is propagated/surfaced (or at minimum logged),
+    NEVER silently swallowed into a truncated-but-exit-0 diff.
+
+### Constraints
+ -  Output byte-identical on inputs that fit today; the fix only removes the
+    accumulation. graf change gates for review. Keep the [[BLAME-006b]] binary-skip +
+    one-sided short-circuit intact.
+
+##  WIP
+
+### Design decisions
+ -  (open) Wrap each per-file `GRAFDiff2Layer` in a `try()`/`then` frame (rewinds BASS to
+    the pre-call mark after each file) — the canonical PRO.h pattern — or take an explicit
+    `Bu8mark` before the call and rewind after. Stop ignoring the return: `call()`/`try()`
+    it so NOROOM/failure propagates instead of truncating.
+
+### TODOs
+ -[ ] Repro-first: a hermetic tree diff with enough large text files that a LATE file is
+      dropped on the current tree (the BLAME-006b `be-unknown-command.sh` truncation is the
+      witness shape); assert ALL files render after the fix, byte-identical for small sets.
+ -[ ] Per-file BASS frame (`try()`/rewind) around each `GRAFDiff2Layer`; propagate the return.
+ -[ ] Test: large multi-file tree diff is complete (no silent tail truncation); a genuine
+      per-file failure surfaces rather than exit-0-truncates.
+
+### Blockers and bummers
+ -  Pairs with [[BLAME-006b]] (which masked one trigger). Touches the hot tree-diff loop —
+    verify perf is unchanged (a per-file rewind is cheap; it only frees, doesn't re-carve).
+
+##  Outcome
+ -  **LANDED `b9ef44b2`** (FF child of `d6f35358`; 306/306): each per-file
+    `GRAFDiff2Layer` at `graf/DIFFREF.c:588/611` is now `call()`-wrapped (rewinds
+    ABC_BASS per file + propagates a per-file NOROOM); `test/diff/17-tree-no-truncate`.
+    (First cut used `try(…); nedo done;` — identical to `call()` per `abc/PRO.h:77/97`;
+    tightened to plain `call()`.) Root cause confirmed —
+    `GRAFDiff2Layer`'s weave carves a FIXED ~17 MB BASS block per file; with no
+    surrounding frame, scratch accumulated until `a_carve` NOROOM at ~58 files, after
+    which every remaining file's diff silently failed (return ignored) and was dropped
+    (exit 0). Fix (`graf/DIFFREF.c:588` + `:611`): `try(GRAFDiff2Layer,…); nedo done;` —
+    `try()` rewinds ABC_BASS per file (bounds scratch to one file), `nedo done`
+    propagates a genuine NOROOM instead of truncating. RED→GREEN `test/diff/17-tree-no-truncate`
+    (80 tiny files: unfixed truncates at `f056`/drops `f079`; fixed renders all 80).
+    Small-set output byte-identical, perf unchanged, BLAME-006b/DIFF-001/002 intact.
+    **306/306**. Awaiting gate. Msg: `DIFF-008: per-file try() frame in tree-diff; no truncation`.
+
+[BLAME-006b]: ../BLAME/BLAME-006b.mkd "root-tree diff perf (masked this)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

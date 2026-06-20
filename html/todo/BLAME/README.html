@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BLAME tickets: blame performance + output</h1>
+<p>
+<code>be blame</code> perf on inflate-bound history walks, plus output correctness/UX. Each entry below is one open ticket with its live state; a landed ticket (verify with <code>be log | grep BLAME-NNN</code>) drops off. <a href="">BLAME-002</a> (index-served tree descent) landed <code>1a5acce8</code>; the rest below remain. The fix-and-land method is <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="BLAME-001.html">BLAME-001</a> — blame re-inflates unchanged blobs across all ancestors; compare OIDs top-down, inflate only on change.</li>
+<li><a href="BLAME-003.html">BLAME-003</a> — parallelize blame's residual blob inflates across cores; needs a ruling (ROI fell after BLAME-002).</li>
+<li><a href="BLAME-005.html">BLAME-005</a> — blame PRODUCES per-commit-run hunks (<code>{ts,verb,uri=commit:?&lt;sha&gt;}</code> + source + syntax toks) instead of a per-line gutter; the shared bro renderer (separate, needs improvement) then highlights/wraps. Removes the gutter-on-code-line breakage; subsumes <a href="BLAME-004.html">BLAME-004</a>'s stopgap.</li>
+</ul>
+<p>
+BLAME-006a (blame skipped a DELETED file instead of folding an empty layer → readd inherited the ROOT seq) landed <code>fa09701f</code>. BLAME-006b (<code>commit:?&lt;root&gt;</code> token-diffed the whole initial tree — root cause a 9.5 MB binary; skip token-diff of binary blobs + one-sided short-circuit) landed <code>8d66369c</code>. Both split from the <a href="">[BLAME-006</a>] umbrella scan.
+</p>
+</body>
+</html>

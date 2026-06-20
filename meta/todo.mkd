@@ -1,0 +1,46 @@
+#   Tickets
+
+    -- gritzko
+
+For LLM-heavy development, a machine-writable, machine-readable ticket format is necessary to organize the process. Tickets must track an issue as it is encountered/develops, a tally of open tickets must be kept.
+
+  - Ticket pages are stored as `todo/TOPIC/TOPIC-123.mkd` or `todo/TOPIC/TOPIC-123/README.mkd` (for bigger ones).
+  - Ticket documents follow the [wiki] conventions, including the line budget.
+  - Open tickets get listed in higher-level READMEs. Those in turn must be mentioned in grandparent READMEs. 
+  - Closed tickets/topics must be delisted from parents.
+  - Corroborating evidence files (logs, screenshots may accompany tickets).
+  - Section layout for tickets is stricter.
+  - Crosslinking between tickets, wiki and other pages is encouraged.
+  - A spec-code discrepancy or a bug found mid-fix becomes its OWN ticket, link both ways.
+  - Comments to code changes may mention a ticket, preferably in the budget of 2 lines.
+
+##  File layout
+
+Tickets are grouped into topics. Tickets from different topics would safely parallelize in most cases. Fat tickets with additional/attached files files get directory layout, one-shotters stay single-file.
+
+  - Thin tickets `todo/TOPIC/TOPIC-123.mkd`.
+  - Fat tickets `todo/TOPIC/TOPIC-123/README.mkd`.
+  - Attached files must be linked from README.mkd.
+  - Topics most often correspond to subsystems.
+  - `todo/README.mkd` lists active topics (bulletpoints with links) and a nested list of open tickets (one-liners)
+  - `todo/TOPIC/README.mkd` lists active tickets (bulletpoints with links).
+  - Concurrent users may book ticket number ranges, e.g. `ANY-3??` or `POST-4??`, marked in `todo/README.mkd` or `todo/TOPIC/README.mkd` (Section "Sessions", bulletpoints).
+  - Concurrent page edits are probably resolved by SCM.
+
+##  Section structure
+
+Ticket page section structure is fixed. Any volumous texts (logs, chats, related docs) must be kept as separate files, any related pages linked. Sections that are exclusively human-editable get marked with `Hand written` under the title or with `-- John A. Smith` if single-author (indent 4 spaces). Request the user to edit those.
+
+  - `##  Input` sections:
+     1. `### Context`: the use case, currently blocked work, incident evidence like logs or chat excepts.
+     2. `### Goals`: feature to implement, problem to solve, bug to fix, limits to fit under, tests to make pass.
+     3. `### Constraints`: resource limitations, APIs to use, LoC budget, time/tockens to spend, etc.
+  - The `##  WIP` sections:
+     1. `### Design decisions`.
+     2. `### TODOs`, linked and sub-tickets (a `-[ ]` TODO list, marked once done `[v]`, blocked `[-]` wontfix/moot `[x]`). TODOs may nest (respect the line budget).
+     3. `### Blockers and bummers`.
+  - `##  Outcome`: mentions the hashlets of landed commits (bulletpoints), cancelled parts (bulletpoints).
+
+
+
+

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PTR-008</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PTR-008: mark/+js/+beagle/ argv offset-math, Fork/Join</h1>
+<p>
+The 2026-06-15 audit found beagle/ does execvp argv assembly with hand-rolled offset↔pointer math (duplicated 3×) and hand Fork/Join; mark/ hands back a bare interior pointer from a marker scan; js/ builds slices from typed-array base+bytelength. Behavior-preserving, one worktree; js parts may be CI-unbuildable (JSC), note like the MEM js tickets.
+</p>
+<h2>Input</h2>
+<h3>Context — beagle/</h3>
+<ul>
+<li><code>beagle/SUBS.c:99-103,148-151,280-306</code> &amp; <code>beagle/BE.cli.c:2772-2812</code> — execvp argv builder: <code>*off_out=(size_t)(u8bIdleHead(pool)-u8bDataHead(pool))</code> and <code>argv_c[i]=(char*)(u8bDataHead(pool)+offs[i])</code>; <code>BE.cli.c</code> re-inlines <code>be_pool_push</code>'s body. Duplicated 3×.</li>
+<li><code>beagle/BE.cli.c:4096,4296,4388,4456</code> — <code>before=u8bIdleHead(scratch); …feed…; after=u8bIdleHead(scratch); {before,after}</code> hand Fork/Join. <code>:4098</code> <code>u8 _qpad[320]</code>+<code>{_qpad,_qpad+sizeof}</code>. <code>:2912</code> split on <code>=</code> via raw <code>eq</code> pointer + <code>eq+1</code>. <code>:2130</code> <code>{spot_lit, spot_lit+4}</code>.</li>
+<li><code>beagle/SUBS.c:625</code> (decl <code>SUBS.h:117</code>) — <code>BEGetDrainSubs(u8cs *flag_head, u8cs *flag_term)</code> head/term pair, iterated <code>for (fp=head; fp&lt;term; fp++)</code>.</li>
+</ul>
+<h3>Context — mark/ &amp; js/</h3>
+<ul>
+<li><code>mark/MARK.c:531-579</code> — <code>MKDTLineMarker(linef, depth, &amp;mend)</code> returns a bare <code>u8c *mend</code>, then <code>{mend, linec[1]}</code> rebuilds slices ×4. <code>:34,605</code> — <code>markref refs[MARK_MAX_REFS]</code>+<code>int nrefs</code> (silent truncation at 512). <code>:46</code> — <code>{(u8c*)s, (u8c*)s+strlen(s)}</code>.</li>
+<li><code>js/main.cpp:138-141</code> — <code>page[len-1]='\n'; JSStringGetUTF8CString(…, page+len, PAGESIZE-len)</code>: <code>page+len</code> offset + <code>len-1</code> underflows if <code>len==0</code>; recurring raw <code>char page[PAGESIZE]</code>.</li>
+<li><code>js/JABC.hpp:40-65</code> — <code>{_##varn,_##varn}</code> then <code>varn[1]+=len-1</code>; raw VLA <code>u8 _##varn[maxlen]</code>. <code>js/io.cpp:102-105</code> — <code>ta[0]=(u8*)…BytesPtr(); ta[1]=ta[0]+…ByteLength()</code>. <code>js/io.cpp:56-60</code> — <code>ptr-JS_FILES</code> fd-index recovery.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>One shared <code>BEArgvPack(pool, argv, char **out)</code> helper owning the offset↔pointer math; the three sites call it (keep the <code>char**</code> execvp ABI, move only the arithmetic).</li>
+<li>Hand Fork/Join → <code>u8sFork</code>/<code>u8sJoin</code>; <code>_qpad</code>→<code>a_pad(u8, qpad, 320)</code>; <code>=</code>-split→<code>u8csFind</code>+<code>a_head</code>/<code>a_rest</code>; <code>{spot_lit,spot_lit+4}</code>→<code>u8slit</code>; <code>BEGetDrainSubs</code>→one <code>u8css</code> iterated with <code>$for</code>.</li>
+<li>mark: <code>MKDTLineMarker</code> returns a rest-slice (<code>u8csp</code>), not a loose <code>mend</code>; <code>refs</code>→a typed <code>markref</code> buffer (drop the <code>MARK_MAX_REFS</code> cap); <code>{s,s+strlen}</code>→<code>a_cstr</code>.</li>
+<li>js: a <code>u8sFromTypedArray(ctx,obj)</code> wrapper for the base+bytelength slice; fix the <code>len-1</code> underflow + <code>a_pad</code> the <code>char page[]</code>; isolate the JSC-string→buffer step in one <code>JSu8bFeedStringRef</code> helper.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior-preserving; <code>ctest -j16 --timeout 10</code> green. beagle execvp argv genuinely needs <code>char**</code> for the ABI — keep it, only the math moves into the helper.</li>
+<li>js JSC-ABI <code>void*</code> deallocator/context contracts (<code>io.cpp:410</code>, <code>utf8.cpp:9</code>) are fixed — leave. js may be CI-unbuildable (no JSC); note skipped js items like the MEM js tickets.</li>
+<li><code>void *ctx</code> action fns (<code>besub_cb</code>, <code>be_known_cb</code>, <code>cli *c</code>) are the sanctioned idiom — out of scope; <code>DISPATCH.c</code> is already clean.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The 3× duplicated argv offset-math is the priority (one <code>BEArgvPack</code> deletes two re-inlined copies); the js typed-array/string helpers are lower value and may not build in CI.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: lock outputs on the beagle/mark test tables.</li>
+<li>] <code>BEArgvPack</code> shared helper; fold the 3 sites.</li>
+<li>] beagle Fork/Join → <code>u8sFork</code>/<code>u8sJoin</code>; <code>_qpad</code>/literal/<code>=</code>-split/<code>BEGetDrainSubs</code> → slice idioms.</li>
+<li>] mark: <code>MKDTLineMarker</code> rest-slice; <code>refs</code> typed buffer; <code>a_cstr</code>.</li>
+<li>] js (if it builds): typed-array slice wrapper, <code>len-1</code> underflow fix, JSString→buffer helper.</li>
+<li>] Build + ctest; report done vs skipped (incl. js skipped-for-JSC).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>js/ likely unbuildable in CI (JSC) — do beagle/mark regardless and list js as deferred, mirroring the MEM js tickets.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>pending.</li>
+</ul>
+</body>
+</html>

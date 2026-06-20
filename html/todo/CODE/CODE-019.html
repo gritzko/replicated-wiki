@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CODE-019</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-019: relocate <code>sha1hex</code> from <code>dog/WHIFF.h</code> to <code>dog/git/SHA1.h</code> (beside its sibling <code>sha1</code>)</h1>
+<p>
+<code>dog/WHIFF.h</code> is about packed index words (<code>wh64</code>/<code>wh128</code>) + SHA→hashlet keys — but it ALSO defines <code>sha1hex</code> (the 40-ASCII-hex SHA-1 struct) and its bin↔hex conversions, which WHIFF's own logic never uses. Its sibling, the binary <code>sha1</code> struct + SHA-1 hashing, already lives in <code>dog/git/SHA1.h</code> (which even has a 40-hex feed helper). <code>sha1hex</code> belongs there. TIGHT, behaviour-preserving move + include fixes — NOT an open cleanup. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Defined in <code>dog/WHIFF.h:151-196</code>: <code>sha1hex</code> struct + <code>sha1hexcp</code>, <code>sha1hexZ</code></li>
+</ul>
+<div>
+<p>
+(sort), <code>sha1hexFromSha1</code>, <code>sha1FromSha1hex</code>, <code>sha1hexeq</code>, <code>sha1hexSlice</code>, <code>sha1hexFromHex</code>, and the <code>#define X(M,n) M##sha1hex##n</code> Bx instantiation.
+</p>
+</div>
+<ul>
+<li>WHIFF's <code>wh64</code>/<code>wh128</code> packing + <code>WHIFFHashlet*</code>/hex-key code does NOT reference</li>
+</ul>
+<div>
+<p>
+<code>sha1hex</code> — it is pure colocation (WHIFF.h is header-only).
+</p>
+</div>
+<ul>
+<li>Its sibling lives in <code>dog/git/SHA1.h</code>: the binary <code>sha1</code> struct (<code>:13</code>,</li>
+</ul>
+<div>
+<p>
+&quot;git SHA-1 type + hashing via sha1dc&quot;), <code>sha1Z</code>, <code>sha1slice</code>, <code>SHA1Sum/Open/Feed/ Close</code>, <code>SHA1u8sFeedHashlet</code>, and already a &quot;feed all 40 ASCII hex chars&quot; helper (<code>:78</code>). The right home for the 40-hex twin + its conversions.
+</p>
+</div>
+<ul>
+<li>Reach: <code>sha1hex</code> is used by dog(3)/graf(9)/keeper(7)/sniff(7)/beagle(1) ≈ 27 sites,</li>
+</ul>
+<div>
+<p>
+ZERO in <code>abc/</code> — a git-compat object-id type, correct at the <code>dog/git</code> layer.
+</p>
+</div>
+<ul>
+<li><a href="CODE-016.html">CODE-016</a> (LANDED <code>0a43dec5</code>) already &quot;centralize<a href="">d</a> sha1↔hex through</li>
+</ul>
+<div>
+<p>
+<code>dog/git/SHA1.h</code>&quot; — so that home is established; the <code>sha1hex</code> STRUCT + its methods just stayed behind in <code>WHIFF.h</code>. CODE-019 finishes that move; consistent direction.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>Move the <code>sha1hex</code> block (struct, <code>sha1hexcp</code>, <code>sha1hexZ</code>, <code>sha1hexFromSha1</code>,</li>
+</ul>
+<div>
+<p>
+<code>sha1FromSha1hex</code>, <code>sha1hexeq</code>, <code>sha1hexSlice</code>, <code>sha1hexFromHex</code>, the Bx <code>sha1hex</code> instantiation) from <code>dog/WHIFF.h</code> → <code>dog/git/SHA1.h</code>, placed beside <code>sha1</code>.
+</p>
+</div>
+<ul>
+<li>WHIFF.h is left with <code>wh64</code>/<code>wh128</code> + <code>WHIFFHashlet*</code>/hex-key helpers only.</li>
+<li>Every former consumer still resolves <code>sha1hex</code>: files that pulled it via</li>
+</ul>
+<div>
+<p>
+<code>dog/WHIFF.h</code> now <code>#include &quot;dog/git/SHA1.h&quot;</code> (keep both if a file needs both).
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>PURE behaviour-preserving move — signatures/bodies BYTE-IDENTICAL, no rename. Only</li>
+</ul>
+<div>
+<p>
+the home + <code>#include</code>s change. <code>dog/git/SHA1.h</code> must carry whatever <code>sha1hex</code> needs (HEX <code>HEXu8sFeedSome</code>/<code>DrainSome</code>, <code>u8sCopy</code>, <code>a_dup</code>) — it already includes the abc deps for <code>sha1</code>; add any missing. Mind include cycles (WHIFF.h must NOT now pull git/SHA1.h unless it already does).
+</p>
+</div>
+<ul>
+<li>TIGHT + mechanical. The CODE board warns prior sweeps were BS — do exactly this move,</li>
+</ul>
+<div>
+<p>
+nothing more. Full <code>ctest -j16 --timeout 10</code> green; build IS the correctness gate.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>The move is the deliverable; <code>sha1FromSha1hex</code> (<code>sha1*</code>←<code>sha1hex const*</code>) and</li>
+</ul>
+<div>
+<p>
+<code>sha1hexFromSha1</code> (<code>sha1hex*</code>←<code>sha1cp</code>) end up in the SAME file as <code>sha1</code>, removing a cross-header dependency rather than adding one.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Move the <code>sha1hex</code> block from <code>dog/WHIFF.h</code> to <code>dog/git/SHA1.h</code> (beside <code>sha1</code>);</li>
+</ul>
+<div>
+<p>
+  add any abc includes <code>sha1hex</code> needs.
+</p>
+</div>
+<ul>
+<li>] Fix the ~27 consumer <code>#include</code>s (WHIFF.h→git/SHA1.h where pulled only for sha1hex).</li>
+<li>] <code>rg</code>-verify: zero <code>sha1hex</code> in <code>dog/WHIFF.h</code>, present in <code>dog/git/SHA1.h</code>, every</li>
+</ul>
+<div>
+<p>
+  former use resolves. Full ctest green, behaviour byte-identical.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Touches many includes (mechanical). NOT abc-gated (dog/ only). Surfaced by the DOC-001</li>
+</ul>
+<div>
+<p>
+<code>dog/WHIFF.h</code> index pass; sequence such code-org fixes BEFORE documenting that header.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>addd5a9c</code></strong>* (FF child of <code>b9ef44b2</code>; 308/308; byte-identical move verified by</li>
+</ul>
+<div>
+<p>
+an empty removed-vs-added diff): the full <code>sha1hex</code> block moved <code>dog/WHIFF.h</code> (was <code>:149-197</code>) → <code>dog/git/SHA1.h</code> (beside <code>sha1</code>), byte-identical. <code>WHIFF.h</code> already <code>#include</code>d <code>dog/git/SHA1.h</code> (<code>:105</code>, for <code>sha1cp</code>), so the move is fully include-TRANSPARENT — *<strong>zero consumer include edits</strong><strong>; only 2 files changed (<code>dog/WHIFF.h</code>, <code>dog/git/SHA1.h</code>). No new include needed (SHA1.h already pulled HEX/slice deps), no cycle. Fresh build clean, <code>ctest</code> </strong><strong>308/308</strong>*. Awaiting gate. Msg: <code>CODE-019: move sha1hex to dog/git/SHA1.h beside sha1</code>.
+</p>
+</div>
+</body>
+</html>

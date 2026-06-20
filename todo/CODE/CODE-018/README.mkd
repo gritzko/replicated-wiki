@@ -1,0 +1,89 @@
+#   CODE-018: manual `ok64` propagation should use PRO.h `call()`/`try()`
+
+In `.c` files a recurring hand-rolled pattern `ok64 o = A; if (o != OK) return o;`
+forwards an `ok64` callee's error WITHOUT a PRO.h frame.  Per [CLAUDE] §1/§16 +
+[ABC], a function that calls a fallible `ok64` fn should itself `sane()`/`done`
+and propagate via `call(A)` (or `try(A)` + branch).  Header-defined fns are
+inlineables that should be can't-fail; if one does fallible work it belongs in a
+`.c` with a real frame.  Suspect list (116, regenerable) in [suspects].  NOT a
+mechanical sweep — `call()` snapshots+rewinds `ABC_BASS`, which manual `return o`
+does NOT, so each conversion is a per-case correctness check.  Method: [Issues].
+
+##  Input
+
+### Context
+ -  Finder (run at repo root): `be 'spot:.c#ok64 o=A;if(o!=OK) return o;'` →
+    116 hits 2026-06-16: **93 in `.c`, 23 in `.h`** (full list: [suspects]).
+ -  The pattern is functionally an error-forward, but `call(A)` additionally
+    snapshots+rewinds BASS around `A` (frees the callee's per-call scratch).  Some
+    manual sites may be INTENTIONAL — the callee returns a slice/buffer carved in
+    BASS that the caller still uses, so a `call()` rewind would dangle it.  These
+    must stay manual (or restructure) — converting them blindly is a bug.
+ -  Hot dirs: `sniff/POST.c` (12), `sniff/AT.c` (8), `sniff/PUT.c` (7),
+    `dog/ULOG.c` (4), `sniff/PATCH.c` (4), `keeper/WIRECLI.c` (3).
+ -  Prior CODE sweeps went "bullshit quality" (see [CODE]) — be conservative,
+    surface uncertainty, don't churn.
+
+### Goals
+ -  In `.c`: where the callee carves no BASS scratch the caller needs past the
+    call, replace `ok64 o=A; if(o!=OK) return o;` with `call(A)` (the fn already /
+    now has `sane(...)`/`done`).  `try(A)`+`then`/`nedo` where a branch follows.
+ -  Triage the 23 `.h` sites: a true can't-fail inlineable keeps manual forward
+    (PRO.h is `.c`-only); a genuinely-fallible one with cleanup needs → move to a
+    `.c`.  Decide each, don't blanket-convert.
+ -  Behaviour-preserving; the suspect count drops only by REAL conversions, not by
+    rewording to dodge the search.
+
+### Constraints
+ -  **BASS-rewind hazard is the gate**: before converting a site, confirm the
+    callee leaves nothing live in BASS that the caller reads after `A`.  If unsure,
+    SKIP and list it.
+ -  **abc/ is GATED** (28 suspects across `abc/*.c` + `abc/*.h`) — surface those
+    diffs for maintainer review, never autoland ([CLAUDE] "abc changes reviewed").
+ -  **False positives** (do NOT touch): `abc/PRO.h#trace`, `abc/Bx.h`, `abc/SSTx.h`
+    (macro/template headers); `*/test/*` + `abc/fuzz/*` (TEST/FUZZ frames, low
+    priority).  All flagged in [suspects].
+ -  No behaviour change to BASS lifetime, error codes, or control flow.
+
+##  WIP
+
+### Design decisions
+ -  Do the non-abc `.c` sites first in clean dir-scoped batches; gate abc/ and the
+    `.h`-triage separately.  Repro-first ([CLAUDE] §17): the existing suite is the
+    behaviour anchor — full `ctest` green after each batch; add a case only where
+    a conversion could shift behaviour.
+
+### TODOs
+ -[v] `.c` conversions: 51 sites across 18 non-abc `.c` files, each BASS-verified
+      (callee output is mmap/scalar/caller-carved, never live BASS scratch). Suspect
+      count 116→65; finder re-run confirms the drop is real `call()`/`try()`.
+ -[v] `.h` triage: `dog/DPATH.h` (DPATHVerify, DPATHBranchNormFeed) — KEEP MANUAL
+      (inlinable forwarders, no cleanup, PRO.h is `.c`-only). No move-to-`.c`.
+ -[v] Skipped + listed the BASS/control-flow hazards (Blockers below) — findings.
+ -[v] abc/ (28): reviewed, recommendations prepared, NOT landed; HAZARD flagged.
+ -[v] `ctest -j16 --timeout 10` = 298/298 per batch incl. final tree.
+
+### Blockers and bummers
+ -  SKIPPED (BASS-hazard / control-flow, correctly left manual): `ULOGMergeWalk`
+    + `SNIFFMergeWalk` cb-dispatch (cb may carve cross-call BASS in ctx — MEM-018);
+    `diffref_remember_submodule` (cross-step `u8bAcquire`); `BRAM.c`/`CAPOEmit` are
+    `try`/`on`-idioms not forwards; tok BRCT/MDT/MKDT (no frame, ptr-arith legacy).
+ -  abc GATED: clean candidates `PATH.c`/`URI.c`/`JSON.c`/`FILE.c`; **HAZARD
+    `abc/ROCK.c#ROCKGet`** holds a `rocksdb_get` `val` needing free — a `call()`
+    early-return leaks it; keep manual / restructure. abc `.h` all `fun` inlineables.
+
+##  Outcome
+ -  **LANDED `a5d133f8`** (ff atop GET-020 `49039f36`): 51 `.c` conversions across
+    18 non-abc files, 298/298; `POSTCFLCT` was the documented false positive
+    (`// ====` comment banners, no real markers) — forced with `be post!` as gated.
+ -  CLOSED as-is (2026-06-16): the abc/ remainder (28 sites) is NOT pursued —
+    review-only, marginal ABC-consistency value; clean candidates were
+    `PATH.c`/`URI.c`/`JSON.c`/`FILE.c` forwards, but `abc/ROCK.c#ROCKGet` is a
+    free-leak HAZARD (keep manual) and the abc `.h` are `fun` inlineables (keep
+    manual).  14 non-abc sites correctly skipped as BASS findings.  Ticket done.
+
+[suspects]: suspects.txt "spot snapshot — 116 manual-propagation sites"
+[CODE]: ../README.mkd "CODE topic (prior sweeps went bullshit-quality)"
+[CLAUDE]: ../../../CLAUDE.md "coding guidelines §1/§16"
+[ABC]: ../../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

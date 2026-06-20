@@ -1,0 +1,66 @@
+#   GET-025: `be get '?#<sha>'` (short sha) reconcile breaks the worktree baseline — every tracked file reads `new`, `be head` not advanced
+
+A behind-by-N worktree reconciled with `be get '?#<short-sha>'` ends up with a
+cur-tip the baseline resolver reads as EMPTY: `be status` reports every tracked
+file as `new` (not `mod`/clean) and `be head` still shows the OLD tip, even
+though the checkout updated the changed files on disk. Surfaced during the
+DOC-001 commit reconcile; in the GET-024 `?#<sha>` trunk-state area. Method: [Issues].
+
+##  Input
+
+### Context
+ -  Repro (from the DOC-001 committer, worktree `~/todo/DOC-001-abc2`, behind 1 =
+    missing GET-024 `134b9e30`, with 11 dirty `INDEX.md`):
+    ```
+    $ be get '?#134b9e30'     # EXIT 0; updated sniff/GET.c + test/get/33; kept the 11 INDEX.md
+    $ be status   →  ?  1217 new, 244 unk        (expected: behind 0, ~11 mod)
+    $ be head     →  tip = ef8901fa (GET-021), NOT 134b9e30
+    ```
+ -  Observation: the new cur-tip wtlog row is the SHORT form `?#134b9e30` (8 hex)
+    while row-1 anchors a full 40-char sha; the baseline tree then resolves EMPTY,
+    so all 1217 tracked files read as `new`. The commit graph itself is intact
+    (`be log:?#134b9e30` resolves: GET-024, parent ef8901fa). abc sub-mount fine.
+ -  Hypothesis: the GET-side analog of [[GET-024]]. GET-024 fixed the POST/`--force`
+    path (`be-put-06-triangle` uses `be get --force ?#<sha>`); the NON-force
+    reconcile path with a SHORT `?#<sha>` records a cur-tip the baseline resolver
+    can't expand → empty baseline. Either `be get` must resolve/expand a short
+    `?#<sha>` to the full sha when recording the wtlog cur-tip, or reject a short
+    sha; it must NOT silently leave an unresolvable baseline.
+
+### Goals
+ -  `be get '?#<sha>'` (short OR full) on a behind worktree advances cur cleanly:
+    `be head` shows the new tip, `be status` shows only the genuinely-dirty files
+    as `mod` (NOT the whole tree as `new`), baseline resolves normally.
+
+### Constraints
+ -  Reproduce INDEPENDENTLY on a fresh hermetic worktree first (do NOT clobber
+    `~/todo/DOC-001-abc2` — it holds the DOC-001 trim work uncommitted against this
+    broken baseline; the 11 trimmed `INDEX.md` are also backed up at
+    `~/todo/doc-trimmed/`). Then fix in `sniff/GET.c` (the GET-024 arm / wtlog
+    cur-tip recording), VALIDATE with `-DWITH_SSH=ON` (`be-put-06-triangle` must
+    stay green) AND a new non-force `?#<sha>` reconcile test.
+
+##  WIP
+
+### Design decisions
+ -  (open) Likely the wtlog cur-tip must store the FULL sha (expand the short
+    `?#<sha>` at record time), or the baseline resolver must accept a short-sha
+    cur-tip. Confirm which by tracing the empty-baseline resolution.
+
+### TODOs
+ -[ ] Hermetic repro: behind-1 worktree + `be get '?#<short-sha>'` → assert
+      `be status` is NOT all-`new` and `be head` advanced. (Also test full sha.)
+ -[ ] Fix the cur-tip recording / baseline resolution in `sniff/GET.c`.
+ -[ ] Green in build-debug AND build-ssh (`be-put-06-triangle` + the new test).
+ -[ ] Unblocks the DOC-001 10-file parent commit (retry after the fix).
+
+### Blockers and bummers
+ -  Blocks landing the DOC-001 trimmed indexes (commit was correctly aborted
+    rather than committing against the empty baseline). Adjacent to [[GET-024]]
+    `134b9e30` (which I landed) — treat as a candidate regression of that change.
+
+##  Outcome
+ -  (open — filed 2026-06-16 from the DOC-001 commit reconcile failure; repro from
+    the committer agent, needs independent hermetic confirmation)
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

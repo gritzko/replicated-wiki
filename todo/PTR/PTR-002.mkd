@@ -1,0 +1,51 @@
+#   PTR-002: dog/ buffer pokes, dup block-scanners, ptr+len
+
+The 2026-06-15 audit found dog/ rips typed slices into raw cursors, pokes buffer internals by hand, and carries record arrays as `ptr+len` — all against CLAUDE.md §1/§10 and [ABC]. Behavior-preserving, one worktree; vendored `dog/sha1dc/` and generated `*.rl.c` are out of scope.
+
+##  Input
+
+### Context
+ -  `dog/ULOG.c:283-313,944` — `ulog_idx_*_anon` `calloc(4,sizeof ptr)` then hand-set `slot[0..3]=base / base+cap`, recover size via `idx[3]-idx[0]`; scan casts `data[0..3]` and advances `scan[0]++`. Buffer-internals poke.
+ -  `dog/tok/MDT.c:69-159` & `dog/tok/MKDT.c:69-164` — near-duplicate block helpers each cast `u8csc line`→`u8c *p`/`*e` and hand-scan `p++`/`p<e`.
+ -  `dog/HUNK.c:856-1042` — `hk_line{u8c *lo,*hi}` family does `*cur+1`, `a.hi[-1-i]`, `memchr(*cur, …, end-*cur)`, `memcmp(dp+1,ap+1,…)`.
+ -  `dog/git/IGNO.c:15-166` — `IGNOGlob` rips both `u8cs` args into `pp/pe/sp/se` (`pp+=2`, `pp[1]`, `try<=se`); the line splitter uses `data[0]++` and `line_end[-1]`.
+ -  `dog/git/DELT.c:133-210` — match-extender advances `tp/bp/mp/ms` by hand (`base[0]+i`, `*(ms-1)`, `mp-ms`); `delt_hash4` reads `p[0..3]`.
+ -  `dog/tok/DEF.c:283-688` — `enr`+separate `u32 len/at` pairs and `enr[j]`; fixed `u8 enr_stack[8192]`+`malloc`/`free`; `wbuf + sizeof(wbuf)/sizeof(wbuf[0])` slice.
+ -  `dog/git/GIT.c:288` — `git_eat_prefix(u8cs, char const *pfx, size_t plen)` rebuilds `{pfx, pfx+plen}`. `dog/HOME.c:352` — split `at_query` on `/` via `while(*p!='/')p++`.
+
+### Goals
+ -  ULOG anon-index via `wh128bMap`/`wh128bAllocate`; scan with `u8bData`/`u8bIdle`/`u8csUsed1`, never `data[i]` casts or `scan[0]++`.
+ -  Unify `MDT`/`MKDT` onto ONE slice-based block-helper set (`$for`/`u8csUsed1`/`u8csFind`); the two files should share, not diverge.
+ -  `hk_line` → `u8csc`; split lines via a slice line-iterator; compare with `u8csEq`/`u8csCommonPrefix`.
+ -  IGNO slice-driven (`u8csUsed1`/`u8csFind`, recurse on sub-slices) + a ragel line lexer for the splitter.
+ -  DELT window scan on slice cursors; emit via `u8cs` sub-slices (leave the legit varint bit-shifts).
+ -  DEF `enr`/`map` → `u8b`/`u32b` buffers, scratch via `a_carve` (drop `enr_stack`+`malloc`), `a$(u32, ws, wbuf)`.
+ -  `git_eat_prefix(u8csc pfx)` drop the length arg; HOME split via `u8csFind`.
+
+### Constraints
+ -  Behavior-preserving; `ctest -j16 --timeout 10` + dog fuzzers green; regenerate `*.rl.c` from `.rl` only via the documented ragel invocation.
+ -  Leave DELT/PACK varint bit-shifts and `WHIFF.h`/`SHA1.h` raw 8-/20-byte `memcpy` (low-level format/hash primitives).
+
+##  WIP
+
+### Design decisions
+ -  `MDT`/`MKDT` dedup is the highest-value structural win — extract shared helpers before micro-fixing either copy.
+
+### TODOs
+ -[ ] Repro-first: lock current outputs on the existing dog test tables (tok/HUNK/IGNO/DELT).
+ -[ ] ULOG anon-index + scan → typed buffer API.
+ -[ ] Unify MDT/MKDT block helpers (slice-based).
+ -[ ] HUNK `hk_line` → `u8csc` line-iterator.
+ -[ ] IGNO + DELT + DEF slice/buffer conversions.
+ -[ ] `git_eat_prefix` + HOME split via `u8csFind`.
+ -[ ] Build + ctest; report done vs skipped.
+
+### Blockers and bummers
+ -  None known; MDT/MKDT unification may touch shared tokenizer headers — keep dog/INDEX.md updated.
+
+##  Outcome
+
+ -  pending.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

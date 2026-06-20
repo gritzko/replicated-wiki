@@ -1,0 +1,22 @@
+#   STATUS tickets: the worktree status view
+
+`be status` (and bare `be`) report the worktree against its baseline as one `status:` ROWS hunk. Tickets here extend that view — the `!`/`--force` extended mode and path/submodule scoping — all on the shared ROWS state banner ([BE-005]). Each entry is one active ticket; it drops off once the whole ticket lands. The fix-and-land method is [Issues].
+
+##  Active tickets
+
+ -  [STATUS-002] — `be status:<sub>/` ignores only the sub's own `.gitignore`, so
+    the parent repo's patterns miss submodule paths (flood of `unk build-debug/...`).
+    Fix: hierarchical `.gitignore` (cwd→$HOME, compounding, crossing sub
+    boundaries) in `dog/git/IGNO`. POST-020 refuted; prior build/Corpus stop-gap
+    rejected. Reproduced; rerun in progress.
+
+STATUS-001 (`be status!` ≡ `be status --force` = extended status: file rows PLUS all
+tracked branches + remotes, rehoming `SNIFFGetSummary` orphaned by GET-026; plus
+`be status:<path>/` sub-scope) landed `bc5c0bd4`. Topic closed.
+
+[Plan]: ../../wiki/Plan.mkd "the live planning page"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[STATUS-001]: STATUS-001.mkd "be status! extended + status:<path>/ sub-scope"
+[STATUS-002]: STATUS-002.mkd "be status lists .gitignore'd paths as unk (submodule subtree)"
+[BE-005]: ../BE/BE-005.mkd "umbrella: shared ROWS state banner"
+[GET-026]: ../GET/GET-026.mkd "orphans SNIFFGetSummary"

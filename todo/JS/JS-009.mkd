@@ -1,0 +1,45 @@
+#   JS-009 [MED]: `io.mmap` (`JABCioFileMap`) — mmap leak on TA fail, `args[0]` before argc check, silent path truncation
+
+`JABCioFileMap` (`io.cpp:416-446`) leaks the mapping when the typed-array
+construction fails, reads `args[0]` before checking `argc`, and silently truncates
+an over-long path. Method: [Issues].
+
+##  Input
+
+### Context
+ -  mmap leak: the `mmap_free`/`FILEUnMap` deallocator is only wired into the typed
+    array that FAILED to construct → on failure the mapping is never unmapped.
+ -  `args[0]` is read before any `argc` check → OOB when called with no args.
+ -  A path longer than `PAGESIZE` is silently truncated (the return size is ignored)
+    and left non-NUL-terminated.
+ -  `WITH_JS`-gated WIP.
+
+### Goals
+ -  No leaked mapping on the TA-fail path; no OOB on a no-arg call; an over-long path
+    errors instead of truncating.
+
+### Constraints
+ -  `FILEUnMap(buf)` on the TA-fail path; guard `argc`; error on path overflow.
+
+##  WIP
+
+### Design decisions
+ -  (open) Unmap explicitly when `JSObjectMakeTypedArrayWithBytesNoCopy` returns
+    NULL; check `argc` before `args[0]`; reject a path that overflows the page.
+
+### TODOs
+ -[ ] Repro-first: `io.mmap()` (no args) does not OOB; force a TA-construct failure
+      and assert (LSAN) no mapping leaks; a `>PAGESIZE` path errors.
+ -[ ] Apply the three fixes.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `621f4633`** (2026-06-16): `JABCioFileMap` now guards `argc<1`
+    before reading `args[0]`, rejects an over-long (`len>=PAGESIZE`) path, and
+    `FILEUnMap`s the mapping on the typed-array-construct-fail path. C++ repro
+    `run_mmap_argc_repro` (argc==0 → ASAN SEGV on `args[0]` RED, clean GREEN;
+    plus `>PAGESIZE` path must throw); ctest JABC green, ASAN/LSan clean.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

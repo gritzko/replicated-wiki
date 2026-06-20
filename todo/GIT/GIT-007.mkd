@@ -1,0 +1,55 @@
+#   GIT-007: JABC pack-log binding — pure marshalling over the dog/git core, delete the duplicated logic
+
+##  Input
+
+### Context
+
+Child of [[GIT-001]]; depends on [[GIT-002]]/[[GIT-004]]. `js/pack.hpp` is a third copy of pack-log logic: `JABCPackFeedOfs` (`:23`) is a hand-rolled replica of keeper's `pack_feed_ofs`, `JABCpackFeed` (`:58`) re-implements the raw-vs-OFS_DELTA decision (inflate base, `DELTEncode`, size compare, emit header+ofs varint+deflate), and `JABCpackNext` (`:120`) re-inflates to learn a record's compressed length. Once [[GIT-002]] lands the writer and [[GIT-004]] the resolver in dog/git, the binding must hold NO pack-log logic — it only marshals JS typed arrays into `u8s` and calls the dog/git functions. See [PackLog], [INDEX], [CLAUDE].
+
+ -  Triple duplication: the OFS varint encoder, the feed delta-decision, and the record-end scan exist once in keeper, once in dog/git (post GIT-002/004), and once in the binding — a format tweak must be written three times and they can drift. `JABCpackFeed`'s delta-or-raw block is a line-for-line copy of `KEEPPackFeed`'s inner emit (`keeper/KEEP.c:1709-1766`); the landed `PACKu8sFeedOfs` dedup was necessary but insufficient — the surrounding inflate-base / `DELTEncode` / size-compare / emit-hdr+deflate sequence is still duplicated.
+ -  Format logic in a leaf binding violates the JABC charter ([INDEX]): the native layer is meant to be leaf-only (syscalls + typed-array fills); pack-log encoding is not a leaf concern.
+ -  `malloc` scratch: `JABCpackFeed`/`JABCpackNext` `malloc` base + delta buffers, against [CLAUDE] §5 (resource allocation at the top of the call chain; BASS carve for scratch).
+ -  Local defects to clear in the rewrite (not just relocate): `binto` and `basec` re-derive the identical base range (`js/pack.hpp:77`/`:83`); and `PACKu8sFeedObjHdr`'s return is ignored in the OFS arm (`:90`) but checked in the raw arm (`:102`), so a near-full buffer can emit a partial OFS header, fail the deflate, and let the raw fallback write a SECOND header over the advanced head — latent double-header corruption, masked today only because JS sizes the buffer to fit.
+
+### Goals
+ -  Reduce `js/pack.hpp` to pure marshalling over the dog/git pack-log core, holding zero delta/encode/inflate decisions.
+ -  Delete the duplicated pack-log logic (`JABCPackFeedOfs`, the inline feed delta-decision, the re-inflate record-end scan) once [[GIT-002]]/[[GIT-004]] land.
+ -  Clear the local defects in the rewrite: the `binto`/`basec` base-range dup and the latent double-header corruption from the ignored OFS-arm return.
+
+### Constraints
+ -  Marshalling only: each `js/pack.hpp` entry resolves a typed array to a `u8s` (the one boundary touch, `JABCBytesOf`) and calls a dog/git PACK function; zero delta/encode/inflate decisions in the binding.
+ -  Scratch is caller-provided: the dog/git feed/resolve functions take a caller buffer (or BASS carve), so the binding passes a JS-owned `Buf`/`Uint8Array`; no `malloc` in the binding.
+ -  The JS-side sha→(offset) index STAYS in JS: it is the entry-boundary policy (the binding's analog of keeper's refs/LSM), not format logic — keep building it over the `hit`/`hash` bindings (the "wh128 layer above" noted in `pack.hpp`).
+ -  Delete `JABCPackFeedOfs` outright — it is replaced by `PACKu8sFeedOfs` (GIT-002); the binding never open-codes a varint.
+
+##  WIP
+
+### Design decisions
+ —
+
+### TODOs
+ -[ ] Re-point `_pack_feed` at the dog/git writer (GIT-002): pass type, content, resolved base bytes + base offset; the dog/git function decides raw|OFS_DELTA and emits, checking every header/varint/deflate return (closing the ignored-return gap). Delete the inline inflate/`DELTEncode`/compare block and the `binto`/`basec` dup.
+ -[ ] Re-point object reads at the dog/git resolver (GIT-004) and a dog/git record-extent helper; delete `JABCpackNext`'s re-inflate-to-measure and the JS-composed seek+`delt.apply` chain.
+ -[ ] Delete `JABCPackFeedOfs`; keep the thin drains (`_pack_count`/`_type`/`_size`/`_baseoff`/`_ref`/`_inflate`) as marshalling over `PACKDrain*`.
+ -[ ] Repro-first ([CLAUDE] §17): keep `js/test/pack.js` green; add a cross-impl vector — a log written by keeper round-trips byte-identically when read back through the JABC binding (and vice versa), proving keeper + binding share one format.
+
+### Blockers and bummers
+ -  Lands after [[GIT-002]] (the writer + `PACKu8sFeedOfs`) and [[GIT-004]] (the resolver) exist in dog/git.
+
+##  Outcome
+ -  Landed `d8fec51a` on beagle.new: `js/pack.hpp` is pure marshalling — `_pack_feed`→
+    `PACKu8sFeedObj`, `_pack_resolve`→`PACKResolveOfs`, `_pack_next`→new
+    `PACKRecordEnd` (dog/git/PACK.c:184, decl PACK.h:136 — record-extent now owned in
+    dog/git). Deleted `JABCPackFeedOfs`, the inline inflate/`DELTEncode`/compare emit
+    block, the `binto`/`basec` dup, `JABCpackNext`'s re-inflate, and all `malloc`/`free`
+    (scratch is JS-owned). Double-header corruption structurally gone (writer owns the
+    emit + checks every return). Cross-impl vector (`JABCpack`): a chain written via the
+    binding resolves byte-identically through the dog/git chase. 413/413, ASan/LSan clean.
+
+[PackLog]: ../../wiki/PackLog.mkd "pack-log concept page"
+[INDEX]: ../../../beagle/js/INDEX.md "JABC module index"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"
+[GIT-001]: GIT-001.mkd "umbrella: single-stream OFS-only migration"
+[GIT-002]: GIT-002.mkd "object-by-object OFS-only writer"
+[GIT-004]: GIT-004.mkd "OFS-only native resolver"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

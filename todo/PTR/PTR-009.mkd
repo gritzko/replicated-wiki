@@ -1,0 +1,49 @@
+#   PTR-009: abc/URI static Buf[4096] needs an API change (carved from PTR-001)
+
+PTR-001 split out the two `abc/URI.c` static `u8 Buf[4096]` because deleting them is a real DESIGN FORK, not a mechanical refactor: `URIMergePath`/`URIRelativePath` return slices that VIEW into the static buffer and the caller (`URIAbsolute`/`URIRelative`, public alias `n`) does NOT copy them out — `abs->path` keeps pointing into the buffer after return. `a_carve` can't replace them: BASS rewinds at the `call()` boundary, so a carve inside the callee dangles the returned slice. GATED — abc is core, surface the diff.
+
+##  Input
+
+### Context
+ -  `abc/URI.c:301` `static u8 URIMergePathBuf[4096]` — `URIMergePath` (`:305`) memcpy's base-dir+rel into it, runs RFC-3986 remove_dot_segments with `in/in_end/out` cursors (`in+=3`, `*out++`, `out[-1]`), and returns `{Buf, out}` into `result` (= `abs->path`). Sole caller `:444`.
+ -  `abc/URI.c:140` `static u8 URIRelPathBuf[4096]` — `URIRelativePath` (`:162`) builds `../`-climb + tail segments into it, returns `{Buf, out}` into `rel->path`. Sole caller `:253`.
+ -  Both results outlive the call: `URIAbsolute`/`URIRelative` return with `abs->path`/`rel->path` STILL viewing the static buffer (no `u8csDup` out). Non-reentrant: a second call clobbers a live first result. External caller `sniff/SUBS.c` (`n(&abs,&dbase,&rel)`) relies on the current contract.
+
+### Goals
+ -  Delete both static `Buf[4096]`; the computed path must live in caller-owned storage with a clear lifetime.
+ -  Prefer an abc/PATH segment-walk (`PATHu8sDrainNE` + `a_carve`/gauge) over the `in/in_end/out` cursor for remove_dot_segments — no manual RFC parse in C ([ABC]).
+ -  Keep `URIMergePath`/`URIRelativePath`/`URIAbsolute`/`URIRelative` behavior byte-identical (abc/test/URI table + RESOLVEURItest stay green).
+
+### Constraints
+ -  GATED: abc is core + public (`n`) — surface the diff, never autoland; the chosen API shape needs human review.
+ -  This is an API decision, not a free refactor: the scratch/result storage must be threaded from a caller that outlives the use, which changes the public `URIAbsolute`/`URIRelative` signature OR introduces a per-`uri` owned path buffer. Pick the shape WITH the maintainer before coding.
+
+##  WIP
+
+### Design decisions
+ -  Candidate A: add a caller-provided `u8s scratch` (or `Bu8`) param to `URIAbsolute`/`URIRelative`, carve it at the top call site (SUBS.c, tests); callee feeds the computed path in, result views the caller's buffer. Ripples to `sniff/SUBS.c` + abc/test/URI.
+ -  Candidate B: give `uri` its own owned path-scratch slot (struct grows) so the result can view `abs`'s own storage; revisits "uri struct = 8 slices + separate text" (URI-004) — likely rejected, but note it.
+ -  Either way remove_dot_segments becomes a PATH-segment walk into a gauge, not the `out++`/`out[-1]` cursor.
+
+### TODOs
+ -[ ] Agree the API shape (A vs B) with the maintainer BEFORE coding.
+ -[ ] Repro-first: lock abc/test/URI + RESOLVEURItest outputs.
+ -[ ] `URIMergePath` → PATH-segment remove_dot_segments into caller storage; drop `URIMergePathBuf`.
+ -[ ] `URIRelativePath` → caller storage; drop `URIRelPathBuf`.
+ -[ ] Thread the storage through `URIAbsolute`/`URIRelative` + update `sniff/SUBS.c` + tests.
+ -[ ] Build + ctest + URI fuzz; surface diff for review.
+
+### Blockers and bummers
+ -  Public-signature change collides with any open URI-00x work on `abc/URI.c`; coordinate before forking.
+
+##  Outcome
+
+ -  Ruled Candidate A, `u8s out` variant. Landed `b0455595` (abc sub `5f84502a`):
+    `URIAbsolute`/`URIRelative` take a caller-owned `u8s out` (callers pass
+    `u8bIdle(buf)` over `a_pad`); the result VIEWS the written prefix via a gauge
+    (`u8gOf`/`u8gFeed`/`u8csMv(result, u8gLeftC(g))`) so `out` must outlive it.
+ -  Both static `Buf[4096]` deleted; `remove_dot_segments` → `PATHu8sDrain`
+    segment-walk; `merged` concat stays internal BASS `a_carve`. 397/397, ASAN-clean.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

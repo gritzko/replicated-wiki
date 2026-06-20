@@ -1,0 +1,91 @@
+#   SUBS-024: POST sub-push ignores parent-kind source resolution (live gap)
+
+[SUBS-020] landed a POST mirror meant to route each recursed sub commit to the SAME
+place GET would fetch it from — same peer (beagle), parent-relative (git non-`.git`),
+or official (git `.git`) — but a live `be post` to a git fs-path destination pushed
+the sub to its OFFICIAL url instead of the parent-relative path, so an unrelated
+unreachable upstream aborted the whole post. POST must apply the three-case
+resolution + fallback for real, the way GET already does. See [SUBS-020], [Submodules].
+
+##  Input
+
+### Context
+Three source cases (user's framing; identical to [SUBS-020]):
+
+ -  **beagle remote** → expect the sub in the SAME repo/peer.
+ -  **git repo, `.git` URI** → no same-repo expectation; the sub's official URL.
+ -  **git repo, fs URI** → expect the sub repo in the fs at the parent-relative
+    path. In the beagle and fs cases, if the assumption fails, FALL BACK to the
+    official `.gitmodules` URL.
+
+### Context — live repro
+`be post ssh://localhost/src/dogs` (beagle parent → git fs-path destination):
+
+ -  `keeper: post: branch ?.dogs/ is a be-only synthetic coordinate; pushing to git
+    remote https://github.com/gritzko/libabc.git default branch` — the `abc` sub
+    went to its OFFICIAL github url (case 2), NOT parent-relative
+    `ssh://localhost/src/dogs/abc` (case 3).
+ -  github unreachable → WIREUNRCH aborted the whole post; `--nosub` was the only
+    way through. GET resolves this correctly; POST does not.
+
+### Goals
+POST routes each sub-push destination by the parent/destination kind, with fallback.
+
+ -  Git fs-path (non-`.git`) destination → push the sub parent-relative
+    (`<dest>/<subpath>`); fall back to the official URL only if absent.
+ -  Beagle destination → same peer + `?/<project>`; fall back to official.
+ -  Git `.git` destination → official URL (unchanged).
+ -  Repro test: a beagle-parent post to a git fs-path dest asserts the sub lands
+    parent-relative, not official.
+
+### Constraints
+ -  Reuse the GET resolver exports (`SNIFFSubSrcEndsGit`, `SNIFFSubCandidateGitRel`)
+    and the `bepushgit_recurse_cb` arm [SUBS-020] added — find WHY it doesn't fire
+    here (ssh fs-path dest / beagle-parent → git-dest path); do not re-roll.
+ -  Trace the actual push routing first (recursion-debug practice); the
+    `?/<sub>/.<parent>` synthetic-coordinate → git-default-branch mapping is involved.
+
+##  WIP
+
+### Design decisions
+Root cause (traced, repro'd): case 3 fed the `.gitmodules` url to
+`SNIFFSubCandidateGitRel`; an ABSOLUTE url resolves-to-self → NONE → the
+official url wins. Split case 3 by url FORM — four cases, keyed on the
+remote (dest for POST, src for GET), all reusing the SAME resolver:
+
+ -  beagle peer → same peer, sub shard `?/<subproj>` (unchanged).
+ -  git `.git` → declared official url as-is (unchanged).
+ -  git fs-path + RELATIVE url (`../sub`) → resolve url vs remote URI
+    (sibling); ref = url. Unchanged (post/44, get/50-3a).
+ -  git fs-path + ABSOLUTE url → `<remote>/<subpath>`; ref = subpath.
+    NEW — bypasses the unreachable declared upstream (e.g. github).
+ -  Fallback to the official url only when no candidate computes.
+ -  Both GET (sniff/SUBS.c case-3 list) and POST (BE.cli.c
+    bepushgit_recurse_cb) get case 4, for push/fetch symmetry.
+
+### TODOs
+ -[v] Trace `be post ssh://<fs-path>` — absolute `.gitmodules` url →
+      SNIFFSubCandidateGitRel NONE → official url wins (repro'd $HOME/tmp).
+ -[v] POST case 4: url absolute → dest = SNIFFSubCandidateGitRel(src,
+      subpath); keep relative-url arm + official fallback.
+ -[v] GET case 4: add `<src>/<subpath>` candidate before official (SUBS.c).
+ -[v] Tests: post/45 + get/53 — absolute-url sub lands `<remote>/<sub>`,
+      NOT official; ctest 394/394 WITH_SSH.
+
+### Blockers and bummers
+(none yet)
+
+##  Outcome
+ -  `b09b09bf` — case 4 in POST (BE.cli.c `bepushgit_recurse_cb`) and GET
+    (sniff/SUBS.c `SNIFFSubMount`); reuses `SNIFFSubCandidateGitRel`, no
+    new symbols. `post/45`+`get/53` added; full ctest 394/394 WITH_SSH.
+ -  GET gate widened: case 3/4 keyed on the URI FORM, dropping the
+    `git_parent` gate that never fired over ssh (see follow-up below).
+ -  Bundled fix: emptied `test/put/01-states/05.put.err.txt` to match the
+    committed `be put` stderr-spam removal (`3582cbe1`) — straggler fixture.
+ -  Follow-up (own ticket TBD): `subs_recover_locator` flags ssh git
+    remotes as `src_beagle`, which is why GET case 3 never fired over ssh.
+
+[SUBS-020]: SUBS-020.mkd "sub-source resolution by parent kind (GET landed, POST mirror)"
+[Submodules]: ../../wiki/Submodules.mkd "submodule model"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

@@ -4,10 +4,18 @@ Discrepancies in `abc/` — the foundational slice/buffer/net/poll/curl layer ev
 
 ##  Active tickets
 
- -  [ABC-001] — **LANDED** (abc `37f85ddb`, parent gitlink `262e7e9e`). The `CURLtest`/`POLtest` SEGV was abc's own POL timer UAF feeding a wild fd into libcurl: `POLTimer` wrote `p->tofd` through a post-callback-stale `p` that aliased a curl socket poller after a re-entrant `POL_QUEUE` reorder → `curl_multi_socket_action(garbage fd)` → SEGV (MEM-013 class). Fix: re-resolve the timer slot by stable identity before writing, dedup timers by identity, bounded `CONNECTTIMEOUT`; hermetic `CURLfw.c` (RFC-5737, no live DNS). `MEM-010` overlap stays open.
- -  [ABC-002] — **unify C errno→ok64 handling**: `FILEerrno` (switch, canonical `FILE*` symbols) and `FILEErr`/`FILE_ERR_VOCAB` (hand-built raw-hex table) return *different* codes for the same errno (`FILEErr(ENOENT)`=`0x39760e5dd` ≠ `FILENONE`; omits `EEXIST`). Delegate `FILEErr`→`FILEerrno`, delete the table, route all errno→ok64 through one mapping. Surfaced reviewing [[SUBS-016]] (which left a `{ENOENT,FILENONE}` stopgap).
+ -  [ABC-004] — add `abc/BIT.h`: a `u1` bit type + bitmap slice/buffer
+    (`u1s`/`u1cs`/`u1b`) + word-parallel set algebra; migrates the ad-hoc
+    `BitAt`/`Set`/`Unset`, fixes the broken `BitUnset` (`FILE_RW`), backs
+    [DOG-001]'s `weavescope`.
 
-[ABC-001]: ABC-001.mkd "abc inet tests SEGV on firewalled host"
-[ABC-002]: ABC-002.mkd "unify C errno→ok64 (FILEerrno vs FILE_ERR_VOCAB)"
+ABC-003 (`UTF8_LEN[byte>>4]` byte-length table shifted; multibyte lead bytes
+over-count) landed into the abc sub — `02a23dc3` (`?/abc/.dogs`) + pin `cb71e65b`.
+(BRO-004's incoherence was a separate bro bug, not this table — see [[ABC-003]].)
+
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
 [MEM]: ../MEM/README.mkd "memory-safety audit tickets"
+[ABC-003]: ABC-003.mkd "UTF8_LEN table shifted"
+[ABC-004]: ABC-004.mkd "abc/BIT.h — u1 bit type + bitmap set algebra"
+[DOG-001]: ../DOG/DOG-001/README.mkd "weavescope adopts u1 as its backing"
+[BRO-004]: ../BRO/BRO-004.mkd "colour diff render consumer"

@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-044</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-044: WEAVEMerge RGA order key is not causally monotonic</h1>
+<p>
+<a href="DIS-043.html">DIS-043</a> gave <code>dog/WEAVE</code> tokens an RGA stable order and sorts concurrent siblings by raw *<strong>commit-id DESC</strong><strong>. That is only causally valid when a commit's id is larger than its ancestors' — true for the DWEAVE fuzzer (it keys commit-id = line index, monotonic) but FALSE for real 60-bit commit hashlets, which are arbitrary. When the common-ancestor (spine) id exceeds the edit ids, a replace-edit's inserted token is stranded behind the dead original's whole subtree, and a same-line divergence can splice clean instead of conflicting — </strong><strong>silent merge data-loss</strong>*. Found during <a href="../DOG/DOG-005.html">DOG-005</a> (graf cut-over): diff/blame/cat/get are byte-parity-clean, but 11 real-commit merge tests fail. The green DIS-043 fuzz was misleading — its monotonic-id oracle could never hit this.
+</p>
+<h2>Issues</h2>
+<p>
+RGA needs a causally-monotonic order key; the raw commit-id is not one.
+</p>
+<ul>
+<li>Repro (isolated dog-API harness): the bug toggles purely on <code>base&lt;ours&lt;theirs</code></li>
+</ul>
+<div>
+<p>
+(passes) vs <code>base&gt;ours</code> (fails) — <code>int x = 10</code> merges to <code>int x = ;</code> … <code>10</code> at EOF.
+</p>
+</div>
+<ul>
+<li>Failing: <code>be-patch-03/04/10/12/14/15/17/22/23/34</code>, <code>be-get-51-ff-weave-unindexed-merge</code></li>
+</ul>
+<div>
+<p>
+(real-commit merges with arbitrary hashlets); synthetic small ordered ids (1/2/3) hide it.
+</p>
+</div>
+<ul>
+<li>Root: a descendant commit may have a SMALLER hashlet than its ancestor, so commit-id</li>
+</ul>
+<div>
+<p>
+order ≠ causal order; RGA's concurrent tie-break must be a causal/Lamport rank.
+</p>
+</div>
+<ul>
+<li>Fuzzer gap: <code>dog/fuzz/WEAVE</code> keys commit-id = line index (monotonic), accidentally a</li>
+</ul>
+<div>
+<p>
+valid causal order — so it can never surface this class.
+</p>
+</div>
+<h2>Planned</h2>
+<p>
+Tie-break on the commit INDEX (already stored, causal), made path-independent.
+</p>
+<ul>
+<li>The token already stores the commit INDEX, and <code>commits[]</code> is built ancestors-first</li>
+</ul>
+<div>
+<p>
+(spine = index 0), so <code>index(ancestor) &lt; index(descendant)</code> — causal. Switch <code>WEAVEMerge</code>'s RGA tie-break from the raw hashlet (<code>cid</code>, <code>dog/WEAVE.c:519/588</code>) to the index; that fixes the spine-id &gt; edit-id stranding directly. No new column.
+</p>
+</div>
+<ul>
+<li>CAVEAT — make the index path-independent: <code>WEAVEMerge</code> builds <code>commits[]</code> as</li>
+</ul>
+<div>
+<p>
+<code>a.commits ++ b.new</code>, so concurrent siblings flip index by parent role (the very criss-cross DIS-043 used the hashlet to avoid). Build the merged <code>commits[]</code> in a deterministic causal order (topo: ancestors first, concurrent commits tie-broken by hashlet) so the index is a real topo rank — causal AND path-independent.
+</p>
+</div>
+<ul>
+<li>Extend <code>dog/fuzz/WEAVE</code> to non-monotonic / arbitrary commit-ids (its commit-id =</li>
+</ul>
+<div>
+<p>
+line-index oracle is why DIS-043 looked green); fold the DOG-005 <code>base&gt;ours</code> repro + the failing be-patch/be-get merges in as property tests, confirmed red pre-fix.
+</p>
+</div>
+<h2>Blockers</h2>
+<ul>
+<li><a href="DIS-043.html">DIS-043</a> is LANDED (<code>8eece3f3</code>) and carries this bug; this fixes it. <a href="../DOG/DOG-005.html">DOG-005</a>'s</li>
+</ul>
+<div>
+<p>
+merge cut-over gates on it (the diff/get cut-over is already byte-parity-clean).
+</p>
+</div>
+<h2>Landed</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

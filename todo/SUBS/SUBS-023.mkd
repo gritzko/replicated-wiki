@@ -1,0 +1,77 @@
+#   SUBS-023: well-formed synthetic dot-branch `?/<sub>/.<parent>` won't resolve — sub can't be re-attached by name (GRAFNONE)
+
+A detached submodule should re-attach to its synthetic dot-branch by name —
+`be get '?/<sub>/.<parent>'` — the canonical coordinate its commits live on. But
+that query won't RESOLVE: `be head '?/abc/.dogs'` (the get dry-run) returns
+`graf: head: cannot resolve target` / GRAFNONE at both the parent and the recursed
+sub level, even though the abc shard's refs DO carry `?/abc/.dogs#<sha>`. So a
+detached sub cannot be re-attached to its dot-branch by name. Flagged as a
+[[SUBS-021]] follow-up; confirmed 2026-06-16. Research → fix. Method: [Issues].
+
+##  Input
+
+### Context
+ -  Repro (`~/beagle`, read-only dry-run): `be head '?/abc/.dogs'` →
+    `graf: head: cannot resolve target` / `Error: GRAFNONE` (twice — it recurses
+    `be: head .` / `be: head abc` and both miss). Same with a `#<sha>` fragment.
+ -  Yet the abc sub-shard's refs hold the dot-branch tip, e.g.
+    `~/beagle/.be/abc/refs`: `26616Bkc1V  post  ?/abc/.dogs#02a23dc3…` — the branch
+    EXISTS, the resolver just can't map the `?/<sub>/.<parent>` query to it.
+ -  Background: a detached sub tip is `?<sha>` and its commits sit on the synthetic
+    coordinate `?/<sub>/.<parent>` (see [[submodule-synthetic-branch-post]],
+    [[submodule-tip-detached-form]]). The POST composer writes that branch correctly;
+    GET/HEAD resolution of it is the gap.
+
+### Goals
+ -  `be get '?/<sub>/.<parent>'` (and `be head`) RESOLVES the synthetic dot-branch to
+    its tip and re-attaches the sub there — symmetric with how POST writes it.
+ -  Works at the sub level and via parent recursion; a `#<sha>` fragment pins the cur.
+
+### Constraints
+ -  Resolve through the existing REFS/synthetic-branch machinery
+    (`sniff/GET.c` synth/`DOGQueryStripProject` path ~`:1910-1999`; graf head's
+    `GRAFResolveTip`/`REFSResolve`); do NOT re-roll branch parsing. No new flags.
+
+##  WIP
+
+### Design decisions
+ -  (open) Root-cause WHERE `?/<sub>/.<parent>` resolution returns GRAFNONE — is the
+    query's leading `/<sub>` segment stripped wrong, is the `.`-prefixed parent
+    coordinate not matched against the dot-branch refs row, or is the recursion target
+    mis-derived? Likely the `DOGQueryStripProject` / synthetic-branch resolve path.
+
+### TODOs
+ -[ ] Repro-first: a hermetic parent+detached-sub store; `be get '?/<sub>/.<parent>'`
+      → assert the sub re-attaches to the dot-branch tip (RED = GRAFNONE today).
+ -[ ] Root-cause the GRAFNONE in the synthetic-branch resolve path; fix the mapping.
+ -[ ] Test: re-attach by name resolves at sub + parent-recursion level; `#<sha>` pins cur.
+
+### Blockers and bummers
+ -  Follow-up of [[SUBS-021]] (which fixed the SHA-leak but left this re-attach gap).
+    Pairs with the detached-tip readers ([[submodule-tip-detached-form]]).
+
+##  Outcome
+ -  **CLOSED 2026-06-16 — WON'T FIX (maintainer).** Verified the normal parent-recursion
+    GET flow re-attaches a sub via its gitlink PIN, NOT the synthetic `?/<sub>/.<parent>`
+    branch: `test/get/11-sub-clone-recursive` (+ `get/31`, `get/37`) resolve the sub at the
+    `.gitmodules` pin and pass on trunk; NO `test/get/` case ever resolves a
+    `?/<sub>/.<parent>` query (that form is POST-side only — `post/43`/`44`). So the
+    SNIFFFAIL is reachable only by hand-typing `be get '?/<sub>/.<parent>'`, an internal
+    coordinate nobody uses — no real-world breakage. The `be head` probe that surfaced it
+    is remote-oriented and was a poor proxy. A fix exists (below) but is not worth landing;
+    `~/todo/SUBS-023` discarded. Dropped from the active index.
+ -  (un-landed fix, for the record) root cause — the
+    synthetic dot-branch REFS row is keyed on the WHOLE path `/sub/.par`, but both
+    resolvers ran `DOGQueryStripProject` first, peeling off `<sub>` → bare `.par` →
+    `KEEPResolveRef`/`REFSResolve` miss → GRAFNONE (`graf/LOG.c:771`) / SNIFFFAIL
+    (`sniff/GET.c:1918`). Fix: new `fun b8 DOGQueryIsSynthBranch(query)` (`dog/DOG.h`,
+    recognizes `?/<sub>/.<parent>`) → graf/LOG.c + sniff/GET.c SKIP the strip and resolve
+    the FULL path via the existing REFS machinery; a 40-hex `#<sha>` fragment pins the cur
+    (scoped to synth branches, so `?<branch>#<sha>` keeps tip-checkout). New
+    `test/get/52-sub-synth-reattach`; **307/307**. Awaiting gate. (Rewinding to an OLDER
+    pin still needs `--force` per the normal non-ff guard — out of scope.)
+ -  ⚠️ The fix worker accidentally edited the 3 files in `~/beagle` then restored them;
+    verified the live tree is clean (those files `ok`, no leftovers) — no WIP lost.
+
+[SUBS-021]: SUBS-021.mkd "re-post SHA leak (landed 8c69c16b)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

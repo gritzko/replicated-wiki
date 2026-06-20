@@ -1,0 +1,51 @@
+#   JS-014 [cleanup]: adopt a least-surprising C++ style (Google C++) + prune dead surface
+
+`js/` is deliberately C++ (JSC); ratify ONE external standard, add a checked-in
+`.clang-format`, converge naming, and prune the dead/unused surface. User-requested
+cleanup. Method: [Issues].
+
+##  Input
+
+### Context
+ -  Naming is mixed: `JS*` / `io_*` / `mmap_free` / `timeout_cb` snake-case vs
+    `JABCutf8b…`. No checked-in `.clang-format`; file/TU org is ad hoc.
+ -  Dead/unused surface: `JABC_FN_ARG_ALLOC_STRING` (uninitialised-pointer "loaded
+    gun", unused), `JABC_FN_ARG_STRING` (raw VLA), the unused
+    `JS_SET_PROPERTY_RO`/`JS_GET_PROPERTY`/`JS_TO_NUMBER`/`JS_ADD_METHOD`/
+    `JABC_FN_CALL` macros, the declared-but-undefined `JABCutf8cpMakeValueRef` /
+    `JABCutf8bFeedStringRef`, the no-op `JABsane` empty-`if` assert
+    (`utf8.cpp:50-61`), the dead `convert.cpp`/rdx chain (gate or remove), and the
+    trace `printf`/`fprintf(stderr,…)` left in (`main.cpp:129/142`, `io.cpp:282/325/
+    341` — violates CLAUDE.md §11).
+ -  `WITH_JS`-gated WIP. This ticket is STYLE + dead-code only.
+
+### Goals
+ -  One ratified external C++ standard (proposed: Google C++), a checked-in
+    `.clang-format`, converged naming, and the dead surface pruned/gated.
+
+### Constraints
+ -  ABC slice / `ok64` discipline STAYS at the C-data boundary (that's JS-002..005,
+    NOT this ticket). Ratify the exact standard in this ticket before reformatting.
+
+##  WIP
+
+### Design decisions
+ -  (open) Ratify Google C++ (or the chosen standard); add `.clang-format`; converge
+    `JS*`/`io_*`/`mmap_free`/`timeout_cb`/`JABCutf8b…` naming; remove the listed dead
+    macros/decls/the `JABsane` no-op; gate or remove `convert.cpp`/rdx; strip the
+    trace `printf`/`fprintf` per §11.
+
+### TODOs
+ -[ ] Ratify the exact external standard in this ticket.
+ -[ ] Add `.clang-format`; reformat `js/`.
+ -[ ] Prune the listed dead macros/decls; gate or remove `convert.cpp`/rdx.
+ -[ ] Strip the trace `printf`/`fprintf` (§11).
+
+### Blockers
+ -  Pair the convert/rdx gate-or-remove with JS-008 (fix-before-wiring).
+
+##  Outcome
+ -  **LANDED `9c6118b4`** (2026-06-16): Google C++ ratified + .clang-format
+    applied + dead surface pruned; deeper rename = optional follow-up.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

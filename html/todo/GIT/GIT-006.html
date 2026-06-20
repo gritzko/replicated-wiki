@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-006</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-006: migration &amp; crash recovery — recompact each shard into one OFS-only stream, truncate-and-reindex on torn append</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Child of <a href="">[GIT-001</a>]; depends on <a href="">[GIT-002</a>]/<a href="">[GIT-003</a>]; gates <a href="">[GIT-004</a>]. Existing stores hold mixed OFS/REF logs across many <code>NNNNN.keeper</code> files; they must become one OFS-only stream per shard before the REF reader can be deleted. Reuse the <a href="../../wiki/PackLog.html">PackLog</a> epoch-recompaction mechanism (copy the reachable closure into a fresh project id) as the migration: the closure is re-emitted through the GIT-002 writer, so the output is OFS-only, dedup'd, and single-stream by construction. Separately, object-by-object append changes the crash story from &quot;drop the whole torn pack&quot; to &quot;truncate the log to the last indexed offset and re-<code>UNPK</code> the unindexed tail&quot;. See <a href="../../wiki/PackLog.html">PackLog</a>, <a href="../../wiki/Keeper.html">Keeper</a>, <a href="../../../beagle/CLAUDE.md">CLAUDE</a>.
+</p>
+<ul>
+<li>On-disk REF_DELTA: any object stored as REF_DELTA (every pre-migration log) would resolve to KEEPNONE under an OFS-only resolver — so <a href="">[GIT-004</a>] cannot land until migration runs everywhere, including long-lived <code>~/.be</code> real stores.</li>
+<li>Torn-append recovery: the old single count-patch + bookmark gave all-or-nothing per pack; per-object append needs the log and <code>.idx</code> kept consistent if interrupted mid-ingest. Relates to <a href="">[KEEP-002</a>] (torn-idx rebuild already rebuilds a short index from the pack on rw-open).</li>
+<li>Many-files → one stream: the multi-<code>NNNNN</code> layout and <code>file_id</code> PAST/DATA registry collapse to one growing log per shard; the migration is the natural place to do it.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Recompact each shard into one OFS-only single stream via the GIT-002 writer, retiring the mixed OFS/REF multi-file layout so the REF reader can be deleted (<a href="">[GIT-004</a>]).</li>
+<li>Make object-by-object append crash-safe: recover a torn mid-ingest append by truncating to the last indexed offset and re-<code>UNPK</code>-ing the unindexed tail.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Recompaction is the existing GC-replacement, not new machinery — drive the reachable closure (graf/keeper ancestry + tree walk) through the GIT-002 writer into a fresh shard, then swap. Keep live readers' mmaps valid until close (<a href="../../wiki/PackLog.html">PackLog</a> §&quot;Live readers survive&quot;).</li>
+<li>Idempotent + resumable: a migration interrupted mid-copy leaves the source intact (write the new shard, swap atomically last) — same discipline as <a href="">[GET-018</a>] atomic-swap.</li>
+<li>Append ordering for recovery: append objects + advance the log length, fsync, THEN flush the <code>.idx</code> run; recovery truncates to the last indexed offset and re-UNPKs the tail. Reuse <code>keep_rebuild_torn_idx</code> (<a href="">[KEEP-002</a>]).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+ —
+</p>
+<h3>TODOs</h3>
+<ul>
+<li>] Migration tool: <code>KEEPCompact</code>/epoch-recompact path that emits OFS-only via GIT-002; run it over each shard (and document the one-shot for real <code>~/.be</code> stores) before flipping GIT-004 on.</li>
+<li>] Crash recovery: on rw-open, if the log tail past the last <code>.idx</code> offset holds unindexed objects (or a torn append), re-<code>UNPK</code> the tail and re-flush; on a torn final object, truncate to the last whole object boundary.</li>
+<li>] Collapse file layout: one growing <code>NNNNN.keeper</code> per shard; retire the per-batch new-log rollover (coordinate with GIT-002).</li>
+<li>] Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): a table-driven test that (a) builds a mixed OFS/REF multi-file store, recompacts it, asserts one OFS-only log with identical reachable closure (every commit/tree/blob round-trips); (b) injects a torn mid-ingest append and asserts rw-open recovers a consistent log+idx with no object loss.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Sequenced after <a href="">[GIT-002</a>]/<a href="">[GIT-003</a>]; must finish before <a href="">[GIT-004</a>] deletes the REF reader.</li>
+</ul>
+<h2>Outcome</h2>
+</body>
+</html>

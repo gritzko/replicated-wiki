@@ -1,0 +1,61 @@
+#   POST-020: git-push post path still emits raw stderr printfs
+
+The `be post ssh://…` (git-remote push) path bypasses the BE-005 verb-output ULOG
+sweep: it prints `sniff: N change(s)` and the keeper synthetic-coordinate notice as
+bare `fprintf(stderr, …)` instead of ULOG rows/summaries. Route both through the
+shared ROWS machinery like post/put/delete/get/patch already do. See [POST-019],
+[BE-005].
+
+##  Input
+
+### Context
+`be post ssh://localhost/src/dogs` against a git remote emits raw stderr lines that
+should be ULOG (residual of the verb-output sweep).
+
+ -  `sniff: 0 change(s)` — the post change-count summary (`sniff/POST.c:2375`,
+    `fprintf(stderr, "sniff: %u change(s)\n", …)`).
+ -  `keeper: post: branch ?.dogs/ is a be-only synthetic coordinate; pushing to git
+    remote <url> default branch` — informational notice (`keeper/KEEP.exe.c:939`).
+ -  Both are routine status/progress, not errors — they belong in the `post:` ROWS
+    stream, not bare stderr.
+
+### Goals
+Route the post change-count and the keeper git-push notice through ULOG/ROWS.
+
+ -  `sniff: N change(s)` → a `post:` summary tail (or fold into the banner), like
+    put's staged-count handling.
+ -  The keeper synthetic-coordinate → git-default-branch notice → a ULOG progress
+    row in the active post stream.
+ -  Repro test: a git-remote `be post` asserts no bare `sniff:`/`keeper:` stderr.
+
+### Constraints
+ -  `post/13-sub-dryrun-all-issues` greps `sniff: N change(s)` on STDERR to prove
+    per-level recursion — repoint it to the new ULOG location if the line moves.
+ -  ABC idioms; keeper-side needs ROWS access (`dog/ROWS.h`). Errors stay (BE-003).
+
+##  WIP
+
+### Design decisions
+(pending)
+
+### TODOs
+ -[ ] Convert `sniff: N change(s)` (POST.c:2375) to a `post:` ROWS summary; repoint post/13.
+ -[ ] Convert the keeper synthetic-coordinate notice (KEEP.exe.c:939) to a ULOG row.
+ -[ ] Add a git-remote post repro; re-run `ctest`.
+
+### Blockers and bummers
+(none yet)
+
+##  Outcome
+ -  Landed `8c7f5f3a`: `sniff: N change(s)` → a `post:` ROWS summary tail
+    (`sniff/POST.c`); the keeper synthetic-coordinate→git-default-branch notice →
+    a transient-ROWS row (`keeper_post_notice`, `keeper/KEEP.exe.c`); `beagle/BE.cli.c`
+    forwards HUNK/TLV mode so the captured sub-post relays the per-level summary.
+ -  Repro `test/post/25-dot-branch-no-git-wire` (real git-wire push asserts no bare
+    `sniff:`/`keeper:` stderr); `post/13` `change(s)` grep repointed. POSTCFLCT
+    false-fire (comment at `POST.c:3036`, the [POST-006] bug) needed a one-scan `--force`.
+
+[POST-006]: POST-006.mkd "POSTCFLCT false-fires on marker strings in source"
+[POST-019]: POST-019.mkd "be post output noise — echo + named bump put"
+[BE-005]: ../BE/BE-005.mkd "umbrella: unify verb output via the shared ROWS banner"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>STATUS-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>STATUS-002: <code>be status</code> ignores only the sub's own <code>.gitignore</code> — needs hierarchical (cwd→$HOME) compounding</h1>
+<p>
+<code>be status:&lt;sub&gt;/</code> floods with <code>unk</code> for paths the repo-root <code>.gitignore</code> should exclude (<code>build-*/</code>, <code>*.o</code>, <code>CMakeFiles/</code>, …): the relayed sub-scan <code>IGNOLoad</code>s only the SUBMODULE's own <code>.gitignore</code>, which <code>abc</code> lacks, so the parent's patterns never reach the sub's paths. Bare <code>be</code> collapses a sub to one summary row (no flood) — that's the &quot;intermittent&quot;. Fix: hierarchical <code>.gitignore</code> resolution — load every <code>.gitignore</code> from the classified path's directory UP to <code>$HOME</code> (or <code>/</code> if outside <code>$HOME</code>) and COMPOUND them, crossing submodule boundaries, the way nested git ignores stack. NO hardcoded directory names. See <a href="../../wiki/Sniff.html">Sniff</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro (deterministic; same on PATH <code>be</code> and a fresh build — NOT skew): build</li>
+</ul>
+<div>
+<p>
+the <code>abc</code> sub (makes <code>abc/build-debug/{CMakeCache.txt,*.o,…}</code>), then <code>be status:abc/</code> → ~15 <code>unk abc/build-debug/...</code> rows.
+</p>
+</div>
+<ul>
+<li><code>be status:&lt;sub&gt;/</code> relays into the sub's worktree; its <code>SNIFFOpen</code>/<code>IGNOLoad</code></li>
+</ul>
+<div>
+<p>
+reads only the SUB's own <code>.gitignore</code> (absent for <code>abc</code>), so the repo-root <code>.gitignore</code> never governs the sub's paths.
+</p>
+</div>
+<ul>
+<li>Bare <code>be</code> collapses the sub to one summary row → no flood (the &quot;intermittent&quot;).</li>
+<li>POST-020 (<code>8c7f5f3a</code>) REFUTED: <code>sniff/SNIFF.c</code>/<code>CLASS.c</code>/<code>dog/git/IGNO.c</code>/</li>
+</ul>
+<div>
+<p>
+<code>ULOG.c</code> are byte-identical to parent <code>d8fec51a</code>; the bug is pre-existing / structural (since submodule projector recursion), not a regression.
+</p>
+</div>
+<ul>
+<li>The repo-root <code>.gitignore</code> already lists every flooded pattern — it just</li>
+</ul>
+<div>
+<p>
+isn't consulted from inside the sub.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>Hierarchical <code>.gitignore</code>: classifying a path loads every <code>.gitignore</code> from</li>
+</ul>
+<div>
+<p>
+its directory up to <code>$HOME</code> (or <code>/</code> if not under <code>$HOME</code>) and COMPOUNDS them (git precedence: nearer/deeper rules add or override; <code>!</code> negation honored).
+</p>
+</div>
+<ul>
+<li>The chain CROSSES submodule boundaries, so a parent repo's <code>.gitignore</code></li>
+</ul>
+<div>
+<p>
+governs nested sub paths — this is what fixes the <code>abc/build-debug</code> flood.
+</p>
+</div>
+<ul>
+<li>No hardcoded dir names; <code>build</code>/<code>Corpus</code>/etc. are excluded ONLY because the</li>
+</ul>
+<div>
+<p>
+real <code>.gitignore</code>s in the chain list them.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>ROLL BACK the prior stop-gap (unconditional <code>build*/</code>/<code>Corpus/</code> ignore in</li>
+</ul>
+<div>
+<p>
+<code>IGNOMatch</code>): <code>Corpus</code> is not special — restore pattern-only matching.
+</p>
+</div>
+<ul>
+<li>Honor git pattern semantics (anchoring, dir-only trailing <code>/</code>, <code>!</code> negation,</li>
+</ul>
+<div>
+<p>
+precedence) across the compounded chain.
+</p>
+</div>
+<ul>
+<li>Terminate the walk at <code>$HOME</code> (or <code>/</code>); cache the chain per directory so the</li>
+</ul>
+<div>
+<p>
+status walk doesn't reload <code>.gitignore</code>s for every leaf.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>REJECTED (the prior worker's landed-in-tree fix, to be rolled back):</li>
+</ul>
+<div>
+<p>
+<code>igno_is_build</code>/<code>Corpus</code> special-case in <code>IGNOMatch</code> — a hardcoded dir blacklist, not ignore resolution.
+</p>
+</div>
+<ul>
+<li>CHOSEN: an <code>.gitignore</code> STACK loaded leaf-dir → <code>$HOME</code>/<code>/</code>; <code>IGNOMatch</code></li>
+</ul>
+<div>
+<p>
+consults it nearest-first with git precedence; built once per directory (cached), not per leaf.  Localize in <code>dog/git/IGNO</code> + the <code>sniff/SNIFF</code> open/scan that drives it (incl. the <code>be status:&lt;sub&gt;/</code> relay).
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Roll back the prior fix: drop <code>igno_is_build*</code>/<code>Corpus</code> from <code>dog/git/IGNO.c</code>,</li>
+</ul>
+<div>
+<p>
+  revert the test that pinned it; <code>IGNOMatch</code> pattern-only again.
+</p>
+</div>
+<ul>
+<li>] Implement the chain: load+stack <code>.gitignore</code> from the path's dir up to</li>
+</ul>
+<div>
+<p>
+  <code>$HOME</code>/<code>/</code>; compound with git precedence; cache per directory.
+</p>
+</div>
+<ul>
+<li>] Wire into the status walk so sub subtrees inherit the parent chain.</li>
+<li>] Repro-first test (hermetic): a sub subtree with a PARENT-ONLY <code>.gitignore</code></li>
+</ul>
+<div>
+<p>
+  → build artifacts ignored; plus a <code>!</code>-negation / precedence case. ctest green.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Prior worker flagged the STATUS-002 worktree <code>/</code> at 100% disk (built via a</li>
+</ul>
+<div>
+<p>
+tmpfs symlink).  Watch disk on the rerun.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>(open; prior build/Corpus stop-gap rejected, to be rolled back.)</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,61 @@
+#   BE-005: unify verb output via the shared ROWS/HUNK state banner
+
+`be`'s verb reports must all speak ONE output model: stream color to a
+tty, compose ONE `H` hunk per (sub)module for `--tlv`, each headed by a
+pale-yellow **state banner** — built through ROWS, never per-site
+`fprintf` or a pasted `THEME_BANNER`. Today only the per-file tables
+comply; the summaries / confirmations (`be get`, post/put, `status!`)
+still print raw. This is the umbrella; per-verb wiring lands as the
+child tickets [GET-026], [STATUS-001], [POST-018].
+
+##  Input
+
+### Context
+ -  ROWS (`dog/ROWS.c`) is the shared builder: `status` opens it with
+    `uri="status:"` + `ROWS_BATCH` → one banner hunk (`SNIFF.exe.c:457`).
+ -  The get checkout opens ROWS with `empty_uri` + `ROWS_MODE_KEYED`;
+    `rows_stream_one` (`ROWS.c:172`) zeroes ts/verb/uri → flat, NO banner.
+ -  The banner IS the hunk header, single-sourced via `HUNKu8sFeedBanner`
+    keyed on the hunk's `uri/verb/ts` and the global `HUNKMode`.
+ -  Verb-bang already wired (`DOG_BANG_VERB`/`cli.bang`); `be x!` ≡
+    `be x --force` — the [STATUS-001] extended toggle.
+
+### Goals
+ -  ONE model for every verb report: ROWS table, state-banner header,
+    `HUNKMode`-keyed (color stream on tty / one `H` hunk on `--tlv`).
+ -  Streaming ROWS emits the module banner ONCE before the first row (and
+    on an empty result) — so KEYED (get/clone) matches BATCH (status).
+ -  Per-verb wiring split into [GET-026], [STATUS-001], [POST-018]; each
+    links back here and reuses the same ROWS banner path.
+
+### Constraints
+ -  No copy-pasted banner code at call sites — only the ROWS module-hunk
+    header. `dog/ROWS` + `sniff/` only; no `abc/` ([[abc-changes-need-review]]).
+ -  Preserve live streaming for big clones (KEYED); do NOT force BATCH.
+
+##  WIP
+
+### Design decisions
+ -  Core change in `dog/ROWS.c`: a streaming table with a non-empty
+    `uri/verb/ts` emits its banner once (and on empty), vs zeroing it —
+    the single enabler every child depends on.
+ -  Children supply only their banner uri + rows; the banner, mode-keying
+    and `--tlv` relay stay in ROWS/HUNK.
+
+### TODOs
+ -[ ] `dog/ROWS.c`: streaming banner-once + emit-on-empty (the shared core).
+ -[ ] [GET-026]: bare `be get` = default GET + resulting-state banner.
+ -[ ] [STATUS-001]: `be status!` extended + `be status:<path>/` sub-scope.
+ -[ ] [POST-018]: post/put confirmations through the banner.
+
+### Blockers and bummers
+ -  None yet.
+
+##  Outcome
+ -  (pending land)
+
+[Plan]: ../../wiki/Plan.mkd "the live planning page"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
+[GET-026]: ../GET/GET-026.mkd "bare be get = default GET + state banner"
+[STATUS-001]: ../STATUS/STATUS-001.mkd "be status! extended + status:<path>/ scope"
+[POST-018]: ../POST/POST-018.mkd "post/put confirmations via the banner"

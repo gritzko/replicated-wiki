@@ -1,0 +1,47 @@
+#   GIT-005: single-stream serving — verbatim whole-log clone + a thin-pack builder for incremental fetch
+##  Input
+### Context
+
+Child of [[GIT-001]]; depends on [[GIT-002]]. With one OFS-only stream per shard, full-clone serving is trivial: the whole log IS a valid git pack sans framing, so blast it verbatim with a fresh PACK header + SHA-1 trailer (`PSTRWrite`, the existing stitcher). The hard case is the incremental fetch: a byte suffix from the client's have-frontier is NOT self-contained, because OFS_DELTA records near the tail can reference bases before the frontier. The current `WIREBuildSegments` (`keeper/WIRE.c:319`) tiles PACK bookmarks to ship a verbatim range — that relied on self-contained per-fetch batches, which one-stream dissolves (and whose count math caused [[GET-019]]). Add a real thin-pack builder that walks the wanted set and thinnifies the boundary. See [PackLog], [Keeper].
+
+ -  Suffix isn't shippable verbatim: a tail OFS_DELTA whose base sits before the watermark can't resolve in a non-thin suffix pack, and git OFS can't reference outside the pack.
+ -  Bookmark tiling is going away: GIT-003 drops the per-pack `(count, byte_len)` bookmark, so `wire_tile_count` / `wire_find_pack` lose their unit; the count-vs-bytes mismatch class ([[GET-019]]) goes with it.
+ -  Two regimes, one server: full clone (no haves) wants raw verbatim throughput; incremental (haves present) wants a minimal thin pack — the serve path must pick.
+
+### Goals
+ -  Verbatim whole-log full-clone serving via `PSTRWrite` when the client has no haves.
+ -  A real thin-pack builder for incremental fetch that walks the wanted set and thinnifies the boundary, replacing the bookmark-tiling arm of `WIREBuildSegments`.
+
+### Constraints
+ -  Storage stays untouched: the builder is a serve-time transform (reads the OFS-only log, emits a wire pack); it never rewrites the log. Mirrors the [PackLog] "cheaply reframed" property, extended to thin output.
+ -  Wire-correct thin packs: bases the client already has (its haves' reachable closure) become REF_DELTA; bases inside the shipped set stay OFS_DELTA with offsets recomputed for the OUTPUT pack. Negotiate `ofs-delta` cap as today (`WIRE_CAP_OFS_DELTA`).
+ -  Keep `PSTRWrite` as the verbatim stitcher for the full-clone path; reuse `dog/git/PACK.h` header/varint emit and `DELTEncode` — no open-coded pack bytes ([CLAUDE] §10).
+ -  Both wire ends: serve git clients (vanilla `git fetch`) AND beagle `be://` peers; a beagle peer could accept the raw OFS-only stream directly, but emit standard packs for uniformity unless a measured win says otherwise.
+
+##  WIP
+
+### Design decisions
+ —
+
+### TODOs
+Branch on haves: empty → verbatim whole-log; non-empty → thin builder.
+
+ -[v] Full clone: compute the want's reachable object set = whole log (or from offset 0); `PSTRWrite` a single verbatim segment + header(count) + trailer. Reuse the existing stitcher.
+ -[v] Incremental: resolve haves → their reachable closure (graf/keeper ancestry); walk wants' closure minus haves'; emit each as raw/OFS within the output pack, flipping boundary-crossing bases to REF_DELTA. Replaces the bookmark-tiling arm of `WIREBuildSegments`.
+ -[v] Over-ship guard: never silently cap the want set; `log()`/report if the builder falls back to shipping a base raw rather than thin ([CLAUDE], no silent truncation — the [[GET-019]] lesson).
+ -[v] Repro-first ([CLAUDE] §17): extend `test/PSTR.c` / `test/WIRE.c` — (a) full clone byte-round-trips through `git index-pack`; (b) incremental fetch across a delta boundary yields a valid thin pack a vanilla git client unpacks; (c) a large-blob 1-line-change across the frontier produces a small thin delta, not a raw re-ship (the headline efficiency check). Build WITH_SSH.
+
+### Blockers and bummers
+ -  [[GIT-002]]/[[GIT-003]] dependencies satisfied (landed `e59a1c91`/`fa52117d`).
+
+##  Outcome
+ -  Landed `71a31179` on `dogs` trunk: `WIREBuildSegments` emits per-`.keeper` verbatim segments for full clones (`PSTRWrite`; the bookmark-tiling helpers `wire_find_pack`/`wire_bookmark_at`/`wire_tile_count` deleted, so the [[GET-019]] count-vs-bytes truncation class is structurally gone). New `WIREBuildThinPack` + shared `keeper/CLOSE` closure walk build thin packs: OFS back-offsets recomputed output-relative, boundary bases flipped to REF_DELTA, a reverse-dependency pass fresh-`DELTEncode`s a want-side object against a client-held sibling; over-ship guard logs any raw fallback (`WIRENOROOM` on overflow, never a silent cap). Storage untouched. build-ssh `ctest` 395/395 (ssh clone/fetch round-trips RAN); headline check: a 19 KiB blob 1-line change → 278-byte thin pack vs 8984 raw (~32×), `git index-pack --fix-thin` accepts both the full and thin (incl. REF-only) packs.
+
+[PackLog]: ../../wiki/PackLog.mkd "pack-log concept page"
+[Keeper]: ../../wiki/Keeper.mkd "the keeper dog"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"
+[GIT-001]: GIT-001.mkd "umbrella: single-stream OFS-only migration"
+[GIT-002]: GIT-002.mkd "object-by-object OFS-only writer"
+[GIT-003]: GIT-003.mkd "ingest re-encoder / normalizer"
+[GET-019]: ../GET/GET-019.mkd "unpk: scan incomplete (wire count truncation)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

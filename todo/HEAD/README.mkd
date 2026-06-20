@@ -1,7 +1,13 @@
 #   HEAD tickets
 
-`be head` is the read-only dry-run preview (the POST/GET "what would change" verb). No open tickets — landed ones kept as breadcrumbs below.
+`be head` is the read-only dry-run preview (the POST/GET "what would change" verb). The fix-and-land method is [Issues].
 
- -  [HEAD-002] — **LANDED `90f4a362`.** bare `be head` / `be head .` on a self-hosted trunk with no cached remote-tracking row now resolves the trunk's own `?` tip → "up to date" (0/0/0) instead of `graf: head: cannot resolve target` / GRAFNONE; and the head leg's `NONE` is re-flavoured to `GRAFNONE` so the be-level `Error:` agrees with graf's (exit stays non-zero). Regression: `test/head/23-trunk-no-remote` (+ corrected the stale `Error: NONE` assertion in head/02-msg-search).
+##  Active tickets
 
-[HEAD-002]: HEAD-002.mkd "parent head GRAFNONE on stale .refs.idx"
+ -  [HEAD-003] — `be head` hunk output renders PLAIN on a TTY (commit + `+/-` file rows), should be color like `diff:`/`status`; the `522-619` sub-capture forces `HUNKOutTLV` and the parent likely never re-renders. Producer stays presentation-free; color is bro's job.
+
+ -  [HEAD-004] — `be head be://<parent>` fetches a submodule from its `.gitmodules` URL (github) instead of the SAME parent source first → `WIREUNRCH` abort when offline. `be get` forwards `--source` (GET-011); HEAD's sub recursion doesn't. Order must be parent-source → declared URL.
+
+[HEAD-003]: HEAD-003.mkd "be head hunk output is plain on a tty"
+[HEAD-004]: HEAD-004.mkd "be head be:// fetches subs from .gitmodules, not parent"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

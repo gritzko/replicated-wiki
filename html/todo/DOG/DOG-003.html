@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-003: <code>dog/WEAVE</code> core — format + Parse/Next/Merge/Produce</h1>
+<p>
+Build the new <code>dog/WEAVE</code> engine per <a href="DOG-001/README.html">DOG-001</a>/<a href="DOG-001/api.html">api</a>: the columnar parsed view, the HUNK-compliant codec, and the build/produce ops — <code>WEAVEParse</code>, <code>WEAVENext</code> (linear fold), <code>WEAVEMerge</code> (identity-keyed fork merge), <code>WEAVEProduce</code> (any past rev as scoped-alive bytes) — plus the sequential cursor and a table-driven test. Emission is <a href="DOG-004.html">DOG-004</a>; this ticket owns the data model and correctness core. Gates on <a href="DOG-002.html">DOG-002</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Replaces <code>WEAVEFromBlob</code>/<code>Diff</code>/<code>DiffCarry</code>/<code>Apply</code> + <code>WEAVE_DECODE</code>/<code>wdec</code></li>
+</ul>
+<div>
+<p>
+/<code>weavedec</code> with one columnar form (the runtime decode made canonical).
+</p>
+</div>
+<ul>
+<li>Identity becomes <code>(commits[ins], ordinal)</code> on a stable <code>u64</code> id, so merge</li>
+</ul>
+<div>
+<p>
+is a shared-sequence interleave — the <a href="../DIS/DIS-003.html">DIS-003</a> robust fix.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li><code>WEAVEParse</code> zero-copy view; <code>WEAVENext(into,w,blob,ext,commit)</code> folds one</li>
+</ul>
+<div>
+<p>
+blob (RAPHash + relocated BRAM/NEIL); <code>pos</code> recomputed, not stored.
+</p>
+</div>
+<ul>
+<li><code>WEAVEMerge(into,a,b,merge_commit)</code> unions removers and orders concurrent</li>
+</ul>
+<div>
+<p>
+runs by <code>commit</code> id (total, deterministic — no timestamp tie-break).
+</p>
+</div>
+<ul>
+<li><code>WEAVEProduce(w,scope,out)</code> emits rev content; <code>WEAVEAlive</code> the tip fast</li>
+</ul>
+<div>
+<p>
+path; <code>weavecur</code> decodes <code>ins</code>/<code>rms</code> in lockstep with <code>toks</code>.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>16 MiB text cap (24-bit <code>tok32</code> offset): detect-and-fallback wired here,</li>
+</ul>
+<div>
+<p>
+exercised by <a href="DOG-004.html">DOG-004</a>'s large-file path. <code>commits[0]</code> = spine.
+</p>
+</div>
+<ul>
+<li><code>u64</code> identity collision guarded by <code>must()</code> at table insert.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Builder writes columns directly (no intermediate TLV); <code>ins</code>/<code>rms</code> are</li>
+</ul>
+<div>
+<p>
+blocked-ZINT, pre-expanded to BASS <code>u64</code> columns at Parse for O(1) access.
+</p>
+</div>
+<ul>
+<li><code>WEAVEMerge</code> walks A/B by per-commit ordinal: shared tokens match by id,</li>
+</ul>
+<div>
+<p>
+side-only runs splice in, collisions order by id. Markers are render-only.
+</p>
+</div>
+<ul>
+<li>Keep the diff-core degenerate-side handling + the checked EDL fallback</li>
+</ul>
+<div>
+<p>
+from today's <code>weave_diff_core</code> (<code>DIFFu64AddEntry</code>, no raw writes — <a href="../MEM/MEM-036.html">MEM-036</a>).
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Header <code>dog/WEAVE.h</code> (signatures + doc) per <a href="DOG-001/api.html">api</a>; <code>dog/INDEX.md</code> entry.</li>
+<li>] <code>WEAVEParse</code>/codec; <code>weavecur</code>; <code>WEAVEAlive</code>/<code>WEAVEProduce</code>.</li>
+<li>] <code>WEAVENext</code> (fold one blob); <code>WEAVEMerge</code> (identity interleave).</li>
+<li>] Table-driven test <code>dog/test/WEAVE01</code> (round-trip + diff_fold + merge_fold);</li>
+</ul>
+<div>
+<p>
+  the <code>abac</code>/<code>aabc</code> holdout class folded in as <code>merge_fold_multirm</code>.
+</p>
+</div>
+<ul>
+<li>] Fuzz <code>Next</code>/<code>Merge</code> content-recovery: <code>dog/fuzz/WEAVE.c</code> (<code>DWEAVEfuzz</code>),</li>
+</ul>
+<div>
+<p>
+  corpus <code>$HOME/Corpus/DWEAVE</code>.
+</p>
+</div>
+<ul>
+<li>] Merge correctness pass 1: LCS interleave → identity merge-JOIN (match</li>
+</ul>
+<div>
+<p>
+  every shared id, union removers); fixed the <code>rms</code>-column <code>NOROOM</code>.
+</p>
+</div>
+<ul>
+<li>] Merge concurrent-insert order is path-dependent (criss-cross dup) →</li>
+</ul>
+<div>
+<p>
+  split out as <a href="../DIS/DIS-043.html">DIS-043</a>; needs a stable per-token order key.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Gates on <a href="DOG-002.html">DOG-002</a> (the diff core must be includable from <code>dog/</code>).</li>
+<li><a href="../DIS/DIS-043.html">DIS-043</a>: criss-cross merges still duplicate tokens — correct for</li>
+</ul>
+<div>
+<p>
+ linear/simple-fork histories only until the order key lands.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>Landed <code>25fb62bd</code>: columnar <code>dog/WEAVE</code> core (Parse/Serialize/Next/Merge/Produce/</li>
+</ul>
+<div>
+<p>
+Alive/Step/Scope) + <code>dog/fuzz/WEAVE</code> (<code>DWEAVEfuzz</code>) content-recovery fuzzer + <code>dog/test/WEAVE01</code>. NOROOM (rms column) + LCS→identity-JOIN fixed here.
+</p>
+</div>
+<ul>
+<li>Criss-cross concurrent-insert order split to <a href="../DIS/DIS-043.html">DIS-043</a> (RGA stable-order key),</li>
+</ul>
+<div>
+<p>
+landed <code>8eece3f3</code>. Emit is <a href="DOG-004.html">DOG-004</a> (WIP).
+</p>
+</div>
+</body>
+</html>

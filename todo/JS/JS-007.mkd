@@ -1,0 +1,42 @@
+#   JS-007 [MED]: `main()` script load — wrong file, `ftell` -1 → `malloc(0)` OOB, ignored `fread`
+
+`main()` opens `argv[1]` instead of the parsed `script_file`, trusts `ftell`
+unchecked, and ignores the `fread` count. Method: [Issues].
+
+##  Input
+
+### Context
+ -  `main.cpp:212-222` opens `argv[1]` instead of the parsed `script_file` → wrong
+    file with `--eval X file.js`.
+ -  `ftell` can return -1 → `malloc(0)` then `script[-1]` OOB.
+ -  The `fread` return is ignored → a short read leaves uninitialised script bytes
+    before the NUL.
+ -  `WITH_JS`-gated WIP.
+
+### Goals
+ -  The parsed `script_file` is loaded; a failed `ftell` / short `fread` is detected,
+    not silently mis-handled.
+
+### Constraints
+ -  Use `script_file`; check `len >= 0`; check the `fread` count.
+
+##  WIP
+
+### Design decisions
+ -  (open) Replace `argv[1]` with `script_file`; guard `ftell` and `fread`.
+
+### TODOs
+ -[ ] Repro-first: `--eval X file.js` runs `file.js`; an empty/unreadable file does
+      not crash.
+ -[ ] Apply the three guards.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `24f890ed`** (2026-06-16): `main()` opens the parsed `script_file`
+    (not `argv[1]`), errors on `ftell` < 0, checks `malloc`, and NUL-terminates
+    at the actual `fread` count; new `JABCscriptFile` ctest (`test/run-007.sh`)
+    is red-before/green-after on the wrong-file open.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,52 @@
+#   DIFF-006: multi-hunk diff repeats `--- a/`/`+++ b/` per hunk, not per file
+
+In a multi-hunk unified diff (e.g. bare `be diff:`), the `--- a/<path>` /
+`+++ b/<path>` file-header pair is emitted for EVERY `@@` hunk instead of once per
+file. So 17 changed files with 62 hunks print 62 header pairs; git prints 17 (one
+pair, then its `@@` hunks grouped under it). Cosmetic unified-diff divergence, low
+severity. Split from [[DIFF-005]]'s bare-diff re-investigation. Method: [Issues].
+
+##  Input
+
+### Context
+ -  Reproduced in `$HOME/todo/PTR-005`: `be diff:` → 62 `--- a/` headers across
+    exactly 17 distinct files (`sort -u` on the paths == the 17 `mod` files; no
+    extra/unchanged/sub files — so it is NOT over-listing). PATCH.c=16 hunks, GET.c=13,
+    PUT.c=6, etc.
+ -  Root cause: `dog/HUNK.c:1242-1251` emits `--- a/<path>` / `+++ b/<path>` for every
+    HUNK, and each hunk is a self-contained record carrying its own `path`. There is no
+    per-file coalescing pass that would print the header pair once then group the file's
+    `@@` hunks under it.
+
+### Goals
+ -  Multi-hunk output prints ONE `--- a/`/`+++ b/` pair per file, with that file's
+    `@@` hunks grouped under it — matching git's unified-diff layout.
+
+### Constraints
+ -  Output otherwise byte-identical (same `@@` windows, same `+`/`-`/context lines);
+    only the redundant repeated headers collapse. Single-hunk files unchanged.
+ -  Render/HUNK change gates for review; add a multi-hunk-per-file shape test.
+
+##  WIP
+
+### Design decisions
+ -  Coalesce at the HUNK emit boundary (`dog/HUNK.c:1242`): suppress the file-header
+    pair when the previous hunk carried the same `path`; emit it only on a path change
+    (first hunk of each file).
+
+### TODOs
+ -[ ] Repro: count `--- a/` vs distinct paths in a multi-file `be diff:`.
+ -[ ] Fix: emit the header pair once per file (path-change boundary) in `dog/HUNK.c`.
+ -[ ] Test: a 2-file, ≥3-hunk diff prints exactly 2 header pairs.
+
+### Blockers and bummers
+ -  Pure cosmetics; do AFTER the real DIFF-007 overflow bug.
+
+##  Outcome
+ -  **CLOSED 2026-06-16 — WON'T FIX (maintainer).** Repeating the `--- a/`/`+++ b/`
+    pair per hunk is a cosmetic unified-diff divergence from git's per-file grouping;
+    output is otherwise correct and every hunk self-identifies its path. Not worth the
+    coalescing-pass churn. Ticket left in place; dropped from the active index.
+
+[DIFF-005]: DIFF-005/README.mkd "bare-diff re-investigation (parent scan)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

@@ -8,6 +8,11 @@ A large, long-lived file cannot be blamed at all — a fixed buffer fills before
  -  `blame:keeper/KEEP.c` returns `BNOROOM` (observed in release; the trivial schemes and small files succeed).
  -  Suspect caps: `GRAF_FW_BLOB_MAX` 16 MB (graf/BLAME.c:245), keeper `buf1..4` (keeper/KEEP.h:167), the 16 MB `a_carve` outbuf in `GRAFBlame`.
  -  The all-ancestors walk ([BLAME-001]) inflates/accumulates far more than necessary, hastening the overflow.
+ -  Reconfirmed 2026-06-15 via the `be` dispatcher: `be blame:beagle/BE.cli.c`
+    (4295 lines) → `BNOROOM` → `BEDOGEXIT` (exit 157, zero output);
+    `be blame:README.md` (165 lines) works. Scales with file/output SIZE (not
+    only history depth) — points at the output/weave accumulation cap over
+    per-blob inflate.
 
 ##  Blockers
 None. Needs a repro-first failing test (CLAUDE.md §17) pinning the exact buffer before resizing or switching to a growable/BASS-carved sink.
@@ -21,7 +26,15 @@ Repro, identify the overflowing buffer, then make it grow (or stream) rather tha
  -  Likely shrinks naturally once [BLAME-001] stops folding unchanged versions, but the cap must be removed regardless.
 
 ##  Landed
-None yet.
+LANDED `43e90bdb`. **Root cause was NOT a size cap** (none of the three
+suspects fired): `GRAFFileWeave`'s fold loop (`graf/BLAME.c`) called
+`WEAVEFromBlob`/`WEAVEApply`/`WEAVEDiff` **bare**, so each fold's transient
+`ABC_BASS` scratch never rewound and piled up across all versions until the
+1 GB arena exhausted mid-walk → `BNOROOM` (a missing call frame, cf.
+[[avoid-poking-abc-bass-internals]]). Fix: wrap the three per-fold calls in
+`try()` (per-iteration BASS rewind); the woven result survives in each weave's
+own mmap'd TLV. Test `graf/test/blame-bignoroom.sh` (80-commit/4000-line);
+`be blame:beagle/BE.cli.c` → exit 0, 4297 lines; 290/290 green.
 
 [BLAME-001]: ../todo/BLAME-001.mkd "keeper-side lazy descent + sha-dedup"
 [Plan]: ../wiki/Plan.mkd "the master plan"

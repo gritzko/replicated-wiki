@@ -1,0 +1,47 @@
+#   PTR-001: abc/ pointer-arith teardown — BSD/URI/TLV/ANSI (GATED)
+
+`abc/` is core and just-touched by URI-002/003/004, so this ticket is a behavior-preserving refactor whose diff is **surfaced for human review — never autoland** (CLAUDE.md "abc changes need review"). The 2026-06-15 audit found four hot spots where typed slices are ripped into raw cursors or bytes are hand-parsed, both forbidden by CLAUDE.md §1/§10 and [ABC].
+
+##  Input
+
+### Context
+ -  `abc/BSD.c:196-345` — `BSDDiff` rips `old`/`neu`/`patch` into `ob`/`out`/`outend` cursors and drives the algorithm on `out+=8`, `outend-out`, `ob[scsc+lastoffset]`; the boundary slice API is discarded (S.md "very very bad" mode-switch). Helpers at :88/:131/:140 take `u8cp + i64 size` pairs.
+ -  `abc/URI.c:301-374` — `URIMergePath` hand-implements RFC-3986 remove_dot_segments with `in`/`in_end`/`out` cursors (`in+=3`, `*out++`, `out[-1]`, `out--`) plus two static module-global `u8 Buf[4096]` (forbidden fixed buffer, non-reentrant); slices built by `Buf+len`.
+ -  `abc/TLV.c:169,181,205,229` — `*(u32*)(start+1)=len` / `*(u64*)(1+*outer)=tl-9` unaligned pointer-cast writes (UB) plus ptr-arith on `*outer`/`start`.
+ -  `abc/ANSI.c:217-234` — OSC-11 reply hand-parsed: `p=buf,end=buf+n; p+=2; p++; end-p; p[0]`, with `ansi_parse_hex16(&p,end)` a consumed-ptr + end out-param.
+
+### Goals
+ -  Keep `BSDDiff` data as slices: emit via `u8sFeed`/`u8sFed`, bound with `$len`/`u8sUsed`; helper sigs take `u8csc`.
+ -  Replace `URIMergePath` cursors with a PATH-segment walk into an `a_carve`/gauge; delete both static `Buf[4096]`.
+ -  Route TLV length writes through `u8sFeed32`/`u8sFeed16` (memcpy-backed, alignment-safe), as the rest of the module already does.
+ -  Drive the ANSI OSC parse with a `u8cs` + `u8sUsed`/`u8sFind`.
+
+### Constraints
+ -  GATED: surface the diff for review; do NOT land autonomously.
+ -  Behavior-preserving; abc fuzzers (BSD/URI/TLV) + `ctest -j16 --timeout 10` stay green.
+ -  Suffix-array integer index math in BSD is inherent — only the data *pointers* become slices, not the algorithm's indices.
+
+##  WIP
+
+### Design decisions
+ -  BSD is the worst single file — do it first, isolated, replaying the BSD fuzz corpus before/after for byte-identity.
+ -  Prefer a ragel/PATH walk for `URIMergePath` over a cursor rewrite ([ABC] "never manual parsing in C").
+
+### TODOs
+ -[x] Repro-first: BSD round-trip test (Diff→Patch == orig) + ANSI differential repro lock outputs; no BSD/TLV/ANSI fuzzer or corpus exists to replay.
+ -[x] `BSD.c` slice-ify the data path; `u8csc` helper signatures (BSDi64sFeedOff/BSDi64Off, u8csAtP indexing, a_rest suffixes).
+ -[ ] `URIMergePath` → segment walk; drop the two static buffers — SPLIT OUT to PTR-009 (real public-API design fork, not mechanical).
+ -[x] TLV unaligned cast-writes → `u8sFeed32`/`u8sFeed64` (field is genuinely 64-bit at `:238`, not 16).
+ -[x] ANSI OSC parse → `u8cs` + `u8sUsed`/`u8sFind`; helper drops consumed-ptr+end out-param.
+ -[ ] Surface the diff for review; do not land — pending human review.
+
+### Blockers and bummers
+ -  Coordinate with open URI-001 work so this does not collide on `abc/URI.c`.
+ -  URI static-buffer removal is a public-API design fork (results outlive the call; a BASS carve rewinds at `call()`) → carved to PTR-009; `abc/URI.c` here is UNTOUCHED.
+
+##  Outcome
+
+ -  BSD/TLV/ANSI done, full suite green (286/286), diff awaits human review; URI split to PTR-009.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

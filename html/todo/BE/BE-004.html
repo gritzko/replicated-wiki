@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BE-004</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BE-004: unify <code>home</code> into a process singleton (stop threading <code>home *</code>)</h1>
+<p>
+<code>home</code> is per-invocation ambient state derived purely from *<strong>cwd</strong>* (store / worktree discovery) — a process property, like <code>&amp;KEEP</code> and <code>&amp;GRAF</code> already are. Yet the codebase threads <code>home *</code> through every API and embeds a borrowed <code>home *h</code> in every dog's state struct, and reopens a fresh local <code>home</code> at ~16 sites. Make <code>home</code> a singleton <code>&amp;HOME</code>; drop the pointer-passing.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>dog/HOME.h:26</code> states the current model verbatim: &quot;each dog embeds a</li>
+</ul>
+<div>
+<p>
+<code>home *base</code> in its state struct and propagates it through DOGOpen. All HOME functions take <code>home *</code> as their first argument.&quot;
+</p>
+</div>
+<ul>
+<li>Borrowed <code>home *h</code> fields: <code>keeper/KEEP.h:117</code>, <code>graf/GRAF.h:33</code>,</li>
+</ul>
+<div>
+<p>
+<code>sniff/SNIFF.h:89</code>. Every <code>*Open</code>/<code>*OpenBranch</code> takes <code>home *</code>.
+</p>
+</div>
+<ul>
+<li>~16 sites declare a local <code>home X = {}; HOMEOpen(&amp;X,…); … HOMEClose(&amp;X)</code></li>
+</ul>
+<div>
+<p>
+(e.g. <code>beagle/BE.cli.c</code> ×8, <code>bediff_build_pins</code>, the get/head/patch paths).
+</p>
+</div>
+<ul>
+<li>*<strong>Precedent:</strong>* <code>KEEP</code>/<code>GRAF</code> are ALREADY process singletons (<code>&amp;KEEP</code>,</li>
+</ul>
+<div>
+<p>
+<code>&amp;GRAF</code>, with <code>KEEPOPEN</code>/<code>GRAFOPEN</code> &quot;already open, use the global, do not close&quot; statuses). <code>home</code> is the odd one still passed by pointer.
+</p>
+</div>
+<ul>
+<li><code>home</code> already assumes process scope: one 4 GB <code>arena</code>, one <code>config</code> mmap,</li>
+</ul>
+<div>
+<p>
+and &quot;at most two branches loaded into the process at once&quot; (<code>HOME.h</code>).
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>One process-global <code>&amp;HOME</code> (mirroring <code>&amp;KEEP</code>/<code>&amp;GRAF</code>), opened once from</li>
+</ul>
+<div>
+<p>
+cwd; idempotent re-open returns a <code>HOMEOPEN</code>-style status, never reopens.
+</p>
+</div>
+<ul>
+<li>Drop the <code>home *h</code> borrowed field from the KEEP/GRAF/SNIFF state structs</li>
+</ul>
+<div>
+<p>
+and the <code>home *</code> first argument from the HOME/KEEP/GRAF/SNIFF APIs.
+</p>
+</div>
+<ul>
+<li>Delete the ~16 local <code>home X = {}</code> reopens; callers just use <code>&amp;HOME</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Submodule recursion *<strong>forks child processes</strong>* (each child's cwd → its own</li>
+</ul>
+<div>
+<p>
+<code>&amp;HOME</code>), so a single process never needs two homes — the singleton holds.
+</p>
+</div>
+<ul>
+<li><code>home</code> carries a mutable <code>project</code> selector + two branch slots</li>
+</ul>
+<div>
+<p>
+(writable cur + one ro aux); the singleton must keep supporting project/branch swap for cross-branch and sibling-shard reads.
+</p>
+</div>
+<ul>
+<li><code>dog/HOME</code> is dog-layer, not <code>abc/</code> — no abc changes (<a href="">[abc-changes-need-review</a>]).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Model <code>&amp;HOME</code> exactly on <code>&amp;KEEP</code>/<code>&amp;GRAF</code>: file-scope global + open/close</li>
+</ul>
+<div>
+<p>
+refcount/status, callers never own it.
+</p>
+</div>
+<ul>
+<li>In-process project-swap is fine with the singleton, NOT a blocker:</li>
+</ul>
+<div>
+<p>
+<code>sniff/SUBS.c:617 subs_sibling_shard_has_pin(home *parent_home,…)</code> probes a sibling sub-shard by swapping <code>parent_home-&gt;project</code> + <code>KEEPOpenBranch</code>, then restores it (GET-011). Against <code>&amp;HOME</code> it swaps <code>&amp;HOME-&gt;project</code> and restores exactly as it does today — the singleton already owns a mutable <code>project</code> field, and the parent home is <strong>already</strong> a shared handle here, so nothing changes. (It does contradict &quot;subs always fork&quot;: this one pin probe reads in-process rather than forking — a behaviour note, not a migration obstacle.) No genuine <strong>dual-home</strong> (two live <code>home</code> structs in one process) exists anywhere, so the singleton thesis holds.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] <code>&amp;HOME</code> singleton (<code>dog/HOME.c</code>, <code>extern home HOME</code>), open/close on it,</li>
+</ul>
+<div>
+<p>
+  <code>HOMEOPEN</code>/<code>HOMEROBR</code> on compatible re-open (mirrors <code>&amp;KEEP</code>/<code>&amp;GRAF</code>).
+</p>
+</div>
+<ul>
+<li>] Dropped <code>home *h</code> from all six dog structs + the <code>home *</code> first arg</li>
+</ul>
+<div>
+<p>
+  across HOME/KEEP/GRAF/SNIFF/SPOT/WOOF/BRO/REFSResolveURI/KEEPResolveURI;   <code>k-&gt;h-&gt;</code> → <code>HOME.</code>.
+</p>
+</div>
+<ul>
+<li>] <code>&amp;HOME</code> opened once in <code>becli_inner</code>; reopen sites removed.</li>
+<li>] Sibling-shard read save/restores <code>HOME.project</code> (no dual home).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None. (The first land's FF-weave hit <a href="">DIS-041</a>; that's fixed, so the</li>
+</ul>
+<div>
+<p>
+re-run FF'd/wove clean.)
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED <code>88485deb</code> — <code>home</code> is now the process singleton <code>&amp;HOME</code>; <code>home *</code></li>
+</ul>
+<div>
+<p>
+params and the borrowed <code>home *h</code> struct fields are gone across all dogs + dispatcher; ~70 source + ~22 test files; 291/291 green. Preserved the BRO-001 banner, BLAME-004 try-wraps, DIS-041 fix in the overlapping files.
+</p>
+</div>
+</body>
+</html>

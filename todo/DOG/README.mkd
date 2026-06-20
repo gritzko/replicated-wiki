@@ -1,0 +1,28 @@
+#   DOG tickets: shared dog-layer reworks
+
+`dog/` is the shared layer between `abc/` and the verb dogs (sniff/keeper/graf/spot/bro). Tickets here move generic, multiply-used machinery DOWN into `dog/` and rework its APIs. Current focus: relocate the token-level history engine out of `graf/` into a columnar, [HUNK]-compliant `dog/WEAVE` reusable by every dog and keyed on real commit ids. [Plan]-shaped pages, cleared via the [Issues] loop.
+
+##  Active tickets
+
+ -  [DOG-001] — umbrella: rewrite WEAVE as a columnar, HUNK-compliant
+    `dog/WEAVE` (`{text,toks,ins,rms,commits}`); full design in its [api].
+ -  [DOG-002] — prereq: relocate the diff core (`BRAM`+`NEIL`) from `graf/`
+    down to `dog/`, behaviour-preserving (unblocks the dog/ layering).
+ -  [DOG-003] — core: format + `WEAVEParse/Next/Merge/Produce` + cursor +
+    table-driven tests (folds the [DIS-003] holdout in as a property case).
+ -  [DOG-004] — emit: `WEAVEEmit{Diff,Full,Merged}` + `Alive`/`Produce` over
+    an index-bitset scope; 16 MiB cap + large-file fallback (folds [DIFF-007]).
+ -  [DOG-005] — cut-over: repoint graf (GET/REBASE/BLAME/DIFFREF/LOG) at the
+    new API, delete `graf/WEAVE.{c,h}`, update both INDEX.md.
+
+[DOG-001]: DOG-001/README.mkd "WEAVE → dog/ columnar rewrite (umbrella)"
+[api]: DOG-001/api.mkd "proposed dog/WEAVE API + on-wire format"
+[DOG-002]: DOG-002.mkd "relocate BRAM+NEIL diff core into dog/"
+[DOG-003]: DOG-003.mkd "dog/WEAVE core: format + Parse/Next/Merge/Produce"
+[DOG-004]: DOG-004.mkd "dog/WEAVE emit + scope-bitset + large-file cap"
+[DOG-005]: DOG-005.mkd "graf cut-over to dog/WEAVE; delete graf/WEAVE"
+[DIS-003]: ../DIS/DIS-003.mkd "WEAVEMerge token identity is positional"
+[DIFF-007]: ../DIFF/DIFF-007.mkd "diff:<largefile> silently empty"
+[HUNK]: ../../wiki/Dog.mkd "the hunk wire format (dog layer)"
+[Issues]: ../../meta/work.mkd "the parallel fix-and-land loop"
+[Plan]: ../../wiki/Plan.mkd "the live planning page"

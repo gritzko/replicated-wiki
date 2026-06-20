@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DOG-005</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG-005: graf cut-over to <code>dog/WEAVE</code>; delete <code>graf/WEAVE</code></h1>
+<p>
+Repoint graf at <code>dog/WEAVE</code> and delete <code>graf/WEAVE.{c,h}</code>. GET, REBASE, BLAME, DIFFREF and LOG call the new API; the parent-closure <code>WEAVEApply</code> path becomes <code>WEAVEMerge</code> + scope bitsets resolved at the graf/DAG boundary. Finishes the move, updates both INDEX.md, and retires the superseded tickets. Gates on <a href="DOG-003.html">DOG-003</a>/<a href="DOG-004.html">DOG-004</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Callers: <code>graf/GET.c</code> (<code>build_tip_weave*</code>), <code>graf/REBASE.c</code>, <code>graf/BLAME.c</code></li>
+</ul>
+<div>
+<p>
+(<code>GRAFFileWeave</code>), <code>graf/DIFFREF.c</code>, <code>graf/LOG.c</code>.
+</p>
+</div>
+<ul>
+<li><code>GRAFFileWeave</code> folds the closure via <code>WEAVEApply</code>/<code>Diff</code>; this becomes</li>
+</ul>
+<div>
+<p>
+<code>WEAVENext</code> along first-parent + <code>WEAVEMerge</code> at merges, scope from the DAG.
+</p>
+</div>
+<ul>
+<li>THE bug: <code>be-patch-15</code> step 2 fails 5/5 under the dog cut-over. <a href="../DIS/DIS-045.html">DIS-045</a></li>
+</ul>
+<div>
+<p>
+PROVED the dog engine correct — <code>dog/test/WEAVE03</code> drives step-2 as a shared-base 3-way merge (base F2 → ours, base F2 → theirs, then <code>WEAVEMerge</code>) and gets <code>08.lib.want_step2.c</code> byte-exact (322/322, 4.7M fuzz). So the fault is graf's GLUE: <code>WEAVEApply</code>-against-parent-closure replay is NOT byte-identical to that first-parent <code>WEAVENext</code>+<code>WEAVEMerge</code> shared-base model for the ancestor-skip topology. Fix the modeling, not the engine.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>All graf weave ops on <code>dog/WEAVE</code>; <code>graf/WEAVE.{c,h}</code> deleted; suite green;</li>
+</ul>
+<div>
+<p>
+<code>graf blame/diff/merge</code> + <code>be get</code>/<code>be patch</code> byte-parity (modulo capped).
+</p>
+</div>
+<ul>
+<li><a href="../GET/GET-001.html">GET-001</a>'s per-version BASS blowup gone by construction (no per-call decode).</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behaviour-preserving for uncapped files; conflict-marker output shape</li>
+</ul>
+<div>
+<p>
+unchanged so <a href="../POST/POST-006.html">POST-006</a>/<a href="">DIS-040</a> detection is unaffected.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Resolve closures to scope bitsets at the graf/DAG edge: map a rev's</li>
+</ul>
+<div>
+<p>
+ancestor <code>u64</code> ids → <code>commits[]</code> indices once per op (reuse <code>DAGAncestors</code>).
+</p>
+</div>
+<ul>
+<li>Model the ancestor-skip merge as the <a href="../DIS/DIS-045.html">DIS-045</a> WEAVE03 shared-base 3-way:</li>
+</ul>
+<div>
+<p>
+fold ours AND theirs onto the SAME merge-base weave (the skip ancestor, NOT a per-branch closure replay), then <code>WEAVEMerge</code>; that is what the engine is byte-parity-correct for. Make <code>GRAFFileWeave</code>'s glue match it.
+</p>
+</div>
+<ul>
+<li>Land file-disjoint where possible; cut over one caller at a time if needed.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro <code>be-patch-15</code> step 2 5/5 fail through the graf glue (the dog</li>
+</ul>
+<div>
+<p>
+  engine is already pinned by WEAVE03 — isolate the closure→fold model).
+</p>
+</div>
+<ul>
+<li>] Repoint GET/REBASE/BLAME/DIFFREF/LOG; closure→scope at the DAG boundary,</li>
+</ul>
+<div>
+<p>
+  shared-base 3-way at ancestor-skip merges (per WEAVE03).
+</p>
+</div>
+<ul>
+<li>] Delete <code>graf/WEAVE.{c,h}</code>; update <code>graf/INDEX.md</code> + <code>dog/INDEX.md</code>.</li>
+<li>] Full ctest + blame/diff/merge ident; close <a href="../GET/GET-001.html">GET-001</a>/<a href="../DIS/DIS-003.html">DIS-003</a>/<a href="../DIFF/DIFF-007.html">DIFF-007</a></li>
+</ul>
+<div>
+<p>
+  and re-confirm <a href="">MEM-036</a>/<a href="">MEM-040</a> are moot.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Gates on <a href="DOG-003.html">DOG-003</a>+<a href="DOG-004.html">DOG-004</a>. <a href="../DIS/DIS-045.html">DIS-045</a> no longer blocks — engine proven</li>
+</ul>
+<div>
+<p>
+correct, the fault is the graf cut-over glue (closure replay ≠ shared-base 3-way). Watch <a href="../DIS/DIS-041.html">DIS-041</a> (FF-weave needs indexed commits) during GET cut-over.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>(open)</li>
+</ul>
+</body>
+</html>

@@ -23,7 +23,13 @@ A large, long-lived file cannot be blamed at all — a fixed buffer fills before
 <li><code>blame:keeper/KEEP.c</code> returns <code>BNOROOM</code> (observed in release; the trivial schemes and small files succeed).</li>
 <li>Suspect caps: <code>GRAF_FW_BLOB_MAX</code> 16 MB (graf/BLAME.c:245), keeper <code>buf1..4</code> (keeper/KEEP.h:167), the 16 MB <code>a_carve</code> outbuf in <code>GRAFBlame</code>.</li>
 <li>The all-ancestors walk (<a href="../todo/BLAME-001.html">BLAME-001</a>) inflates/accumulates far more than necessary, hastening the overflow.</li>
+<li>Reconfirmed 2026-06-15 via the <code>be</code> dispatcher: <code>be blame:beagle/BE.cli.c</code></li>
 </ul>
+<div>
+<p>
+(4295 lines) → <code>BNOROOM</code> → <code>BEDOGEXIT</code> (exit 157, zero output); <code>be blame:README.md</code> (165 lines) works. Scales with file/output SIZE (not only history depth) — points at the output/weave accumulation cap over per-blob inflate.
+</p>
+</div>
 <h2>Blockers</h2>
 <p>
 None. Needs a repro-first failing test (CLAUDE.md §17) pinning the exact buffer before resizing or switching to a growable/BASS-carved sink.
@@ -40,7 +46,7 @@ Repro, identify the overflowing buffer, then make it grow (or stream) rather tha
 </ul>
 <h2>Landed</h2>
 <p>
-None yet.
+LANDED <code>43e90bdb</code>. *<strong>Root cause was NOT a size cap</strong>* (none of the three suspects fired): <code>GRAFFileWeave</code>'s fold loop (<code>graf/BLAME.c</code>) called <code>WEAVEFromBlob</code>/<code>WEAVEApply</code>/<code>WEAVEDiff</code> *<strong>bare</strong>*, so each fold's transient <code>ABC_BASS</code> scratch never rewound and piled up across all versions until the 1 GB arena exhausted mid-walk → <code>BNOROOM</code> (a missing call frame, cf. <a href="">[avoid-poking-abc-bass-internals</a>]). Fix: wrap the three per-fold calls in <code>try()</code> (per-iteration BASS rewind); the woven result survives in each weave's own mmap'd TLV. Test <code>graf/test/blame-bignoroom.sh</code> (80-commit/4000-line); <code>be blame:beagle/BE.cli.c</code> → exit 0, 4297 lines; 290/290 green.
 </p>
 </body>
 </html>

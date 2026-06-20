@@ -1,0 +1,126 @@
+CODE-018 suspects — manual `ok64 o = A; if (o != OK) return o;` (regenerate:
+  be 'spot:.c#ok64 o=A;if(o!=OK) return o;'   (run at repo root))
+Snapshot 2026-06-16: 116 hits — 93 in .c, 23 in .h.
+
+# ---- .c files (convert to PRO.h call()/try() where BASS-rewind is safe) ----
+beagle/BE.cli.c#u8csbDataLen:L3704          (already a try()/__ site — verify)
+dog/ULOG.c#ULOGFindLatest:L698
+dog/ULOG.c#ULOGFindVerb:L717
+dog/ULOG.c#ULOGMergeWalk:L1048
+dog/ULOG.c#L1056
+dog/git/PACK.c#PACKDrainObjHdr:L77
+dog/git/PKT.c#PKTu8sDrain:L23
+dog/git/SUBS.c#SUBSu8sParse:L38
+dog/git/SUBS.c#SUBSu8sParse:L63
+dog/tok/BRCT.c#BRCTInner:L91
+dog/tok/MDT.c#MDTEmitHeading:L164
+dog/tok/MDT.c#MDTEmitHeading:L177
+dog/tok/MDT.c#L185
+dog/tok/MKDT.c#MKDTEmitHeading:L235
+dog/tok/MKDT.c#MKDTEmitHeading:L247
+dog/tok/MKDT.c#L255
+dog/tok/TOK.c#TOKSplitText:L92
+graf/BRAM.c#bram_region:L116
+graf/DIFFREF.c#diffref_remember_submodule:L303
+graf/REBASE.c#GRAFRebase:L763
+graf/REBASE.c#rebase_blob_at_sha:L934
+graf/WEAVE.c#WEAVEFromBlob:L429
+keeper/KEEP.c#keep_get_rec:L882
+keeper/KEEP.c#KEEPGetSize:L902
+keeper/KEEP.exe.c#CLIUriLen:L732
+keeper/PROJ.c#KEEPProjTree:L369
+keeper/REFS.c#REFSEach:L322
+keeper/SUBS.c#keep_subs_tree_step:L26
+keeper/SUBS.c#keep_subs_walk_path:L67
+keeper/UNPK.c#unpk_drain_waiters:L84
+keeper/WALK.c#walk_tree_dive:L45
+keeper/WALK.c#KEEPTreeULog:L417
+keeper/WIRECLI.c#wcli_wire_to_be:L412
+keeper/WIRECLI.c#wpush_walk_tree:L1172
+keeper/WIRECLI.c#wpush_walk_commit:L1239
+sniff/AT.c#SNIFFAtBaseline:L381
+sniff/AT.c#SNIFFAtCurTip:L411
+sniff/AT.c#SNIFFAtPatchChain:L577
+sniff/AT.c#SNIFFAtPatchEntries:L607
+sniff/AT.c#SNIFFAtNow:L710
+sniff/AT.c#SNIFFAtScanPutDelete:L768
+sniff/AT.c#at_hash_wt_blob:L864
+sniff/AT.c#at_hash_wt_blob:L876
+sniff/DEL.c#del_dir:L211
+sniff/DEL.c#DELStage:L394
+sniff/PATCH.c#resolve_cherry:L1180
+sniff/PATCH.c#patch_first_parent:L1215
+sniff/PATCH.c#patch_apply_file_inner:L1892
+sniff/PATCH.c#L1900
+sniff/POST.c#post_expand_under:L199
+sniff/POST.c#post_pd_cb:L272
+sniff/POST.c#post_pd_cb:L294
+sniff/POST.c#post_walk_decisions:L1196
+sniff/POST.c#post_rebase_emit_cb:L1290
+sniff/POST.c#post_rebase_emit_cb:L1301
+sniff/POST.c#POSTResolveBranchTip:L1346
+sniff/POST.c#post_cascade_one:L1439
+sniff/POST.c#post_cascade_walk:L1549
+sniff/POST.c#post_cascade_walk:L1562
+sniff/POST.c#L2410
+sniff/POST.c#POSTCommit:L2502
+sniff/PUT.c#put_visit_tracked:L164
+sniff/PUT.c#put_detect_moves:L456
+sniff/PUT.c#L464
+sniff/PUT.c#put_detect_moves:L473
+sniff/PUT.c#put_stage_bare:L660
+sniff/PUT.c#PUTStage:L753
+sniff/PUT.c#L923
+sniff/SNIFF.c#SNIFFMergeWalk:L382
+sniff/SNIFF.c#L390
+spot/CAPO.c#CAPOEmit:L117
+spot/CAPO.c#capo_tri_cb:L154
+abc/FILE.c#FILEScanRecurse:L1101        (abc — GATED, surface diff)
+abc/FSW.c#FSWDrain:L70                   (abc — GATED)
+abc/FSW.c#FSWDrain:L149                  (abc — GATED)
+abc/JSON.c#JSONUnEscape:L263            (abc — GATED)
+abc/PATH.c#PATHu8sDrain:L100           (abc — GATED)
+abc/ROCK.c#ROCKGet:L256                 (abc — GATED)
+abc/ROCK.c#ROCKCheckpoint:L435         (abc — GATED)
+abc/URI.c#URIutf8Drain:L65              (abc — GATED)
+abc/URI.c#L73                           (abc — GATED)
+abc/URI.c#URIutf8Feed:L83               (abc — GATED)
+abc/URI.c#L91                           (abc — GATED)
+
+# ---- .h files: inlineable forwarders (PRO.h is .c-only — leave manual, OR
+#      move to .c if they do fallible work with real cleanup). Triage each. ----
+dog/DPATH.h#DPATHVerify:L34
+dog/DPATH.h#DPATHBranchNormFeed:L72
+abc/DNS.h#DNSu8sFeed16:L90              (abc — GATED)
+abc/DNS.h#DNSu8sFeed32:L103             (abc — GATED)
+abc/DNS.h#DNSNameText:L239             (abc — GATED)
+abc/DNS.h#DNSQuestFeed:L249            (abc — GATED)
+abc/DNS.h#DNSQuestDrain:L263           (abc — GATED)
+abc/DNS.h#DNSRRFeed:L279               (abc — GATED)
+abc/DNS.h#DNSRRDrain:L303              (abc — GATED)
+abc/FILE.h#FILEBookEnsure:L643         (abc — GATED)
+abc/NFA.h#NFAu8RAtom:L202              (abc — GATED)
+abc/NFA.h#NFAu8RCounted:L319           (abc — GATED)
+abc/NFA.h#NFAu8RSeq:L466               (abc — GATED)
+abc/NFA.h#NFAu8RSeq:L481               (abc — GATED)
+abc/NFA.h#NFAu8Compile:L509            (abc — GATED)
+abc/NUM.h#NUMu8sFeedSep:L53            (abc — GATED)
+abc/NUM.h#NUMu8sFeedSmall:L64          (abc — GATED)
+abc/NUM.h#NUMu8sFeedSmall:L73          (abc — GATED)
+abc/NUM.h#NUMu8sFeed:L87               (abc — GATED)
+abc/NUM.h#NUMu8sFeed:L102              (abc — GATED)
+
+# ---- FALSE POSITIVES (do NOT touch) ----
+abc/PRO.h#trace:L308                    (the PRO.h flow machinery itself)
+abc/Bx.h#fun:L200                       (Bx.h template macro — `fun`/generated)
+abc/SSTx.h#X:L31                        (SSTx.h template macro — `X`/generated)
+graf/test/MMAP01.c#graf_left_open:L92   (test — TEST() frame / lower priority)
+graf/test/REBASE01.c#bass_cb:L694       (test)
+graf/test/REBASE01.c#bass_cb:L704       (test)
+abc/test/DNS.c#DNSResolve:L150          (test)
+abc/test/LSM.c#u64less:L158             (test)
+abc/test/NFA.c#nfa_match:L14            (test)
+abc/test/NFA.c#nfa_search:L32           (test)
+abc/test/ROCK.c#ROCKtest6:L230          (test)
+abc/test/SLOG.c#writeNumStrRec:L68      (test)
+abc/fuzz/SLOG.c#writeNumRec:L44         (fuzz)

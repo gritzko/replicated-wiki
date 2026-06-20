@@ -1,0 +1,61 @@
+#   POST-019: `be post` output noise — drop the `be: post …` echo + name the bump put
+
+`be post` on a parent with an advanced submodule emits noise: dispatcher echo lines
+`be: post .` / `be: post abc` (pure progress chatter), and an anonymous `put put:` +
+`staged 1 put row(s)` block. The mid-post put itself is FINE — it stages the bumped
+sub gitlink so the parent commit records the new tip — but it names nothing, so the
+user can't tell it staged `abc/`. Drop the `be:` echo; make the put SAY what it put.
+See [POST-018], [BE-005], [Submodules].
+
+##  Input
+
+### Context
+Observed `be post 'JS: tcp/udp network bindings'` from `~/beagle` with an advanced
+`abc` submodule; a `put:` block appears in the middle of the post output.
+
+ -  Verbatim: parent recurses `post abc/?00e5d050#…` (mod abc/UDP.h), THEN `put
+    put:` + `staged 1 put row(s)`, THEN parent `post ?803b3fae#…` whose rows
+    already include `mod abc` (the same gitlink bump).
+ -  The interleaved put is the gitlink bump (`put <sub>#<40-hex>`, `sniff/POST.c:234`
+    / `485`) staging the new `abc` tip into the parent before the parent commit.
+ -  Its banner is the POST-018 ROWS routing (`put_feed_summary_tail`, `sniff/PUT.c:652`),
+    suppressed only under `SNIFF.quiet`; the parent-scope bump runs non-quiet.
+
+### Goals
+The internal post-driven gitlink-bump staging must not print a user-facing `put:`
+banner inside a `post` stream.
+
+ -  The sub-bump shows ONLY as `mod <sub>` in the parent post rows (already there).
+ -  Suppress the standalone `put put:` table + `staged N put row(s)` for the
+    internal gitlink-bump path; leave explicit `be put` UX unchanged.
+ -  Repro test: `be post` with an advanced sub asserts NO `put:` banner between the
+    sub-post and the parent-post (table-driven, `test/post/` suite).
+
+### Constraints
+ -  Do not change WHAT lands — the gitlink bump must still be committed; only its
+    banner is suppressed.
+ -  Confirm the mechanism by trace before fixing (recursion-debug practice); the
+    `SNIFF.quiet` guard at `PUT.c:657` is the likely lever, not yet trace-confirmed.
+
+##  WIP
+
+### Design decisions
+(pending — likely run the internal bump put under the quiet/relay guard, or fold
+its row into the parent post table rather than open a separate `put:` banner.)
+
+### TODOs
+ -[ ] Trace `be post` with an advanced sub (`strace -f` / ABC_TRACE) to confirm the
+      put call site + why it prints non-quiet.
+ -[ ] Add a failing repro in `test/post/` (advanced-sub parent post, assert no put banner).
+ -[ ] Gate the `put:` banner off for the internal gitlink-bump path; re-run `ctest`.
+
+### Blockers and bummers
+(none yet)
+
+##  Outcome
+(pending)
+
+[POST-018]: POST-018.mkd "post/put confirmations through the shared banner"
+[BE-005]: ../BE/BE-005.mkd "umbrella: shared ROWS state banner"
+[Submodules]: ../../wiki/Submodules.mkd "submodule model"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

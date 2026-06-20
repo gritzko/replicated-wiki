@@ -25,6 +25,17 @@ yet leaves partial state.
     data — a specific set of paths is silently skipped by the multi-file walk.
  -  Recovery used (legit, not a silent patch): complete the tree via per-file
     `be get <path>` (real store checkouts), verify 1200 ok, then build.
+ -  2026-06-16 PTR-sweep batch (9 wts off one `~/beagle/.be`): 7 of 9 truncated
+    to **474/528 `test/` files**, a CLEAN tree-order cutoff at `test/put/05` (ALL
+    of `test/spot`+`test/tree`+`test/put/05…` dropped, `mis`); `woof/`+`abc/`
+    present here, so the dropped SET is NOT fixed across runs.
+ -  The 2 complete wts (528) are exactly the ones whose worker **re-ran `be
+    get`** → a second pass filled the tail.  So re-run makes PROGRESS (474→528),
+    not the "doesn't converge" earlier theory; cutoff is a moving truncation point.
+ -  Live repro preserved at `$HOME/todo/PTR-001` (do NOT delete) — truncated wt,
+    `be status` shows the 54 `mis`.  Consequence: truncated wts ran `ctest` over a
+    REDUCED set — **286 vs 298** in complete wts (~12 spot/tree/put cases silently
+    never registered); their "green" excluded those.
 
 ### Goals
  -  `be get` either produces a COMPLETE checkout (every tree file + mounted
@@ -41,27 +52,49 @@ yet leaves partial state.
 
 ##  WIP
 
-### Design decisions (open)
- -  Repro is DETERMINISTIC (above): the bulk/multi-file checkout walk silently
-    skips a fixed set of paths (`woof/`, some `test/spot`+`test/tree`) and exits
-    `SNIFFFAIL`, while per-file `be get` for the same paths works.  Find why the
-    walk drops them (tree-descent order? a count/cursor bug? a per-entry error
-    swallowed mid-walk?) — objects are present, so it's the walk, not the pool.
+### Design decisions
+ -  ROOT CAUSE FOUND (2026-06-16, fix-ready): `keeper/WALK.c::walk_tree_dive`
+    recurses into subdirs with a PLAIN C call while each level `a_carve`s a 1 MiB
+    `tbuf` off ABC_BASS — bare recursion never rewinds, so ~1000 dirs pile up to
+    the 1 GiB arena cap; the next carve returns `BNOROOM` mid-walk → WALK return →
+    `SNIFFFAIL`.  Trace: BASS climbs 21→1023 MiB, breaks exactly at `test/put/05`
+    with `free=0`, `vo=BNOROOM`, `ctx.error=OK` (no file-write error).  Same class
+    as BLAME-004's `blame-bignoroom`.  NOT the atomic-swap hypothesis.
+ -  FIX: wrap the recursion `try(walk_tree_dive,…); vo=__;` — `try()` snapshots
+    BASS after the parent's `tbuf` carve and rewinds per subtree, so only the live
+    root-to-leaf chain stays carved.  One line; covers `WALKTreeLazy` (get) +
+    `WALKTree` (blame/diff).  ("empty `abc/`" was downstream of the truncation —
+    NOT a 2nd bug; abc mounts once the walk completes.)
+ -  Updated dx (2026-06-16): the miss is a CLEAN tree-order TRUNCATION (writes
+    files in order, stops at a point), NOT a scattered fixed set — cutoff moves by
+    run/store but is identical across same-batch wts, and a re-run resumes from
+    there (474→528).  Strong tell of a count/cursor/batch-cap stopping the walk
+    after N entries (or a buffer fill / swallowed mid-walk error), not the pool.
+ -  Hunt the bulk-checkout walk (`sniff/GET.c` checkout + any ROWS/HUNK batch cap
+    it drains through); per-file `be get <path>` works → compare the single-path
+    path vs the bulk walk for where the tail is dropped + why `SNIFFFAIL` is the
+    only signal.
 
 ### TODOs
- -[ ] Repro: N concurrent `be get file:<wt>` from one store; also a single run
-      under disk pressure.  Capture which files/subs drop and the SNIFFFAIL site.
- -[ ] Fix: complete-or-fail checkout (likely the [GET-018] atomic-swap);
-      `SNIFFFAIL` names the failed step; no silent partial tree.
- -[ ] Test: an errored checkout leaves no half-populated tree; subs mount or
-      the whole GET fails.
+ -[v] Repro: single `be get` truncates at `test/put/05`; BASS climbs to 1023 MiB
+      then `BNOROOM`.  Repro preserved at `$HOME/todo/PTR-001` (read-only).
+ -[v] Fix: `try()`-wrap the `walk_tree_dive` recursion (BASS rewind per subtree);
+      fresh `be get` now 1441 tracked / 0 `mis`, abc mounted, exit 0.
+ -[v] Test: `WALKtest6` (1300-wide sibling tree) — FAILS pre-fix (`BNOROOM`),
+      PASSES post-fix; full suite 298/298.
+ -[ ] Land: gate the diff (`keeper/WALK.c` + `keeper/test/WALK.c`), then ff-post.
 
 ### Blockers and bummers
  -  Intermittent / likely concurrency-dependent → repro may need parallel
     invocations against a shared store.
 
 ##  Outcome
- -  (open)
+ -  **LANDED `49039f36`** (ff, parent `229d122b`): `keeper/WALK.c` `try()`-wrap of
+    the `walk_tree_dive` recursion + `keeper/test/WALK.c::WALKtest6`.  298/298; a
+    fresh `be get` now checks out the COMPLETE tree (1204 ok, 0 `mis`).
+ -  Spun off: sibling-`sniff` PATH-fallback masks which binary runs when
+    `bin/sniff` is absent (`HOMEResolveSibling`) — distinct dev-ergonomics hazard,
+    to be filed as its own ticket.
 
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"
 [GET-018]: GET-018.mkd "atomic wt GET: stage/swap or journal+rollback"

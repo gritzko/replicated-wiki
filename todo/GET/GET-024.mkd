@@ -1,0 +1,74 @@
+#   GET-024: `be get ?#<sha>` records a DETACHED cur-tip (`?<sha>`) instead of trunk-state — breaks `be put ?#<sha>` + commit (POSTDET). Regression from GET-023.
+
+`?#<sha>` (empty query + `#`-fragment sha) means "current/trunk branch, pinned to
+state <sha>" — a NON-detached trunk-state checkout you can commit on top of. But the
+[[GET-023]] checkout arm canonicalises it into the DETACHED form `?<sha>` (query=sha,
+empty fragment) when it records the cur-tip, so a follow-up `be post` is refused
+POSTDET ("detached wt — re-attach to a branch"). Real regression from `d6f35358`,
+caught by `be-put-06-triangle` (SSH-gated, so it slipped the build-debug merge checks).
+Method: [Issues].
+
+##  Input
+
+### Context
+ -  Symptom: `test/put/06-triangle` round R4 (`be put "?#$TIP"` → `be get --force "?#$TIP"`
+    → `be post`) dies at the post with `sniff: post: refusing on detached wt … Error: POSTDET`.
+    PASSES on parent `b71eba2a`, FAILS 3/3 on `d6f35358`/`ef8901fa` (clean trunk,
+    `-DWITH_SSH=ON`). Not flaky, not a stale-wt artifact (main wt cur == trunk tip).
+ -  Root cause: [[GET-023]] (`d6f35358`) added the `?#<sha>` arm at `sniff/GET.c` (the
+    `has_q && $empty(query) && !$empty(fragment)` branch + its `~:2175` source compose)
+    that builds the GETCheckout SOURCE in the DETACHED form `?<frag>` (`u8csMv(fsrc_u.query,
+    frag)`, empty fragment) → the cur-tip wtlog row lands as `?<sha40>`. `post_is_detached_wt`
+    (`sniff/POST.c:945`, DIS-009) flags empty-fragment + 40-hex-query as detached → POST
+    refuses. The input was `?#<sha>` (TRUNK-STATE, fragment-sha) — it must NOT collapse to
+    the detached query-sha form.
+ -  Spec: PUT (`PUT.html` §PUT) — `be put ?#<sha>` is a legitimate trunk reset that allows a
+    follow-up commit. The detached `?<sha>` form (DIS-009) staying detached is CORRECT; only
+    the `?#<sha>` mis-canonicalisation is wrong.
+ -  PROCESS GAP: the GET-023 merge built only `build-debug` (no `WITH_SSH`), so the
+    SSH-gated `be-put-06-triangle` never ran → the regression landed green-looking.
+
+### Goals
+ -  `be get ?#<sha>` checks out `<sha>` and records the cur-tip as TRUNK-STATE (`?#<sha>`:
+    empty query + `#`-fragment), NON-detached — a follow-up `be post` is allowed.
+ -  Preserve GET-023's classify-or-reject (invalid fragment → error; `SNIFFfragref` green)
+    AND the genuine detached `?<sha>` form staying detached.
+
+### Constraints
+ -  Fix in the GET-023 `sniff/GET.c` arm: record the source as the trunk-state form
+    (empty query + fragment=frag), NOT the detached `?<frag>` — reuse `u`'s parsed
+    components rather than re-composing a query-sha. No re-roll of URI handling.
+ -  VALIDATE with `-DWITH_SSH=ON` (build-ssh) — `be-put-06-triangle` is the repro; it MUST
+    pass. Full `ctest` green in BOTH build-debug and build-ssh.
+
+##  WIP
+
+### Design decisions
+ -  (open) The arm passes `?<frag>` as the GETCheckout source; change it to the
+    `?#<frag>` (trunk-state) shape so the recorded cur-tip keeps an empty query + the sha
+    in the fragment — exactly what `post_is_detached_wt` treats as NON-detached.
+
+### TODOs
+ -[ ] Repro-first (WITH_SSH): `be-put-06-triangle` RED on trunk; minimal repro
+      `be put ?#<sha>` → `be get --force ?#<sha>` → `be post` → POSTDET.
+ -[ ] Fix the GET-023 arm to record trunk-state, not detached; keep `?<sha>` detached.
+ -[ ] `be-put-06-triangle` + `SNIFFfragref` + the detached-refuse tests (`get-33`) all green;
+      full ctest in build-debug AND build-ssh.
+
+### Blockers and bummers
+ -  Regression of [[GET-023]] (`d6f35358`). The fix is GET-side (canonical form), not a
+    change to POST's detached refusal (that is correct).
+
+##  Outcome
+ -  **LANDED `134b9e30`** (2026-06-16): the GET-023 arm composed the GETCheckout source as
+    the detached query-sha `?<frag>` (`u8csMv(fsrc_u.query, frag)`, empty fragment) → len-41
+    query → recorded DETACHED. Fix: carry `u`'s own present-but-empty query
+    (`u8csMv(fsrc_u.query, u->query)`) so `URIutf8Feed` emits the bare `?` trunk sigil and
+    GETCheckout records trunk-state `?#<sha>` while still checking out `<frag>`. Same composer
+    + `call()` check, no hand-roll. Process-gap closed: new NON-SSH-gated case in
+    `test/get/33-detached-refuse-commit/run.sh` (runs in build-debug, verified RED on revert).
+    Green BOTH configs: build-ssh 388/388 (incl. `be-put-06-triangle`), build-debug 309/309;
+    `SNIFFfragref` + genuine-detached `?<sha>` POSTDET preserved.
+
+[GET-023]: GET-023.mkd "reject ref that is neither sha nor branch (LANDED d6f35358)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

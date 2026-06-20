@@ -1,4 +1,4 @@
-#   Issues: the parallel agent fix-and-land loop
+#   The parallel agent ticket-driven fix-and-land work loop
 
 Issues are cleared by a fleet of background agents — one per ticket, each in its own isolated clone. The loop is: agree the fix, fork an agent, it repros-first and implements, then STOPS for a human to gate the commit; on approval it updates, re-tests, and fast-forward-posts. The method keeps many fixes in flight at once while every landed commit stays reviewed, tested, and ff-only.
 
@@ -24,6 +24,8 @@ An agent repros the bug, fixes it, gets the suite green, then STOPS without comm
  -  The agent pauses at the commit boundary and reports root cause, fix (file:line), and test result; it does not post on its own.
  -  The human says "commit" (land it) or "iterate" (another pass); a real design fork makes the agent stop and ask, never guess.
  -  Commit message is 1 line max (64 chars), must start with the ticket code
+ -  Any Beagle bugs during the session should be filed as tickets (with maximum context added, see [/meta/todo])
+ -  Moronic 10-line comments better be avoided. The budget is 4 lines, better less. Just mention the ticket for further detail.
 
 ##  Commit and ff-post, serialized
 On approval the agent updates onto current trunk, re-tests, commits, and fast-forward-posts — one post at a time.

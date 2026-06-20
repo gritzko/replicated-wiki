@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-002 <a href="">CRIT</a>: <code>file.write(string)</code> / <code>io.log(string)</code> heap corruption — invalid free + uninitialised write</h1>
+<p>
+<code>JABCutf8CopyStringValue</code> (<code>js/utf8.cpp:63-71</code>) advances the slice HEAD past the written bytes, so the caller writes the uninitialised tail and frees a non-allocation-base pointer. Flagged by 5 of 7 review lenses (very high confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>$u8alloc(into,max)</code> sets <code>into={base, base+max}</code> (<code>abc/Sx.h:491</code>: head=base),</li>
+</ul>
+<div>
+<p>
+then <code>JABCutf8CopyStringValue</code> does <code>into[0]+=fact</code> — advancing the HEAD past the copied bytes, leaving <code>into={base+fact, base+max}</code>.
+</p>
+</div>
+<ul>
+<li>Caller <code>JABCioFileWrite</code> (<code>io.cpp:111</code>) does <code>write(fd, ta[0], $len(ta))</code> → it</li>
+</ul>
+<div>
+<p>
+writes from <code>base+fact</code> for <code>max-fact</code> bytes (the UNINITIALISED tail), not the string. Then <code>$u8free</code> (<code>io.cpp:124</code>) frees <code>base+fact</code> — a non-base pointer → heap corruption / invalid free.
+</p>
+</div>
+<ul>
+<li><code>fact</code> includes the NUL terminator (off-by-one in the length too).</li>
+<li>Severity unchanged by the <code>WITH_JS</code> gate: <code>file.write</code>/<code>io.log</code> are the live,</li>
+</ul>
+<div>
+<p>
+wired binding entry points, not the dead rdx path.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li><code>file.write(&quot;hello&quot;)</code> writes exactly <code>hello</code> (5 bytes) and frees the real base.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>The copy helper must leave <code>into</code> as a DATA slice (term=<code>base+fact-1</code>, head</li>
+</ul>
+<div>
+<p>
+stays at <code>base</code>); the caller writes <code>[base, len)</code> and frees <code>base</code>. Use the idiomatic ABC slice term-set, not a head advance.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Fix in <code>JABCutf8CopyStringValue</code>: set the slice TERM to the byte count</li>
+</ul>
+<div>
+<p>
+(excluding NUL), keep HEAD at base. Audit every caller for the head==base assumption.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: <code>file.write(&quot;hello&quot;)</code> into a pipe; assert the fd receives exactly</li>
+</ul>
+<div>
+<p>
+  <code>hello</code> (5 bytes), no trailing garbage; run under ASAN to catch the bad free.
+</p>
+</div>
+<ul>
+<li>] Fix the copy helper to leave a base-anchored data slice; drop the NUL from len.</li>
+<li>] Re-check <code>JABCioFileWrite</code> / <code>JABCioLog</code> write + free pair.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>5ee417eb</code></strong>* (2026-06-16): <code>JABCutf8CopyStringValue</code> now keeps the</li>
+</ul>
+<div>
+<p>
+slice HEAD at the malloc base and sets TERM to <code>base+fact-1</code> (drops the NUL, <code>fact==0</code>-guarded), so <code>file.write(string)</code> writes the real <code>[base,len)</code> and <code>$u8free</code>s the real base; C++ pipe repro in <code>jabc_test.cpp</code> (red→green, ASAN).
+</p>
+</div>
+</body>
+</html>

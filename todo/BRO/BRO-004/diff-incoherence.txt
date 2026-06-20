@@ -1,0 +1,34 @@
+BRO-004 evidence — `be --color diff:ABC.md` first-hunk incoherence (captured in
+$HOME/beagle, 2026-06-16; ABC.md has an uncommitted abstract edit; ABC-003
+UTF8_LEN fix NOT landed in this tree, so em-dash width is still buggy here).
+
+Repro:
+  cd $HOME/beagle
+  be --color diff:ABC.md | <strip ANSI>     # garbled first hunk
+  be --plain diff:ABC.md                     # for comparison
+
+Finding: `grep -c 'canonical docs'` = 2 in BOTH --color-stripped AND --plain.
+In --plain the two are the legitimate removed (old, wrapped) + added (new,
+inline) occurrences. In --color the first hunk is INCOHERENT — lines split
+mid-word, old/new interleaved, and the em-dash line duplicated:
+
+--- colour, ANSI-stripped, first hunk ---
+ diff:ABC.md#L1
+# ABC refactoring policies
+
+Bullet-form one-pager for converting raw C into ABC idioms. References
+Any use of void* with no typed wrappers is suspicious. Any use of pointers to ranges (no slice) is risky. Any offset calculation that does not go into bounds-checked typed wrapper is suspicious. This
+doc is a bullet-form one-pager for converting raw C into ABC idioms. References the canonical docs — read them for full coverage:
+the canonical docs — read them for full coverage:
+
+- `CLAUDE.md` — coding guidelines (esp. §1, §5, §10, §16)
+- `abc/S.md` — slice types and typed-function table
+----------------------------------------
+
+Note: the new inserted paragraph is split as "… This " / "doc is a bullet-form
+…", and "the canonical docs — read them for full coverage:" (an em-dash line)
+appears once inline (new) and once standalone (old) — interleaved
+incoherently. Every garbled/duplicated boundary involves an em-dash (`—`),
+pointing back at the ABC-003 `UTF8_LEN` width bug (un-landed here) as a likely
+contributor; the worker must confirm whether landing UTF8_LEN makes the first
+hunk coherent, or a separate bro line-break/render bug remains.

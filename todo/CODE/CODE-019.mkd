@@ -1,0 +1,74 @@
+#   CODE-019: relocate `sha1hex` from `dog/WHIFF.h` to `dog/git/SHA1.h` (beside its sibling `sha1`)
+
+`dog/WHIFF.h` is about packed index words (`wh64`/`wh128`) + SHA→hashlet
+keys — but it ALSO defines `sha1hex` (the 40-ASCII-hex SHA-1 struct) and its
+bin↔hex conversions, which WHIFF's own logic never uses. Its sibling, the binary
+`sha1` struct + SHA-1 hashing, already lives in `dog/git/SHA1.h` (which even has
+a 40-hex feed helper). `sha1hex` belongs there. TIGHT, behaviour-preserving move
++ include fixes — NOT an open cleanup. Method: [Issues].
+
+##  Input
+
+### Context
+ -  Defined in `dog/WHIFF.h:151-196`: `sha1hex` struct + `sha1hexcp`, `sha1hexZ`
+    (sort), `sha1hexFromSha1`, `sha1FromSha1hex`, `sha1hexeq`, `sha1hexSlice`,
+    `sha1hexFromHex`, and the `#define X(M,n) M##sha1hex##n` Bx instantiation.
+ -  WHIFF's `wh64`/`wh128` packing + `WHIFFHashlet*`/hex-key code does NOT reference
+    `sha1hex` — it is pure colocation (WHIFF.h is header-only).
+ -  Its sibling lives in `dog/git/SHA1.h`: the binary `sha1` struct (`:13`,
+    "git SHA-1 type + hashing via sha1dc"), `sha1Z`, `sha1slice`, `SHA1Sum/Open/Feed/
+    Close`, `SHA1u8sFeedHashlet`, and already a "feed all 40 ASCII hex chars" helper
+    (`:78`). The right home for the 40-hex twin + its conversions.
+ -  Reach: `sha1hex` is used by dog(3)/graf(9)/keeper(7)/sniff(7)/beagle(1) ≈ 27 sites,
+    ZERO in `abc/` — a git-compat object-id type, correct at the `dog/git` layer.
+ -  [CODE-016] (LANDED `0a43dec5`) already "centralize[d] sha1↔hex through
+    `dog/git/SHA1.h`" — so that home is established; the `sha1hex` STRUCT + its methods
+    just stayed behind in `WHIFF.h`. CODE-019 finishes that move; consistent direction.
+
+### Goals
+ -  Move the `sha1hex` block (struct, `sha1hexcp`, `sha1hexZ`, `sha1hexFromSha1`,
+    `sha1FromSha1hex`, `sha1hexeq`, `sha1hexSlice`, `sha1hexFromHex`, the Bx `sha1hex`
+    instantiation) from `dog/WHIFF.h` → `dog/git/SHA1.h`, placed beside `sha1`.
+ -  WHIFF.h is left with `wh64`/`wh128` + `WHIFFHashlet*`/hex-key helpers only.
+ -  Every former consumer still resolves `sha1hex`: files that pulled it via
+    `dog/WHIFF.h` now `#include "dog/git/SHA1.h"` (keep both if a file needs both).
+
+### Constraints
+ -  PURE behaviour-preserving move — signatures/bodies BYTE-IDENTICAL, no rename. Only
+    the home + `#include`s change. `dog/git/SHA1.h` must carry whatever `sha1hex` needs
+    (HEX `HEXu8sFeedSome`/`DrainSome`, `u8sCopy`, `a_dup`) — it already includes the abc
+    deps for `sha1`; add any missing. Mind include cycles (WHIFF.h must NOT now pull
+    git/SHA1.h unless it already does).
+ -  TIGHT + mechanical. The CODE board warns prior sweeps were BS — do exactly this move,
+    nothing more. Full `ctest -j16 --timeout 10` green; build IS the correctness gate.
+
+##  WIP
+
+### Design decisions
+ -  The move is the deliverable; `sha1FromSha1hex` (`sha1*`←`sha1hex const*`) and
+    `sha1hexFromSha1` (`sha1hex*`←`sha1cp`) end up in the SAME file as `sha1`, removing a
+    cross-header dependency rather than adding one.
+
+### TODOs
+ -[ ] Move the `sha1hex` block from `dog/WHIFF.h` to `dog/git/SHA1.h` (beside `sha1`);
+      add any abc includes `sha1hex` needs.
+ -[ ] Fix the ~27 consumer `#include`s (WHIFF.h→git/SHA1.h where pulled only for sha1hex).
+ -[ ] `rg`-verify: zero `sha1hex` in `dog/WHIFF.h`, present in `dog/git/SHA1.h`, every
+      former use resolves. Full ctest green, behaviour byte-identical.
+
+### Blockers and bummers
+ -  Touches many includes (mechanical). NOT abc-gated (dog/ only). Surfaced by the DOC-001
+    `dog/WHIFF.h` index pass; sequence such code-org fixes BEFORE documenting that header.
+
+##  Outcome
+ -  **LANDED `addd5a9c`** (FF child of `b9ef44b2`; 308/308; byte-identical move verified by
+    an empty removed-vs-added diff): the full `sha1hex` block
+    moved `dog/WHIFF.h` (was `:149-197`) → `dog/git/SHA1.h` (beside `sha1`), byte-identical.
+    `WHIFF.h` already `#include`d `dog/git/SHA1.h` (`:105`, for `sha1cp`), so the move is
+    fully include-TRANSPARENT — **zero consumer include edits**; only 2 files changed
+    (`dog/WHIFF.h`, `dog/git/SHA1.h`). No new include needed (SHA1.h already pulled
+    HEX/slice deps), no cycle. Fresh build clean, `ctest` **308/308**. Awaiting gate.
+    Msg: `CODE-019: move sha1hex to dog/git/SHA1.h beside sha1`.
+
+[CODE-016]: CODE-016.mkd "centralize sha1↔hex through dog/git/SHA1.h (LANDED 0a43dec5)"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

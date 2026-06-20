@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>COMMIT-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>COMMIT-001: <code>commit:</code> projection should surface the diff after the metadata</h1>
+<p>
+<code>be commit:?&lt;sha&gt;</code> (keeper projector, see <a href="../../wiki/Projector.html">Projector</a>) emits only the commit object body — headers then message — so it shows who/when/why but never what changed.  <code>git show</code> folds the diff in; beagle keeps them split, forcing a second <code>be diff:?&lt;sha&gt;</code>.  This ticket surfaces the diff from <code>commit:</code>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>commit:</code> is keeper-owned and emits headers + message only; <code>diff:</code> is a</li>
+</ul>
+<div>
+<p>
+separate graf-owned projector. There is no single &quot;show this commit&quot; view.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>After the commit metadata, surface the commit's diff so <code>commit:</code> reads</li>
+</ul>
+<div>
+<p>
+like <code>git show</code>.
+</p>
+</div>
+<ul>
+<li>*<strong>Preferred:</strong>* emit a navigable link to <code>diff:?&lt;sha&gt;</code> (graf's projector)</li>
+</ul>
+<div>
+<p>
+that <a href="../../wiki/Bro.html">Bro</a> can follow — keeps <code>commit:</code> single-purpose, reuses graf's diff renderer, no diff code in keeper.
+</p>
+</div>
+<ul>
+<li>Alternative: inline graf's unified diff right after the message.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Respect projector composition and the dog boundary: keeper owns <code>commit:</code>,</li>
+</ul>
+<div>
+<p>
+graf owns <code>diff:</code>. Do NOT re-roll diff rendering inside keeper — link to (or invoke) graf's <code>diff:</code>.
+</p>
+</div>
+<ul>
+<li>Read-only <code>dog/HUNK</code> stream for Bro; no mutation; all four URI slots still</li>
+</ul>
+<div>
+<p>
+compose.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Link vs inline: recommend the *<strong>link</strong>* — keeper stays diff-free, one clean</li>
+</ul>
+<div>
+<p>
+dog boundary; inlining would force keeper to call graf or duplicate diff logic. (User leaning: link.)
+</p>
+</div>
+<ul>
+<li>Link target = <code>diff:?&lt;sha&gt;</code> for the sha the <code>commit:</code> URI resolved to.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li>] Decided: *<strong>link</strong>* (keeper stays diff-free).</li>
+<li>] Localized: <code>KEEPProjCommit</code> (<code>keeper/PROJ.c</code>), <code>diff:</code> query form is the</li>
+</ul>
+<div>
+<p>
+  one that triggers graf's commit-show (<code>#</code> fragment renders empty).
+</p>
+</div>
+<ul>
+<li>] Implemented: append a <code>diff:?&lt;sha40&gt;</code> <code>U</code> tok32 click-target after the</li>
+</ul>
+<div>
+<p>
+  headers+message; Bro follows it (existing link primitive, no new dep).
+</p>
+</div>
+<ul>
+<li>] Test <code>test/commit/01-diff-link</code>.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>A linked diff inherits whatever <code>diff:</code> shows — now fixed for sub-pin-bump</li>
+</ul>
+<div>
+<p>
+commits by <a href="../DIFF/DIFF-001.html">DIFF-001</a> (landed <code>018a59c4</code>).
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED <code>dac9dab7</code> — <code>commit:</code> appends a navigable <code>diff:?&lt;sha&gt;</code> link (query</li>
+</ul>
+<div>
+<p>
+form) via bro's <code>U</code> click-target; keeper gains no diff logic / no graflib dep, dog boundary intact. 289/289 green.
+</p>
+</div>
+</body>
+</html>

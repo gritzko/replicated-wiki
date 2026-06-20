@@ -11,36 +11,109 @@
 <img class="banner-logo" src="/assets/img/tool.jpg" alt="">
 <span class="banner-title">Beagle SCM</span>
 </a>
-<h1>DIS-041: the graf 3-way weave engine does NOT mis-merge two disjoint edits to one function — it is byte-identical to <code>git merge-file</code>; the SUBS-019 &quot;graf err / PATCHFAIL&quot; is a VERB-layer base/target selection failure, not a weave bug</h1>
+<h1>DIS-041: <code>be get</code>/<code>patch</code> FF-weave bails with <code>graf err</code> and leaves the file UNMERGED when the commits aren't indexed — the correct fallback is to INDEX the commits and RETRY</h1>
 <p>
-The reported &quot;two branches edit the SAME function → <code>be get '?'</code> / <code>be patch '?'</code> fail to weave-merge&quot; was investigated against the frozen on-disk trio <code>/tmp/subs019/POST.{base,ours,theirs}.c</code> (base = <code>cf7031da</code> sniff/POST.c 133506B; ours = trunk <code>71e49b45</code> carrying POST-016, 135392B; theirs = the SUBS-019 wt edit, 133698B — two disjoint edits to <code>post_classify_step</code>). The graf weave engine merges this trio CLEANLY through EVERY path: the <code>graf merge</code> CLI (<code>GRAFMerge3Bytes</code>), a synthetic base→ours DAG (<code>GRAFMergeWtFile</code>), and the REAL <code>$HOME/todo/SUBS-019-new</code> store DAG with <code>parent|foster</code> edges (<code>GRAFMergeWtFileTunable</code>) all return OK and produce the SAME 135584-byte output — byte-identical to <code>git merge-file -p ours base theirs</code> (exit 0, 0 diff lines). The engine is not the failure. What IS reproducible in <code>$HOME/todo/SUBS-019-new</code>: <code>be patch '?' --nosub</code> → <code>PATCHFAIL</code> &quot;branch tip is already reachable from cur (nothing to replay)&quot; (<code>sniff/PATCH.c:1336</code>), because cur == trunk tip <code>71e49b45</code> and the SUBS-019 edit lives only in the dirty wt — there is no COMMIT to replay, so the rebase-one walk correctly refuses. The orchestrator's &quot;merge failed for sniff/POST.c (graf err)&quot; (<code>sniff/GET.c:748</code> = <code>GRAFFAIL</code>, both weave sides empty) needs a trunk commit AHEAD of cur that re-touches POST.c; the store trunk has since been reset to <code>71e49b45</code> (= cur), so that transient state is no longer on disk and the merge cannot be driven through <code>be</code> here. See <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/Graf.html">Graf</a>.
+When a store-backed worktree that is BEHIND trunk is fast-forwarded (<code>be get '?'</code>), files that diverged on both sides need a 3-way weave. If the relevant commit DAG is not indexed, the weave drops to <code>build_tip_weave_tunable</code>'s *<strong>no-history fallback</strong>* (<code>graf/GET.c:537-548</code>), which stamps each side's blob with its own tip hashlet so the two sides share NO baseline birth-ids → <code>WEAVEApply</code> matches nothing → <code>GRAFFAIL</code> (<code>sniff/GET.c:748</code>), and sniff prints <code>merge failed … (graf err) — leaving wt content untouched</code>, i.e. the file is left UNMERGED. The only correct fallback is to *<strong>index the commits and RETRY</strong>* the weave — never bail, never silently return <code>ours</code>. See <a href="../../wiki/PATCH.html">PATCH</a>, <a href="../../wiki/POST.html">POST</a>, <a href="../../wiki/Graf.html">Graf</a>.
 </p>
-<h2>Issues</h2>
-<p>
-The blocker is at the GET/PATCH base+target selection / cur-position layer, not in graf's weave; the weave is provably correct.
-</p>
+<h2>Input</h2>
+<h3>Context</h3>
 <ul>
-<li>graf weave-merge of the frozen SUBS-019 trio is byte-identical to <code>git merge-file</code> (135584B, clean) via <code>GRAFMerge3Bytes</code>, <code>GRAFMergeWtFile</code>, and real-store <code>GRAFMergeWtFileTunable</code> — repros under <code>/tmp/subs019/repro_*.c</code> linked against <code>build-debug/graf/libgraflib.a</code>.</li>
-<li><code>be patch '?'</code> PATCHFAILs &quot;nothing to replay&quot; because cur == trunk tip; the SUBS-019 edit is dirty-wt-only, never a commit, so rebase-one (<code>sniff/PATCH.c:1336/1348</code>) has no source commit — a bare <code>?</code> cannot absorb an uncommitted wt divergence.</li>
-<li><code>be get '?#&lt;ancestor&gt;'</code> does NOT reset cur to the ancestor (records <code>71e49b45</code>, not the fragment) and leaves OURS bytes on disk — a separate cur-position bug (PUT-002 family) that blocks even SETTING UP the base/ours/theirs merge scenario locally.</li>
+<li>LIVE REPRO (now on disk — the earlier investigation said this transient</li>
 </ul>
-<h2>Suspected (un-reproduced, needs the orchestrator's live store)</h2>
+<div>
 <p>
-A no-DAG-history fallback CAN silently drop the target edit, which is the only mechanism that fits &quot;graf err&quot;; it is masked here because the store DAG is fully indexed.
+&quot;is no longer on disk / cannot be driven through <code>be</code>&quot;): FF the BE-004 store-backed worktree <code>~/todo/BE-004-new</code> (cloned behind trunk) onto current trunk → <code>be get '?'</code> → <code>merge failed for bro/BRO.c (graf err)</code> and <code>graf/BLAME.c (graf err) — leaving wt content untouched</code>. Reproducible on demand from any behind-worktree FF where both sides touched a file.
 </p>
+</div>
 <ul>
-<li><code>build_tip_weave_tunable</code>'s no-history fallback (<code>graf/GET.c:537-548</code>) stamps each side's single blob with its OWN tip hashlet as the birth-seq; the two sides then share NO baseline birth-ids, so <code>WEAVEApply</code>'s tgt-closure predicate matches no base-side token and the target net edit can drop wholesale (returns OK with theirs alone) — or GRAFFAIL if neither tip-blob resolves.</li>
-<li>This path is guarded in production by a <code>(void)</code>-ignored <code>GRAFIndexFromTips</code> before the merge (<code>sniff/PATCH.c:1857-1868</code>, comment: &quot;Without this the merge silently returns ours's bytes&quot;); a silently-failing lazy-index, a torn <code>NNNNN.graf.idx</code>, or a fresh/incremental clone re-exposes it.</li>
-<li>Could not be reproduced against <code>$HOME/todo/SUBS-019-new</code> (2 runs, 2835 DAG entries — fully indexed; every faithful harness merge is correct).</li>
+<li>The <code>(void)</code>-ignored <code>GRAFIndexFromTips</code> guard (<code>sniff/PATCH.c:1857</code>,</li>
 </ul>
-<h2>Planned</h2>
+<div>
 <p>
-Get a live repro of the &quot;graf err&quot; store state, then decide whether the un-indexed fallback should self-heal.
+comment: &quot;Without this the merge silently returns ours's bytes&quot;) is the smoking gun — the index step exists but its failure is swallowed.
 </p>
+</div>
+<h3>Goals</h3>
 <ul>
-<li>Capture the orchestrator's store at the failing moment (trunk AHEAD of cur, POST.c re-touched) — without it the &quot;graf err&quot; is an un-reproduced transient; do NOT change graf on the disjoint-edit premise (it is disproven).</li>
-<li>Design decision (only if the suspected fallback is confirmed): when <code>build_tip_weave_tunable</code> hits the no-history fallback for a 3-way, delegate to a shared-base-spine merge (<code>GRAFMerge3Bytes</code> over base/tgt/wt blobs) instead of two un-anchored single-version weaves; or make <code>GRAFIndexFromTips</code> failures propagate (drop the <code>(void)</code>).</li>
-<li>Repro home: <code>graf/test/MERGEWT01.c</code> (DAG-walk merge harness) is the right place for a no-index regression case once the live trigger is captured.</li>
+<li>The FF/weave path INDEXES the needed commits (the tips' ancestry) and</li>
 </ul>
+<div>
+<p>
+RETRIES, so a behind-worktree FF on a real divergence actually MERGES.
+</p>
+</div>
+<ul>
+<li>No silent fallbacks: an un-indexed/empty-side weave must index+retry or</li>
+</ul>
+<div>
+<p>
+propagate a hard error — never &quot;leave wt untouched&quot;, never return <code>ours</code>.
+</p>
+</div>
+<ul>
+<li>Acceptance = the real <code>be get '?'</code> operation merges the divergent files</li>
+</ul>
+<div>
+<p>
+(demonstrated on a live behind-worktree), not &quot;tests green&quot;.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Do NOT touch the weave ENGINE on a disjoint-edit premise — that is</li>
+</ul>
+<div>
+<p>
+DISPROVEN (below). The fix is in the verb/index layer.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>*<strong>RETRACTED (unproven, was BS):</strong>* the prior conclusion &quot;the <code>graf err</code> is a</li>
+</ul>
+<div>
+<p>
+verb-layer base/target SELECTION failure&quot; is withdrawn — it was asserted without a live repro. Diagnose from the repro now available, not theory.
+</p>
+</div>
+<ul>
+<li>*<strong>PROVEN, keep:</strong>* the graf weave ENGINE merges disjoint edits</li>
+</ul>
+<div>
+<p>
+byte-identical to <code>git merge-file</code> (the frozen SUBS-019 trio, 135584 B, clean via <code>GRAFMerge3Bytes</code>/<code>GRAFMergeWtFile</code>/<code>GRAFMergeWtFileTunable</code>). So the engine is correct; the bug is the verb dropping to the un-indexed fallback instead of indexing + retrying.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: a hermetic small store + behind-worktree FF that triggers</li>
+</ul>
+<div>
+<p>
+  <code>graf err</code> (regression test, e.g. extend <code>graf/test/MERGEWT01.c</code>).
+</p>
+</div>
+<ul>
+<li>] Make the weave path index the commits and RETRY when history is absent</li>
+</ul>
+<div>
+<p>
+  (<code>build_tip_weave_tunable</code> / <code>GRAFIndexFromTips</code>); propagate index   failure (drop the <code>(void)</code>), never leave-untouched / return-ours.
+</p>
+</div>
+<ul>
+<li>] Prove <code>be get '?'</code> on a real behind-worktree MERGES the divergent files.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Currently blocks landing BE-004 (its FF hits this); BE-004 stays unmerged</li>
+</ul>
+<div>
+<p>
+until the FF-weave self-heals (index+retry) — NO hand-pick reconcile.
+</p>
+</div>
+<h2>Outcome</h2>
 </body>
 </html>

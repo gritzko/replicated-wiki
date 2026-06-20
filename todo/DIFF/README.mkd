@@ -4,9 +4,27 @@
 
 ##  Active tickets
 
- -  None — DIFF-004 (clickable `diff:<path>?<from>..<to>#L<n>` difflet URIs)
-    landed `7317bb48`. DIFF-003 (file-scoped whole-file diff) landed `eaa75793`.
-    DIFF-001 (gitlink + sub recursion) `ef0430da`+`018a59c4`; DIFF-002 earlier.
+ -  [DIFF-005] — `be diff:<file>` emits ENORMOUS (whole-file) context for a tiny edit.
+    Scanned: INTENDED DIFF-003 full-file mode, only the single-file projector
+    (`DIFFREF.c:163` `full=YES`); bare `be diff:` is already bounded. Awaiting a
+    maintainer UX ruling (bound-large-files / pager-vs-text / document-only).
+ -  [DIFF-007] — `be diff:<largefile>` silently EMPTY: `WEAVEEmitFull`'s 65536-token
+    `outtoks` carve overflows on big files, NOROOM swallowed (`WEAVE.c:1030/1099`). Real
+    bug. (Scan: [[DIFF-005]].)
+
+DIFF-008 (tree-diff silently truncated tail files — per-file `GRAFDiff2Layer` BASS never
+rewound; now `call()`-wrapped) landed `b9ef44b2`. DIFF-006 (multi-hunk diff repeats the
+per-hunk `--- a/`/`+++ b/` header) CLOSED — WON'T FIX (cosmetic, output otherwise correct). DIFF-002 (sub-pin `diff:?<sha>` rendered "no
+results" — gitlink line was raw `fprintf`, now a `GRAFHunkEmit` text hunk) landed `3dc19b0a`. DIFF-004 (clickable
+`diff:<path>?<from>..<to>#L<n>` difflet URIs) landed `7317bb48`.
+DIFF-003 (file-scoped whole-file diff) landed `eaa75793`. DIFF-001 (gitlink + sub
+recursion) `ef0430da`+`018a59c4`; DIFF-002 earlier.
+
+[DIFF-002]: DIFF-002.mkd "sub diff renders empty in the pager (reanimated)"
+[DIFF-005]: DIFF-005/README.mkd "be diff:<file> emits whole-file context"
+[DIFF-006]: DIFF-006.mkd "multi-hunk diff repeats per-hunk file headers"
+[DIFF-007]: DIFF-007.mkd "diff:<largefile> silently empty (outtoks overflow)"
+[DIFF-008]: DIFF-008.mkd "tree-diff truncates later files (per-file BASS not rewound)"
 
 [DIFF-004]: DIFF-004.mkd "clickable difflet URIs diff:<path>?<from>..<to>#L<n>"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

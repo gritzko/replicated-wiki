@@ -16,9 +16,8 @@
 <code>be patch</code> is the repo→worktree write: weave-merge another branch/commit/remote into the working tree (merge / rebase / cherry-pick by URI shape). Tickets here cover reconcile correctness. <a href="../../wiki/Plan.html">Plan</a>-shaped, cleared via the <a href="../../rule/Issues.html">Issues</a> loop.
 </p>
 <h2>Active tickets</h2>
-<ul>
-<li><a href="PATCH-002.html">PATCH-002</a> — *<strong><code>be patch</code> silently skips a worktree-dirty file that the incoming branch also changed</strong>* (counts it <code>noop</code>, not <code>merged</code>), dropping the incoming change → a following <code>be post</code> reverts it. Breaks landing any ticket that touches a file another ticket already landed; blocked MEM-024 (overlapping MEM-025). Worker owns the broken <code>~/todo/MEM-024</code> as evidence; repro-first in <code>test/patch/</code>.</li>
-<li><a href="PATCH-001.html">PATCH-001</a> — <code>be patch</code> of a behind source whose only forward change is a submodule gitlink bump checks the sub out at the new pin but never stages the parent gitlink row (half-applied: sub ahead on disk, parent still pins the old commit, <code>be status</code> clean). Needs a manual <code>be put &lt;sub&gt;</code> today; the gitlink row must absorb as take-theirs. Surfaced landing MEM-010.</li>
-</ul>
+<p>
+No open PATCH tickets.
+</p>
 </body>
 </html>

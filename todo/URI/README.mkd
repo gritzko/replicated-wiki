@@ -4,11 +4,13 @@ Tickets that unify Beagle's branch-vs-commit-hash disambiguation behind one keep
 
 ##  Active tickets
 
- -  [URI-001] — unify branch/commit naming; St.1 branch-first + St.2 length-agnostic full-sha + St.3 scope-only canonical form landed; St.4-5 (retire guessers, remote delegation) pending.
- -  [URI-003] **LANDED** (abc `fe7f86c2` / parent `cc4cc005`) — `URIutf8FeedSafe`: feed→re-parse→compare all 8 fields, err out `URIUNSAFE` on any mismatch (detect-and-err-out; the parser is non-decoding so `URIutf8Feed` stays verbatim, no per-component escaping — would break the 22 verbatim ref callers); also fixed the `URIAbsolute` leading-`/` recompose (`ht/h/p#abc` stays `ht/h/p`). Follow-up: a SEPARATE percent-encoding feeder (`URIutf8FeedEscaped`) paired with a decoding parse mode, for when a safe URL must be *produced* not just verified.
+(none — URI-001 landed)
+
+URI-001 (unify branch/commit naming: St.1 branch-first + St.2 length-agnostic full-sha
++ St.3 scope-only canonical form + St.4-5 retire-guessers/remote-delegation) DONE — all
+5 stages landed/confirmed. Topic closed.
 
 [URI-001]: URI-001.mkd "unify branch/commit naming machinery"
-[URI-003]: URI-003.mkd "URI serialization safety: URIutf8FeedSafe round-trip, no injection"
 [URI-spec]: ../../wiki/URI.mkd "URI grammar + ref shapes"
 [DIS-025]: ../DIS/DIS-025.mkd "squash merge-base / resolver-funnel origin"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

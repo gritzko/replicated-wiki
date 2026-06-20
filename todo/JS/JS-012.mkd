@@ -1,0 +1,43 @@
+#   JS-012 [structural]: test / fuzz / bench near-absent; `test.js` always `exit(0)` so CTest can't see a FAIL
+
+`js/` has one CTest invocation and a thin `test.js`, no C++ harness / fuzz / bench,
+and the test exits 0 even on failure — violating CLAUDE.md §3/§8. Method: [Issues].
+
+##  Input
+
+### Context
+ -  CMakeLists registers ONE test (`jabc --eval "test.run()"`); `test.js` covers only
+    `test.is` + one ASCII `Encode` length; NO C++ harness, NO fuzz target, NO bench,
+    NO `WITH_FUZZ`/`WITH_ASAN`/`WITH_LOAD` (violates CLAUDE.md §3/§8).
+ -  `test.js` always `exit(0)` even on FAIL (`test.js:71-75`) → CTest cannot detect a
+    failing test.
+ -  `WITH_JS`-gated WIP; this is the meta-ticket that makes JS-002..011 verifiable.
+
+### Goals
+ -  Table-driven C++ coverage of the convert/utf8 boundary, a fuzz target, a
+    round-trip bench, and a harness that exits non-zero on failure.
+
+### Constraints
+ -  Follow the project `test/`/`fuzz/`/`bench/` pattern and `WITH_*` build dirs.
+
+##  WIP
+
+### Design decisions
+ -  (open) Add a table-driven `test.cpp` (rows: input bytes, expect len, expect
+    throw; empty / NUL / astral / invalid-UTF-8); a libFuzzer `fuzz/` target for
+    convert/utf8 (corpus `$HOME/Corpus/JABC_UTF8`); a `file.write`/`read` pipe
+    round-trip (catches JS-002); make the harness exit non-zero on failure.
+
+### TODOs
+ -[ ] Add `test.cpp` table for convert/utf8 boundaries.
+ -[ ] Add the libFuzzer target + corpus dir.
+ -[ ] Add the `file.write`/`read` pipe round-trip.
+ -[ ] Make `test.js` (and the harness) exit non-zero on FAIL.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  (open — filed 2026-06-16 from the js/ 7-lens review)
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIS-045</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIS-045: dog/WEAVE merge mis-anchors a blank line vs a code-line EOL</h1>
+<p>
+<code>be patch</code> step 2 of <code>test/patch/15-ancestor-skip</code> merges <code>lib.c</code> to the WRONG content on <code>dog/WEAVE</code> — the DIS-003 &quot;insert-vs-blank&quot; case: a re-stamped spine blank line and theirs's code-line EOL share their bytes (<code>\n</code>), so the content-hashlet diff/merge anchors the inserted line on the wrong side of the blank. It was a ~½ FLAKE on the old graf engine (DIS-003); under the <a href="../DOG/DOG-005.html">DOG-005</a> cut-over it is a HARD 5/5 failure, so dog is not byte-parity with graf for this case. Distinct from <a href="DIS-043.html">DIS-043</a> (criss-cross) and <a href="DIS-044.html">DIS-044</a> (causal order) — this is an identical-CONTENT token ambiguity, not an ordering one. It is the last case blocking DOG-005's merge cut-over (diff/blame/cat/get are already byte-parity-clean).
+</p>
+<h2>Issues</h2>
+<p>
+Identical-content tokens (blank vs EOL) are not disambiguated at a merge boundary.
+</p>
+<ul>
+<li>Repro: <code>test/patch/15-ancestor-skip</code> step 2 (<code>08.lib.want_step2.c</code>) — merged <code>lib.c</code></li>
+</ul>
+<div>
+<p>
+differs (deterministic, 5/5). Inputs are in that dir (base/ours/theirs <code>.c</code>).
+</p>
+</div>
+<ul>
+<li>Root (DIS-003 hypothesis, confirm): a blank line <code>\n</code> and a code-line's trailing</li>
+</ul>
+<div>
+<p>
+<code>\n</code> hash equal, so <code>WEAVENext</code>'s BRAM/NEIL LCS (or the <code>WEAVEMerge</code> join) pairs the wrong one and the insert lands on the wrong side of the blank.
+</p>
+</div>
+<ul>
+<li>The trunk's <code>be-patch-15</code> is still GRAF-backed (DOG-005 unlanded), so reproduce via</li>
+</ul>
+<div>
+<p>
+the dog API directly (feed the step-2 base/ours/theirs through <code>WEAVENext</code>/<code>WEAVEMerge</code>/<code>WEAVEProduce</code>), not the graf-backed test.
+</p>
+</div>
+<h2>Planned</h2>
+<p>
+Disambiguate identical-content tokens; make the fuzzer inject them.
+</p>
+<ul>
+<li>Find where the blank/EOL pair mis-anchors (WEAVENext diff vs WEAVEMerge join) and</li>
+</ul>
+<div>
+<p>
+fix so the merge produces the correct content; preserve DIS-043/DIS-044.
+</p>
+</div>
+<ul>
+<li>Extend <code>dog/fuzz/WEAVE</code> to inject blank lines / repeated identical-content tokens at</li>
+</ul>
+<div>
+<p>
+merge boundaries so this class is caught; fold the step-2 case in as a property test (confirmed red pre-fix).
+</p>
+</div>
+<h2>Blockers</h2>
+<ul>
+<li>No longer blocks <a href="../DOG/DOG-005.html">DOG-005</a>. The premise (engine mis-anchors blank vs EOL)</li>
+</ul>
+<div>
+<p>
+is FALSE: <a href="DIS-043.html">DIS-043</a> (idh JOIN) + <a href="DIS-044.html">DIS-044</a> (causal order) already removed both DIS-003 layers, so the blank-vs-EOL precondition cannot arise in the post-DIS-044 engine. The <code>be-patch-15</code> 5/5 fail is graf cut-over GLUE, not the engine — re-tasked into <a href="../DOG/DOG-005.html">DOG-005</a>.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>Close: ALREADY FIXED by <a href="DIS-043.html">DIS-043</a>/<a href="DIS-044.html">DIS-044</a>; engine pinned, fuzz widened,</li>
+</ul>
+<div>
+<p>
+NO repro. No engine change — the changeset is pure teeth: <code>dog/test/WEAVE03</code> (patch/15 step-2 shared-base oracle, <code>08.lib.want_step2.c</code> byte-exact), WEAVE01 <code>dis045_insert_blank</code>/<code>dis045_double_blank</code> criss-cross-over-blank cases, and <code>dog/fuzz/WEAVE</code> <code>W2_BLANK</code> injection. 322/322 green; DIS-043/044 not regressed; ~4.7M fuzz execs with blank injection found no mis-anchor.
+</p>
+</div>
+<ul>
+<li>Committed <code>711618fe</code> (&quot;DIS-045 WEAVE: blank/EOL merge teeth + step-2</li>
+</ul>
+<div>
+<p>
+oracle&quot;); the <code>be-patch-15</code> repro lives on in <a href="../DOG/DOG-005.html">DOG-005</a>.
+</p>
+</div>
+</body>
+</html>

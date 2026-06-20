@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>MEM tickets: memory-safety audit</h1>
+<p>
+Active tickets from the 2026-06-05 whole-codebase memory-safety audit; the full per-defect digest (severity, file, one-liner for all 45) lives in <a href="MEM.html">MEM</a>. Each entry below is one open ticket — a landed one (verify with <code>be log | grep MEM-NNN</code>) drops off. The 10 below remain; the 6 JSC-blocked <code>js</code> defects (MEM-007/032/033/034/035/039) were dropped as stale — superseded by the landed JABC review (JS-002..014), with <code>js/convert.cpp</code> removed as dead code. The fix-and-land method is <a href="../../skill/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="MEM-010.html">MEM-010</a> — CURL unchecked alloc null-deref plus easy-handle and slist leaks (abc/CURL.c).</li>
+<li><a href="MEM-019.html">MEM-019</a> — graf <code>call()</code> early-return skips mmap/handle cleanup (graf/MERGE.c, MAP.c, LOG.c, REBASE.c).</li>
+<li><a href="MEM-021.html">MEM-021</a> — abc latent low-severity bounds/overflow hardening (SKIPfeed, MMAP resize, DNSNameText, utf8).</li>
+<li><a href="MEM-023.html">MEM-023</a> — tree-walk recursion holds a 1MB buffer per level with no depth cap (keeper/KEEP.c, WALK.c).</li>
+<li><a href="MEM-024.html">MEM-024</a> — push-side recursive walk holds a 1MB mmap per frame; errors swallowed (keeper/WIRECLI.c).</li>
+<li><a href="MEM-025.html">MEM-025</a> — <code>first_name</code> slice dangles into the compacted advert buffer (keeper/WIRECLI.c).</li>
+<li><a href="MEM-027.html">MEM-027</a> — <code>patch_walk</code> does unbounded BASS carving (~29MB/level), exhausting the arena (sniff/PATCH.c).</li>
+<li><a href="MEM-031.html">MEM-031</a> — WOOFApiOpen leaks dogs/buffers on a later open failure (woof/CONN.c).</li>
+<li><a href="MEM-041.html">MEM-041</a> — sniff error-path resource leaks in PATCH blob-write and POST commit.</li>
+<li><a href="MEM-042.html">MEM-042</a> — keeper REFSResolve leaks the ULOG map on a long URI; KEEPGetRemote double-error rarena leak.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BRO-001</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BRO-001: render the hunk status/header line as a full-width banner</h1>
+<p>
+The shared hunk renderer draws a hunk's status/header line (the <code>{ts, verb, uri}</code> metadata row — <code>dog/HUNK.h</code>, currently a plain <code>&lt;date&gt;\t&lt;verb&gt;\t&lt;uri&gt;</code> in text mode) without a clear visual band. Make it a proper banner: abbreviated time + URI on a pale-yellow, full-width, black-text line. This is the shared renderer used by every projector (log/status/grep/diff/commit/blame), so the fix lands once and benefits all. Prerequisite for <a href="../BLAME/BLAME-005.html">BLAME-005</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>A <code>hunk</code> is <code>{ ron60 ts; ron60 verb; u8cs uri; text/toks }</code>; the status</li>
+</ul>
+<div>
+<p>
+line is the <code>ts</code>/<code>verb</code>/<code>uri</code> row the renderer emits (<code>HUNKu8sFeedText/ Color/Html</code> in <code>dog/HUNK.c</code>, consumed by <a href="../../wiki/Bro.html">Bro</a>).
+</p>
+</div>
+<ul>
+<li>Today the line has no distinct band — it reads as ordinary text and is</li>
+</ul>
+<div>
+<p>
+easy to miss between content bodies.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>The status/header line displays the *<strong>time in abbreviated format</strong>*</li>
+</ul>
+<div>
+<p>
+(<code>Fri12</code>-style, the same formatter <code>be head</code>/<code>log:</code> already use) *<strong>and the URI</strong>*.
+</p>
+</div>
+<ul>
+<li>Style: *<strong>pale-yellow background, spanning the FULL line width</strong>* (not just</li>
+</ul>
+<div>
+<p>
+the text), *<strong>black text</strong>*.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Shared renderer (<code>dog/HUNK.c</code> <code>HUNKu8sFeedColor</code> for the TTY path; keep</li>
+</ul>
+<div>
+<p>
+Text/Html modes coherent) — benefits all projectors, no per-producer code.
+</p>
+</div>
+<ul>
+<li>Reuse the existing abbreviated-date formatter (don't roll a new one).</li>
+<li>Full-width fill must respect the terminal width bro already knows.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Open: does the banner keep the <code>verb</code> (the hunk's third field) alongside</li>
+</ul>
+<div>
+<p>
+time + URI, or show only time + URI as stated? Default: keep <code>verb</code> (it's free data) unless it crowds the line.
+</p>
+</div>
+<ul>
+<li>Open: Text (non-TTY) and Html modes — match the banner intent (Html =</li>
+</ul>
+<div>
+<p>
+pale-yellow row, already close per the <code>ulog</code> div) or leave Text plain.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Banner in <code>HUNKu8sFeedColor</code> (<code>hunk_feed_status_color</code>) + bro's</li>
+</ul>
+<div>
+<p>
+  <code>bro_render_ulog_title</code>, via shared <code>THEME_BANNER</code> (<code>dog/THEME.h</code>).
+</p>
+</div>
+<ul>
+<li>] Reused <code>DOGutf8sFeedDate</code> (the <code>Fri12</code>-style formatter).</li>
+<li>] bro (width-aware) pads the band to the terminal edge; verb kept; Text</li>
+</ul>
+<div>
+<p>
+  stays plain machine-grep; Html <code>.ulog</code> CSS made coherent.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None. Unblocks <a href="../BLAME/BLAME-005.html">BLAME-005</a> (per-commit-run hunk headers ride this banner).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>LANDED <code>afc2bd48</code> — black-on-pale-yellow (<code>48;5;230</code>) full-width banner:</li>
+</ul>
+<div>
+<p>
+abbrev date + verb + uri; shared <code>THEME_BANNER</code>; bro-padded width (no hardcode); <code>HUNKTestStatusBanner</code> across all 3 themes; 290/290 green.
+</p>
+</div>
+</body>
+</html>

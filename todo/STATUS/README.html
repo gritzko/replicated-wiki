@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+</head>
+<body>
+<h1>STATUS tickets: the worktree status view</h1>
+<p>
+<code>be status</code> (and bare <code>be</code>) report the worktree against its baseline as one <code>status:</code> ROWS hunk. Tickets here extend that view — the <code>!</code>/<code>--force</code> extended mode and path/submodule scoping — all on the shared ROWS state banner (<a href="../BE/BE-005.html">BE-005</a>). Each entry is one active ticket; it drops off once the whole ticket lands. The fix-and-land method is <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="STATUS-001.html">STATUS-001</a> — <code>be status!</code> (≡ <code>be status --force</code>) = extended status: file rows PLUS all tracked branches + remotes (uri→hash), rehoming <code>SNIFFGetSummary</code> (orphaned by <a href="">[GET-026</a>]); and <code>be status:&lt;path&gt;/</code> scopes the report to ONLY that path's submodule. Child of <a href="">[BE-005</a>].</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>CODE-018: manual <code>ok64</code> propagation should use PRO.h <code>call()</code>/<code>try()</code></h1>
+<p>
+In <code>.c</code> files a recurring hand-rolled pattern <code>ok64 o = A; if (o != OK) return o;</code> forwards an <code>ok64</code> callee's error WITHOUT a PRO.h frame.  Per <a href="../../../CLAUDE.md">CLAUDE</a> §1/§16 + <a href="../../rule/ABC.html">ABC</a>, a function that calls a fallible <code>ok64</code> fn should itself <code>sane()</code>/<code>done</code> and propagate via <code>call(A)</code> (or <code>try(A)</code> + branch).  Header-defined fns are inlineables that should be can't-fail; if one does fallible work it belongs in a <code>.c</code> with a real frame.  Suspect list (116, regenerable) in <a href="suspects.txt">suspects</a>.  NOT a mechanical sweep — <code>call()</code> snapshots+rewinds <code>ABC_BASS</code>, which manual <code>return o</code> does NOT, so each conversion is a per-case correctness check.  Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Finder (run at repo root): <code>be 'spot:.c#ok64 o=A;if(o!=OK) return o;'</code> →</li>
+</ul>
+<div>
+<p>
+116 hits 2026-06-16: *<strong>93 in <code>.c</code>, 23 in <code>.h</code></strong>* (full list: <a href="suspects.txt">suspects</a>).
+</p>
+</div>
+<ul>
+<li>The pattern is functionally an error-forward, but <code>call(A)</code> additionally</li>
+</ul>
+<div>
+<p>
+snapshots+rewinds BASS around <code>A</code> (frees the callee's per-call scratch).  Some manual sites may be INTENTIONAL — the callee returns a slice/buffer carved in BASS that the caller still uses, so a <code>call()</code> rewind would dangle it.  These must stay manual (or restructure) — converting them blindly is a bug.
+</p>
+</div>
+<ul>
+<li>Hot dirs: <code>sniff/POST.c</code> (12), <code>sniff/AT.c</code> (8), <code>sniff/PUT.c</code> (7),</li>
+</ul>
+<div>
+<p>
+<code>dog/ULOG.c</code> (4), <code>sniff/PATCH.c</code> (4), <code>keeper/WIRECLI.c</code> (3).
+</p>
+</div>
+<ul>
+<li>Prior CODE sweeps went &quot;bullshit quality&quot; (see <a href="../README.html">CODE</a>) — be conservative,</li>
+</ul>
+<div>
+<p>
+surface uncertainty, don't churn.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>In <code>.c</code>: where the callee carves no BASS scratch the caller needs past the</li>
+</ul>
+<div>
+<p>
+call, replace <code>ok64 o=A; if(o!=OK) return o;</code> with <code>call(A)</code> (the fn already / now has <code>sane(...)</code>/<code>done</code>).  <code>try(A)</code>+<code>then</code>/<code>nedo</code> where a branch follows.
+</p>
+</div>
+<ul>
+<li>Triage the 23 <code>.h</code> sites: a true can't-fail inlineable keeps manual forward</li>
+</ul>
+<div>
+<p>
+(PRO.h is <code>.c</code>-only); a genuinely-fallible one with cleanup needs → move to a <code>.c</code>.  Decide each, don't blanket-convert.
+</p>
+</div>
+<ul>
+<li>Behaviour-preserving; the suspect count drops only by REAL conversions, not by</li>
+</ul>
+<div>
+<p>
+rewording to dodge the search.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>*<strong>BASS-rewind hazard is the gate</strong>*: before converting a site, confirm the</li>
+</ul>
+<div>
+<p>
+callee leaves nothing live in BASS that the caller reads after <code>A</code>.  If unsure, SKIP and list it.
+</p>
+</div>
+<ul>
+<li>*<strong>abc/ is GATED</strong>* (28 suspects across <code>abc/*.c</code> + <code>abc/*.h</code>) — surface those</li>
+</ul>
+<div>
+<p>
+diffs for maintainer review, never autoland (<a href="../../../CLAUDE.md">CLAUDE</a> &quot;abc changes reviewed&quot;).
+</p>
+</div>
+<ul>
+<li>*<strong>False positives</strong>* (do NOT touch): <code>abc/PRO.h#trace</code>, <code>abc/Bx.h</code>, <code>abc/SSTx.h</code></li>
+</ul>
+<div>
+<p>
+(macro/template headers); <code>*/test/*</code> + <code>abc/fuzz/*</code> (TEST/FUZZ frames, low priority).  All flagged in <a href="suspects.txt">suspects</a>.
+</p>
+</div>
+<ul>
+<li>No behaviour change to BASS lifetime, error codes, or control flow.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Do the non-abc <code>.c</code> sites first in clean dir-scoped batches; gate abc/ and the</li>
+</ul>
+<div>
+<p>
+<code>.h</code>-triage separately.  Repro-first (<a href="../../../CLAUDE.md">CLAUDE</a> §17): the existing suite is the behaviour anchor — full <code>ctest</code> green after each batch; add a case only where a conversion could shift behaviour.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] <code>.c</code> conversions: 51 sites across 18 non-abc <code>.c</code> files, each BASS-verified</li>
+</ul>
+<div>
+<p>
+  (callee output is mmap/scalar/caller-carved, never live BASS scratch). Suspect   count 116→65; finder re-run confirms the drop is real <code>call()</code>/<code>try()</code>.
+</p>
+</div>
+<ul>
+<li>] <code>.h</code> triage: <code>dog/DPATH.h</code> (DPATHVerify, DPATHBranchNormFeed) — KEEP MANUAL</li>
+</ul>
+<div>
+<p>
+  (inlinable forwarders, no cleanup, PRO.h is <code>.c</code>-only). No move-to-<code>.c</code>.
+</p>
+</div>
+<ul>
+<li>] Skipped + listed the BASS/control-flow hazards (Blockers below) — findings.</li>
+<li>] abc/ (28): reviewed, recommendations prepared, NOT landed; HAZARD flagged.</li>
+<li>] <code>ctest -j16 --timeout 10</code> = 298/298 per batch incl. final tree.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>SKIPPED (BASS-hazard / control-flow, correctly left manual): <code>ULOGMergeWalk</code></li>
+</ul>
+<div>
+<p>
++ <code>SNIFFMergeWalk</code> cb-dispatch (cb may carve cross-call BASS in ctx — MEM-018); <code>diffref_remember_submodule</code> (cross-step <code>u8bAcquire</code>); <code>BRAM.c</code>/<code>CAPOEmit</code> are <code>try</code>/<code>on</code>-idioms not forwards; tok BRCT/MDT/MKDT (no frame, ptr-arith legacy).
+</p>
+</div>
+<ul>
+<li>abc GATED: clean candidates <code>PATH.c</code>/<code>URI.c</code>/<code>JSON.c</code>/<code>FILE.c</code>; **HAZARD</li>
+</ul>
+<div>
+<p>
+<code>abc/ROCK.c#ROCKGet</code>** holds a <code>rocksdb_get</code> <code>val</code> needing free — a <code>call()</code> early-return leaks it; keep manual / restructure. abc <code>.h</code> all <code>fun</code> inlineables.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>a5d133f8</code></strong>* (ff atop GET-020 <code>49039f36</code>): 51 <code>.c</code> conversions across</li>
+</ul>
+<div>
+<p>
+18 non-abc files, 298/298; <code>POSTCFLCT</code> was the documented false positive (<code>// ====</code> comment banners, no real markers) — forced with <code>be post!</code> as gated.
+</p>
+</div>
+<ul>
+<li>CLOSED as-is (2026-06-16): the abc/ remainder (28 sites) is NOT pursued —</li>
+</ul>
+<div>
+<p>
+review-only, marginal ABC-consistency value; clean candidates were <code>PATH.c</code>/<code>URI.c</code>/<code>JSON.c</code>/<code>FILE.c</code> forwards, but <code>abc/ROCK.c#ROCKGet</code> is a free-leak HAZARD (keep manual) and the abc <code>.h</code> are <code>fun</code> inlineables (keep manual).  14 non-abc sites correctly skipped as BASS findings.  Ticket done.
+</p>
+</div>
+</body>
+</html>

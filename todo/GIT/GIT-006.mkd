@@ -1,0 +1,47 @@
+#   GIT-006: migration & crash recovery — recompact each shard into one OFS-only stream, truncate-and-reindex on torn append
+
+##  Input
+
+### Context
+
+Child of [[GIT-001]]; depends on [[GIT-002]]/[[GIT-003]]; gates [[GIT-004]]. Existing stores hold mixed OFS/REF logs across many `NNNNN.keeper` files; they must become one OFS-only stream per shard before the REF reader can be deleted. Reuse the [PackLog] epoch-recompaction mechanism (copy the reachable closure into a fresh project id) as the migration: the closure is re-emitted through the GIT-002 writer, so the output is OFS-only, dedup'd, and single-stream by construction. Separately, object-by-object append changes the crash story from "drop the whole torn pack" to "truncate the log to the last indexed offset and re-`UNPK` the unindexed tail". See [PackLog], [Keeper], [CLAUDE].
+
+ -  On-disk REF_DELTA: any object stored as REF_DELTA (every pre-migration log) would resolve to KEEPNONE under an OFS-only resolver — so [[GIT-004]] cannot land until migration runs everywhere, including long-lived `~/.be` real stores.
+ -  Torn-append recovery: the old single count-patch + bookmark gave all-or-nothing per pack; per-object append needs the log and `.idx` kept consistent if interrupted mid-ingest. Relates to [[KEEP-002]] (torn-idx rebuild already rebuilds a short index from the pack on rw-open).
+ -  Many-files → one stream: the multi-`NNNNN` layout and `file_id` PAST/DATA registry collapse to one growing log per shard; the migration is the natural place to do it.
+
+### Goals
+ -  Recompact each shard into one OFS-only single stream via the GIT-002 writer, retiring the mixed OFS/REF multi-file layout so the REF reader can be deleted ([[GIT-004]]).
+ -  Make object-by-object append crash-safe: recover a torn mid-ingest append by truncating to the last indexed offset and re-`UNPK`-ing the unindexed tail.
+
+### Constraints
+ -  Recompaction is the existing GC-replacement, not new machinery — drive the reachable closure (graf/keeper ancestry + tree walk) through the GIT-002 writer into a fresh shard, then swap. Keep live readers' mmaps valid until close ([PackLog] §"Live readers survive").
+ -  Idempotent + resumable: a migration interrupted mid-copy leaves the source intact (write the new shard, swap atomically last) — same discipline as [[GET-018]] atomic-swap.
+ -  Append ordering for recovery: append objects + advance the log length, fsync, THEN flush the `.idx` run; recovery truncates to the last indexed offset and re-UNPKs the tail. Reuse `keep_rebuild_torn_idx` ([[KEEP-002]]).
+
+##  WIP
+
+### Design decisions
+ —
+
+### TODOs
+ -[ ] Migration tool: `KEEPCompact`/epoch-recompact path that emits OFS-only via GIT-002; run it over each shard (and document the one-shot for real `~/.be` stores) before flipping GIT-004 on.
+ -[ ] Crash recovery: on rw-open, if the log tail past the last `.idx` offset holds unindexed objects (or a torn append), re-`UNPK` the tail and re-flush; on a torn final object, truncate to the last whole object boundary.
+ -[ ] Collapse file layout: one growing `NNNNN.keeper` per shard; retire the per-batch new-log rollover (coordinate with GIT-002).
+ -[ ] Repro-first ([CLAUDE] §17): a table-driven test that (a) builds a mixed OFS/REF multi-file store, recompacts it, asserts one OFS-only log with identical reachable closure (every commit/tree/blob round-trips); (b) injects a torn mid-ingest append and asserts rw-open recovers a consistent log+idx with no object loss.
+
+### Blockers and bummers
+ -  Sequenced after [[GIT-002]]/[[GIT-003]]; must finish before [[GIT-004]] deletes the REF reader.
+
+##  Outcome
+
+[PackLog]: ../../wiki/PackLog.mkd "pack-log concept page"
+[Keeper]: ../../wiki/Keeper.mkd "the keeper dog"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"
+[GIT-001]: GIT-001.mkd "umbrella: single-stream OFS-only migration"
+[GIT-002]: GIT-002.mkd "object-by-object OFS-only writer"
+[GIT-003]: GIT-003.mkd "ingest re-encoder / normalizer"
+[GIT-004]: GIT-004.mkd "OFS-only native resolver"
+[GET-018]: ../GET/GET-018.mkd "atomic worktree GET (stage-to-temp + swap)"
+[KEEP-002]: ../KEEP/KEEP-002.mkd "torn .keeper.idx rebuild"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

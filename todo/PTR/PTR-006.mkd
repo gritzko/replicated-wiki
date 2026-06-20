@@ -1,0 +1,53 @@
+#   PTR-006: spot/ void* slab, base-ptr binds, fixed bufs
+
+The 2026-06-15 audit found spot/ reads a typed record array back out of a `u8b` via a `void*` double-cast + `len/sizeof` count, carries a base pointer separate from the source slice (rebuilding sub-slices with `base+offset`), and uses fixed `buf[N]`+`len` structs. Behavior-preserving, one worktree; search results stay byte-identical.
+
+##  Input
+
+### Context
+ -  `spot/CAPO.exe.c:739-741` — `spot_todo *todos=(spot_todo*)(void*)u8bDataHead(todo_buf); ntodo=u8bDataLen/sizeof(spot_todo)`; the slab is hand-serialized at :734 via `u8bFeed(todo_buf, (u8cs){(u8cp)&row, (u8cp)&row+sizeof(row)})`.
+ -  `spot/SPOT.c:230-745` — the matcher carries `u8cp source_base`/`u8cp ndl_base` (SPOTbinds) separate from the token/source slices and rebuilds inline, e.g. `{b->source_base+leaf_srclo, b->source_base+cap_srchi}`, `{source[0]+pos, source[0]+matches[i].lo}`; needle ranges via `val[0]-b->ndl_base` at :211,363,417,509.
+ -  `spot/SPOT.c:697-724` — `SPOTrep *matches=(SPOTrep*)mbuf[0]` (cast a `Bu8` head) + insertion sort `matches[j+1]=matches[j]`.
+ -  `spot/GREP.c:205-211` — `regexlits_ctx { u8 buf[1024]; u32 len; }` (in-struct `ptr+len`) advanced by `c->buf[c->len++]=ch`; `u64 *const *hashbuf1`.
+ -  `spot/GREP.c:283-298` — `grep_match_span(… u8cp source_base, …)` does `{line[0]+so, line[0]+eo}; *lo=(u32)(sub[0]-source_base)`. `spot/GREP.c:221-229` — `u8 _tb[3]; {_tb,_tb+3}` trigram + `seek_runs[]` filled cell-by-cell.
+ -  `spot/CAPO.exe.c:570-574` — interned ext via `u8bDataHead(ext_arena)+row->ext_off` + NUL scan `ext_end++`. `spot/CAPOi.h:114` — `CAPOBuildHunk(… range32 const *hls, int nhl, …)`. `spot/LESS.c:42-53` — 4-pointer descriptor copy by hand; `LESSRun(LESShunk const*, u32)`.
+
+### Goals
+ -  Make the `spot_todo` slab a typed slice/buffer (`Bx.h` instantiation → `spot_todocs`); feed/iterate bounds-checked, dropping the `void*`/`+sizeof` casts. The `path_off`/`path_len` fields could hold a `range32` instead.
+ -  SPOTbinds hold `u8csc source`/`u8csc nsrc`; derive sub-slices with `a_head`/`a_rest`/`u8csSub`; offsets via a typed `u8csOff(nsrc, val)` helper, not `val[0]-base`.
+ -  `SPOTReplace` → a typed `SPOTrep` slice/buffer (`a_carve`/SORT.h) + `…sSort`, not a `u8b` reinterpret + hand sort.
+ -  GREP `buf`/`len` → a `u8b` (feeds via `u8bFeed1`); `hashbuf1` typed `u64bp`; trigram via `a$(u8,tri,_tb)`; `grep_match_span` returns offsets relative to a passed-in source slice.
+ -  Ext resolve via `u8csSub`+`u8csFind` (the path idiom 30 lines down); `CAPOBuildHunk` takes a `range32cs`; LESS descriptor copy via `$mv`/`u32bMv`, `LESSRun` takes `LESShunkcs`.
+
+### Constraints
+ -  Behavior-preserving; `ctest -j16 --timeout 10` + spot fuzzers green; search output byte-identical.
+ -  `RXLITS.rl.c` is generated ragel output — skip. `void *ctx` trampolines (cast to the typed struct on line 1) are the sanctioned idiom — out of scope.
+
+##  WIP
+
+### Design decisions
+ -  The two highest-value fixes are the `spot_todo` slab (typed slice) and the SPOTbinds `source_base`/`ndl_base` base-pointer pattern — together they account for most of the `+offset` slice reconstruction in the module.
+
+### TODOs
+ -[ ] Repro-first: lock grep/spot/replace outputs on existing tables.
+ -[ ] `spot_todo` slab → typed slice (Bx.h); drop `void*`/`sizeof`.
+ -[ ] SPOTbinds → `u8csc` source/needle slices; offsets via typed helper.
+ -[ ] `SPOTReplace` → typed `SPOTrep` buffer + sort.
+ -[ ] GREP `buf/len` → `u8b`; trigram/span/seek_runs → slice ops.
+ -[ ] Ext resolve + `CAPOBuildHunk` + LESS slice conversions.
+ -[ ] Build + ctest; report done vs skipped.
+
+### Blockers and bummers
+ -  None known.
+
+##  Outcome
+
+ -  **CLOSED 2026-06-16 — WON'T FIX (no value, maintainer call).** The spot/
+    ptr-discipline churn (`spot_todo` void*/sizeof slab, SPOTbinds base-ptr binds,
+    GREP `buf[1024]`+len) doesn't justify the risk/effort on a hot search path; the
+    existing code is contained and search output is the contract. Not landed; the
+    reworked `$HOME/todo/PTR-006` worktree was discarded. Ticket left in place for
+    history; dropped from the active index.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

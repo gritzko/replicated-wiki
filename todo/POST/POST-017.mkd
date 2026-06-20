@@ -1,0 +1,91 @@
+#   POST-017: a refused/failed `be post` is non-atomic — writes the reflog before the objects are safely stored
+
+A `be post` that is REFUSED (or errors) after it has begun can still leave a
+`post` row in the store reflog (`<store>/<shard>/refs`) and a `put` staging row,
+even though NO commit object was created. The reflog/refs write must be the LAST
+step — `be post` may append the reflog row ONLY after the commit objects are safely
+in the store: written, `msync`'d (durably flushed), AND indexed. Any refusal/error
+before that point must leave the reflog (and staging) UNCHANGED — the post is
+all-or-nothing. Method: [Issues].
+
+##  Input
+
+### Context
+ -  Repro (2026-06-16, landing BLAME-006b): `be post` was refused by `POSTCFLCT`
+    (the [[POST-006]] marker-string false positive on `graf/WEAVE.c`), yet it had
+    ALREADY appended a stray row to the shared store reflog
+    (`/home/gritzko/beagle/.be/dogs/refs`: `26616Cpe5S post ?#f6bea1c5…`, a duplicate
+    of the parent row) and staged an `abc` gitlink — while creating NO commit. `be
+    head` still resolved the true tip (refs are sha-lineage, not row-order), so it is
+    harmless to resolution, but it is debris that accumulates and reads like a tip.
+ -  Root: the refs/reflog (and staging) write happens BEFORE the commit is finalized,
+    so a late refusal (conflict scan) or any error after that write but before the
+    commit leaves the partial row behind. A post is not all-or-nothing.
+ -  Cousin of [[GET-018]] (atomic wt GET) — same "stage/commit-point ordering so a
+    mid-op failure leaves nothing changed" shape, on the POST side.
+
+### Goals
+ -  `be post` writes the reflog row as the FINAL, single commit point — only after the
+    commit object(s) are (1) written to the store, (2) `msync`'d to durable storage,
+    and (3) indexed (`.refs.idx` / graf / spot). Before that point, a refusal/error
+    (POSTCFLCT, validation, transport, crash) leaves the reflog and staging UNCHANGED.
+ -  No stray/duplicate refs rows or orphan `put` staging from a refused post.
+
+### Constraints
+ -  Move ALL validation that can refuse a post (notably the `POSTCFLCT` conflict scan)
+    BEFORE any reflog/staging mutation, so a refusal never reaches the write.
+ -  Don't regress the legitimate post path or the documented `--force` conflict-scan
+    bypass; output and landed-commit shape unchanged on the happy path.
+ -  Store writes only — keep the wtlog/refs/index ordering consistent with [[GET-018]].
+
+##  WIP
+
+### Design decisions
+ -  ROOT CAUSE (scan done 2026-06-16) — the premise was half-right: the leak is NOT the
+    `refs`/reflog text row (that REFS write at ~`sniff/POST.c:3080` runs AFTER the scan, so
+    it was untouched), it is ORPHAN OBJECTS + a rewritten INDEX. The `POSTCFLCT` scan ran
+    MID-pack-feed (`sniff/POST.c:3012-3022`), inside the blob-feed loop, AFTER `KEEPPackOpen`
+    (~`POST.c:2745`) and after all trees were fed; on a hit it called `KEEPPackClose`, which
+    PERSISTS the pack, publishes a fresh idx puppy (`keep_pup_create_next`) and runs
+    `KEEPCompact` (`keeper/KEEP.c:1782-1851`), THEN returned POSTCFLCT — so a refusal left
+    orphan tree+blob objects in `0000000001.keeper` and a rewritten `*.keeper.idx` durably.
+    (The earlier observed stray `26616Cpe5S` refs row was a SEPARATE partial op, not this.)
+ -  FIX: hoist ALL refuse-capable validation to a pre-flight (step 5a, `POST.c:2675`), right
+    after `post_scan_changeset` builds the decisions ULOG and BEFORE the unlink/`KEEPPackOpen`/
+    any object/index/reflog write. New `post_cflct_scan_cb` (`POST.c:1240`) reads each `add`
+    row's wt body (same mmap/readlink idiom as the feed loop) + `SNIFFHasConflictMarker`; a hit
+    returns POSTCFLCT before any store mutation. Removed the redundant in-loop scan. `--force`
+    skips the pre-flight exactly as before.
+
+### TODOs
+ -[v] Repro-first: `test/post/42-refuse-atomic-store` — refused post leaves the store
+      byte-identical (excl. volatile `.refs.idx`/`.wtlog.idx` read-caches a `be head` also
+      rewrites); RED on unfixed (mutated `0000000001.keeper` + `*.keeper.idx`), GREEN with fix;
+      also covers the `--force` bypass.
+ -[v] Reorder so all validation runs before any store write (objects→index→reflog stay the
+      commit point).
+ -[v] Test: refused post → store unchanged; happy path byte-identical; full `ctest` 303/303.
+ -[ ] (follow-up, OUT OF SCOPE here) `be`-level cross-project ordering: `BEActSubsPost`
+      recurses+commits SUBS (`DISPATCH.c:446`) BEFORE `BEActSniffPost` scans the parent
+      (`:447`); make the parent's conflict scan gate sub-recursion too. Larger orchestration
+      change — separate ticket if wanted.
+
+### Blockers and bummers
+ -  Pairs with [[POST-006]] (whose false-positive exposed this) and [[GET-018]] (the GET-side
+    atomicity). Cleaning the existing stray `26616Cpe5S` row is a separate maintainer step.
+
+##  Outcome
+ -  **LANDED `f5b41282`** (FF child of `0dd4e0ba`; msg `POST-017: validate before any store
+    write (atomic post)`): within-`POSTCommit` atomicity — conflict scan + validators hoisted
+    to a pre-flight (`post_cflct_scan_cb`, step 5a) before any object/index/reflog write
+    (`sniff/POST.c`), so a refused post leaves the store byte-identical. New
+    `test/post/42-refuse-atomic-store` (RED→GREEN), happy path byte-identical, 303/304 (the
+    1 red was a local stale-build of `be-diff-16`, NOT a regression — verified BRO-004 Part 3
+    is correct on trunk). Correction: leak was orphan objects + index, not the refs row.
+    NB the land itself hit [[POST-006]] (POSTCFLCT false-positive on `sniff/POST.c`'s own
+    marker-literal comment) → documented `--force` conflict-scan bypass. The `be`-level
+    scan-before-sub-recursion ordering remains a flagged follow-up.
+
+[POST-006]: POST-006.mkd "POSTCFLCT false-fires on marker strings in source"
+[GET-018]: ../GET/GET-018.mkd "atomic wt GET"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

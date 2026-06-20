@@ -1,0 +1,56 @@
+#   COMMIT-001: `commit:` projection should surface the diff after the metadata
+
+`be commit:?<sha>` (keeper projector, see [Projector]) emits only the commit
+object body — headers then message — so it shows who/when/why but never what
+changed.  `git show` folds the diff in; beagle keeps them split, forcing a
+second `be diff:?<sha>`.  This ticket surfaces the diff from `commit:`.
+
+##  Input
+
+### Context
+ -  `commit:` is keeper-owned and emits headers + message only; `diff:` is a
+    separate graf-owned projector. There is no single "show this commit" view.
+
+### Goals
+ -  After the commit metadata, surface the commit's diff so `commit:` reads
+    like `git show`.
+ -  **Preferred:** emit a navigable link to `diff:?<sha>` (graf's projector)
+    that [Bro] can follow — keeps `commit:` single-purpose, reuses graf's diff
+    renderer, no diff code in keeper.
+ -  Alternative: inline graf's unified diff right after the message.
+
+### Constraints
+ -  Respect projector composition and the dog boundary: keeper owns `commit:`,
+    graf owns `diff:`. Do NOT re-roll diff rendering inside keeper — link to
+    (or invoke) graf's `diff:`.
+ -  Read-only `dog/HUNK` stream for Bro; no mutation; all four URI slots still
+    compose.
+
+##  WIP
+
+### Design decisions
+ -  Link vs inline: recommend the **link** — keeper stays diff-free, one clean
+    dog boundary; inlining would force keeper to call graf or duplicate diff
+    logic. (User leaning: link.)
+ -  Link target = `diff:?<sha>` for the sha the `commit:` URI resolved to.
+
+### TODOs
+ -[v] Decided: **link** (keeper stays diff-free).
+ -[v] Localized: `KEEPProjCommit` (`keeper/PROJ.c`), `diff:` query form is the
+      one that triggers graf's commit-show (`#` fragment renders empty).
+ -[v] Implemented: append a `diff:?<sha40>` `U` tok32 click-target after the
+      headers+message; Bro follows it (existing link primitive, no new dep).
+ -[v] Test `test/commit/01-diff-link`.
+
+### Blockers and bummers
+ -  A linked diff inherits whatever `diff:` shows — now fixed for sub-pin-bump
+    commits by [DIFF-001] (landed `018a59c4`).
+
+##  Outcome
+ -  LANDED `dac9dab7` — `commit:` appends a navigable `diff:?<sha>` link (query
+    form) via bro's `U` click-target; keeper gains no diff logic / no graflib
+    dep, dog boundary intact. 289/289 green.
+
+[Projector]: ../../wiki/Projector.mkd "read-only verbless views"
+[Bro]: ../../wiki/Bro.mkd "the bro pager"
+[DIFF-001]: ../DIFF/DIFF-001.mkd "diff: recurse into subs + render gitlink/pin changes"

@@ -17,9 +17,11 @@
 </p>
 <h2>Active tickets</h2>
 <ul>
-<li><a href="BE-001.html">BE-001</a> — red leaks into non-conflict code render and ulog status rows; restrict red to the <code>conf</code>/<code>modl</code> conflict statuses (<a href="../done/DIS-018.html">DIS-018</a>), default everything else.</li>
-<li><a href="BE-002.html">BE-002</a> — cryptic errors for mistyped verbs/projectors (<code>be difff</code> → <code>bro: cannot open difff: FILENONE</code>, exit 0); add a <code>DOGSuggestCommand</code> &quot;did you mean&quot; suggester + own the diagnostic in <code>be</code> with a non-zero exit.</li>
 <li><a href="BE-003.html">BE-003</a> — every dog must print *<strong>name + verb + URI + error code</strong>* on an error exit (one uniform line, single-sourced) — today error exits are contextless (<code>Error: SNIFFFAIL</code>, <code>bro: cannot open …: FILENONE</code>); general form of BE-002.</li>
+<li><a href="BE-006.html">BE-006</a> — one unreachable-remote <code>be post</code> prints FIVE lines for one failure (raw <code>ssh:</code> leak + <code>be: remote unreachable</code> + <code>Error: WIREUNRCH</code> + <code>Error: BEDOGEXIT</code> ×2, one per spawned <code>be</code> level); collapse to a single uniform error line. Concrete instance of <a href="BE-003.html">BE-003</a>.</li>
 </ul>
+<p>
+BE-007 (root out ROWS — deleted <code>dog/ROWS.{h,c}</code> + 4 types, 18 callers repointed to the typeless <code>HUNKu8sFeedRow</code> ULOG→HUNK serializer; fixed POST-022's wrecked output) landed <code>1a006d08</code>; retires <a href="BE-005.html">BE-005</a> (the ROWS-banner umbrella).
+</p>
 </body>
 </html>

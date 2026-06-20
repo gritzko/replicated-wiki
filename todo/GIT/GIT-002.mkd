@@ -1,0 +1,48 @@
+#   GIT-002: object-by-object OFS-only writer — one growing log per shard, never REF_DELTA
+
+##  Input
+
+### Context
+
+Child of [[GIT-001]]. The store's two write paths diverge: local commits go through `KEEPPackFeed` (`keeper/KEEP.c:1652`) which emits OFS_DELTA only when the base is raw in the same pack (`keep_find_raw_in_pack`) and falls back to REF_DELTA otherwise (`:1724`); ingest (`KEEPIngestFile:2238`) `u8bFeed`s a whole foreign pack verbatim. Converge both onto ONE per-object append — a dog/git format function that writes raw objects + OFS_DELTA exclusively, base anywhere earlier in the log, addressed purely by offset — so keeper's `KEEPPackFeed`, the GIT-003 ingest funnel, AND the js/JABC binding all call one writer (the binding holds no pack-log logic). This is the foundational change; everything else in [[GIT-001]] builds on it. See [PackLog], [CLAUDE].
+
+ -  Dual writers: `KEEPPackFeed` (Feed-time delta decision) and the ingest verbatim append are separate code with separate delta policy; a format change must be written twice and they can drift.
+ -  REF_DELTA on write: `dtype = in_pack ? PACK_OBJ_OFS_DELTA : PACK_OBJ_REF_DELTA` (`KEEP.c:1724`) is the single line that injects sha-addressed deltas into storage — the source of the cross-file recursion and droppability hazards [[GIT-001]] removes.
+ -  OFS candidate is pack-batch-scoped: `keep_find_raw_in_pack` only scans the in-progress pack's entries, so cross-batch near-identical objects re-store raw; one growing log lets OFS reference any earlier object in the shard.
+
+### Goals
+ -  One per-object append writer in dog/git that emits raw objects + OFS_DELTA exclusively (never REF_DELTA), base any earlier object in the open shard log, addressed purely by offset.
+ -  Converge keeper's `KEEPPackFeed`, the GIT-003 ingest funnel, and the GIT-007 JABC binding onto that single append code path (the binding holds no pack-log logic).
+
+### Constraints
+ -  OFS varint is the only thing rewritten — keep the deflated delta-instruction bytes; recompute the header offset as `cur_pos - base_pos`. No re-deltification, no re-deflate on the verbatim-base path. Use `dog/git/PACK.h` `PACKu8sFeedObjHdr` + the OFS varint encoder; no open-coded headers ([CLAUDE] §10, no ptr arithmetic).
+ -  Preserve the intra-pack type order invariant ([PackLog] §"Intra-pack object order"): non-decreasing commit→tree→blob→tag for canonical writes; `strict_order` stays for Feed, ingest emits in dependency order (GIT-003).
+ -  Layering: the byte-level append + the OFS varint encoder live in dog/git (beside `PACKu8sFeedObjHdr`), taking a caller-provided log buffer + resolved base bytes/offset — no refs, index, or singleton. keeper keeps the policy (`KEEPObjSha`, base resolution via `keep_find_raw_in_pack`/`KEEPGet`, `WHIFFHashlet60`, indexing, the FILEBook growable log); reuse `DELTEncode`/`ZINFDeflate`, no fresh re-rolls.
+ -  Delete the duplicated OFS encoder: `keeper/KEEP.c:1544 pack_feed_ofs` and `js/pack.hpp:23 JABCPackFeedOfs` are two hand-rolled copies — replace both with one `PACKu8sFeedOfs` in dog/git (the missing encode counterpart to `PACKDrainOfs`).
+ -  Base must precede dependent (forward-reference free) — the writer only ever deltas against an already-appended object.
+
+##  WIP
+
+### Design decisions
+ —
+
+### TODOs
+One writer: `KEEPPackFeed`-shaped, OFS-only, base = any earlier object in the open shard log.
+
+ -[v] Replace the `in_pack ? OFS : REF` branch with OFS-always: resolve the base to its offset in the current log (extend `keep_find_raw_in_pack` to scan the whole open log's index, not just the in-progress batch), emit OFS_DELTA; if no usable base offset, store raw. Delete the REF_DELTA emit.
+ -[v] Single growing log per shard: append to the tail log unconditionally (drop the new-log-rollover); offsets are writer-assigned and stable. Keep `file_id` as the log identity for the index val.
+ -[v] The per-object append entry IS the dog/git writer (raw bytes or resolved base + base offset → raw|OFS_DELTA record); keeper's Feed, the GIT-003 ingest funnel, and the GIT-007 JABC binding all call it, so there is exactly one append code path. The sha→offset index stays with each caller (keeper's wh128 LSM; the binding's JS-side wh128 layer).
+ -[v] Repro-first ([CLAUDE] §17): extend `test/DELTA_ROUND.c` — feed several versions of a file across what were pack-batch boundaries; assert (a) every emitted delta record is OFS_DELTA (zero REF_DELTA in the log), (b) cross-batch deltas now form (the base is an earlier object), (c) round-trip `KEEPGet` byte-matches each version.
+
+### Blockers and bummers
+ -  Branch-model fork RESOLVED (flat pool — see [[GIT-001]]); never a real blocker. The dog/git writer is buffer-scoped and branch-agnostic, so the resolved model only confirms keeper's base-selection stays within the one shard.
+
+##  Outcome
+ -  Landed `e59a1c91` on `dogs` trunk (`GIT-002 OFS-only object-by-object pack writer in dog/git`): new `dog/git/PACK.PACKu8sFeedObj` (shared raw|OFS_DELTA writer) atop `PACKu8sFeedOfs`; `KEEPPackFeed` OFS-always (REF_DELTA emit deleted, `keep_find_raw_in_pack` scans the whole open log, raw fallback otherwise); `js/pack.hpp` calls the shared encoder; `DELTA_ROUND` rewritten OFS-only (zero REF_DELTA, `git index-pack` byte round-trip). 328/328 tests green; read-side REF resolver untouched.
+ -  Cross-consumer adoption still pending: the GIT-003 ingest funnel and the GIT-007 JABC feed/resolve path converge onto `PACKu8sFeedObj` / the dog/git resolver in their own tickets.
+
+[PackLog]: ../../wiki/PackLog.mkd "pack-log concept page"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"
+[GIT-001]: GIT-001.mkd "umbrella: single-stream OFS-only migration"
+[GIT-003]: GIT-003.mkd "ingest re-encoder / normalizer"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

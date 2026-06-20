@@ -1,0 +1,52 @@
+#   JS-004 [HIGH]: `len-1` / `factlen-1` `size_t` underflow on empty / zero-length strings
+
+`JSStringGetUTF8CString` returns 0 on an empty string or failure; the `-1` sites
+then underflow `size_t` to a huge value. Flagged by all 7 lenses (highest
+confidence). Method: [Issues].
+
+##  Input
+
+### Context
+ -  `JSStringGetUTF8CString` returns 0 on empty/failure. Sites subtract 1 unguarded:
+    `convert.cpp:24-25` (`*idle += factlen-1`), `JABC.hpp:52` & `:64`
+    (`varn[1] += len-1`), `io.cpp:430` (`u8sFeedn(..., len-1)`), `main.cpp:139`
+    (`page[len-1]='\n'` → OOB write when `len==0`).
+ -  `utf8.cpp:39` already has the correct guard (`if (fact<1) return BADARG`) —
+    that pattern just needs to be applied at every site.
+ -  `convert.cpp` is on the DEAD rdx path (unwired in `main.cpp:40-42`), but
+    `JABC.hpp`/`io.cpp`/`main.cpp` sites are live.
+
+### Goals
+ -  Empty / zero-length strings flow through every path without `size_t` underflow
+    or OOB access.
+
+### Constraints
+ -  Guard `len >= 1` before subtracting, mirroring the existing `utf8.cpp:39` check.
+
+##  WIP
+
+### Design decisions
+ -  (open) Apply the `fact<1 → BADARG`/early-return guard at each listed `-1` site.
+
+### TODOs
+ -[ ] Repro-first: push an empty string through each path (`Encode`, `JABC.hpp` arg
+      marshal, `io.cpp:430`, `main.cpp` page write); assert no crash under ASAN.
+ -[ ] Add the length guard at every site.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `bd3a9c67`** (2026-06-16): guarded `len >= 1` before `len - 1` at the
+    two LIVE sites — `io.cpp` `JABCioFileMap` (extracted `JABCioMapBuildPath`, now
+    returns SNOROOM on `len == 0` instead of feeding a SIZE_MAX-underflowed,
+    silently-discarded `u8sFeedn`) and `main.cpp` `JABCReport` `page[len - 1]`
+    (`if (len < 1) len = 1;` removes the `page[-1]` OOB write). C++ harness row
+    `run_mmap_underflow_repro` drives the path builder with `len==0/1/N+1`
+    (RED before: `len==0` returned OK; GREEN after; ASAN/LSan clean). The
+    `main.cpp` OOB is logic-verified (a 0-length JSC conversion is not
+    deterministically forceable from a real JSString with a PAGESIZE buffer).
+ -  DEFERRED to JS-014: `convert.cpp` (off-build) and the `JABC.hpp`
+    `JABC_FN_ARG_*` macro `-1` sites (unused/pruned there).
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

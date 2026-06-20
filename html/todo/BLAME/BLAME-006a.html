@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>BLAME-006a</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>BLAME-006a: blame skips a deleted file instead of folding an empty layer (root mis-attribution)</h1>
+<p>
+<code>be blame:</code> attributes lines to the ROOT commit for a file that was DELETED then RE-ADDED, because the blame weave SKIPS the delete instead of folding an empty (delete) layer — so the old tokens never die and the readd's structurally-equal tokens (titles, blank lines) inherit the root commit's seq. Split from <a href="">[BLAME-006</a>] (the correctness half). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>be blame:ABC.md</code> pins 5 pieces to <code>?c7184818#initial</code> (root). <code>ABC.md</code></li>
+</ul>
+<div>
+<p>
+was a DIFFERENT doc at root, DELETED at <code>006b9039</code> (18Nov24 reorg), RE-ADDED as the current doc at <code>8948262e</code> (22May, its true add commit, owns 20/28). The 5 root-pinned pieces are line-1 H1 + 4 blank lines before <code>##</code> headers — content-only RAPHash (<code>BLAME/WEAVE.c:502,510</code>) COLLIDES across the delete/readd.
+</p>
+</div>
+<ul>
+<li>Root cause: <code>graf/BLAME.c:480</code> (<code>if (dr==BLAME_DESC_ABSENT) continue;</code>) + twin</li>
+</ul>
+<div>
+<p>
+<code>:492</code> — when the path is absent at a commit, <code>GRAFFileWeave</code> SKIPS it instead of folding an empty layer, so old tokens stay alive; the readd content folds and the WEAVE EQ keep-seq branch (<code>WEAVE.c:579-586</code>) matches new title/blank tokens to the still-alive root tokens → they inherit root's seq.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>A delete is folded as an explicit empty (all-delete) layer so tokens DIE at the</li>
+</ul>
+<div>
+<p>
+delete commit → a readd is a clean all-INS at the readd commit; no root leak.
+</p>
+</div>
+<ul>
+<li><code>be blame:ABC.md</code> attributes all pieces to <code>8948262e</code>+ (or their real authors),</li>
+</ul>
+<div>
+<p>
+none to root.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Behaviour-preserving for files that were never deleted: <code>GRAFblameident</code> /</li>
+</ul>
+<div>
+<p>
+<code>GRAFblameruns</code> byte-identical. graf change gates for review.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>Reuse the existing all-delete path (<code>WEAVE.c:534-540</code>, <code>nlen==0</code>): at</li>
+</ul>
+<div>
+<p>
+<code>BLAME.c:480/492</code>, on <code>BLAME_DESC_ABSENT</code>, fold an EMPTY version (all tokens deleted) rather than <code>continue</code>.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: a hermetic delete-then-readd file; assert blame attributes the</li>
+</ul>
+<div>
+<p>
+  readd commit, not root (RED pre-fix). → <code>graf/test/blame-readd.sh</code>.
+</p>
+</div>
+<ul>
+<li>] Fix the skip-on-absent to fold an empty layer.</li>
+<li>] <code>ctest</code> green incl. <code>GRAFblameident</code> (unaffected attributions byte-identical).</li>
+<li>] Gate + land.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Pairs with <a href="">[BLAME-006b</a>] (the perf half) — independent; land separately.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>FIX-READY (<code>$HOME/todo/BLAME-006a</code>, stopped at commit boundary). Both absent</li>
+</ul>
+<div>
+<p>
+points in <code>graf/BLAME.c::GRAFFileWeave</code> (~<code>:483-528</code>, <code>:569</code>): on <code>BLAME_DESC_ABSENT</code>/fetch-miss, if the file was alive in the last folded layer (<code>have_prev</code>), set <code>is_delete</code> + reset <code>*cur_blob</code> to empty instead of skipping; the empty blob flows through <code>WEAVEFromBlob</code> → empty <code>wnu</code> → the existing <code>nlen==0</code> all-delete path (<code>WEAVE.c:564-570</code>), so live tokens die at the delete and the readd is a clean all-INS. Guards: skip delete-on-empty; reset <code>prev_n=0</code> after a delete (early-stop can't false-match a stale chain); still skips when the file was never present. Both descent paths (index-served + <code>GRAF_BLAME_NOINDEX</code> keeper-inflate) give identical correct output. New <code>graf/test/blame-readd.sh</code> (<code>GRAFblamereadd</code>, table-driven top-level + subdir, RED→GREEN). Full <code>ctest</code> *<strong>300/300</strong>* (+1), <code>GRAFblameident</code> byte-identical. Awaiting gate to land.
+</p>
+</div>
+</body>
+</html>

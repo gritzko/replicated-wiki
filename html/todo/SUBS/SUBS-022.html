@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-022</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-022: a RELATIVE <code>argv[0]</code> breaks sub-recursion — <code>execvp(self)</code> after <code>chdir</code> into the sub mount fails (BEDOGEXIT)</h1>
+<p>
+When <code>be</code> is invoked via a RELATIVE path (e.g. <code>./build-debug/bin/be</code>), its submodule recursion <code>fork</code>s, <code>chdir</code>s into <code>&lt;wt&gt;/&lt;subpath&gt;</code>, then <code>execvp</code>s itself — but <code>argv[0]</code> (and the bin dir <code>HOMEResolveSibling</code> derived from it) is still relative to the ORIGINAL cwd, so after the <code>chdir</code> it no longer resolves and the child <code>execvp</code> fails → <code>BEDOGEXIT</code>, the whole recursing verb aborts. Hit twice this session (a <code>be post</code> default sub-recursion, and the bare <code>be diff:</code> investigation). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Repro: <code>cd $HOME/todo/&lt;wt&gt; &amp;&amp; ./build-debug/bin/be post -m '…'</code> on a tree with a</li>
+</ul>
+<div>
+<p>
+mounted submodule → <code>be: BERecurseInto: execvp …: No such file or directory</code> / <code>BEDOGEXIT</code>. Workaround used by the worker flow: <code>be post --nosub</code> (top-level only), or invoke <code>be</code> by an ABSOLUTE path / bare name on <code>PATH</code>.
+</p>
+</div>
+<ul>
+<li>Code: <code>beagle/SUBS.c:90 be_resolve_self</code> → <code>HOMEResolveSibling</code> (<code>SUBS.c:88-89</code>:</li>
+</ul>
+<div>
+<p>
+&quot;walks PATH for a bare argv<a href="">0</a> and uses dirname for an ABSOLUTE one … falling back to the bare name&quot;). A RELATIVE argv<a href="">0</a> (has a <code>/</code>, not leading <code>/</code>) hits the <code>dirname</code> arm → a relative bin dir. <code>BERecurseInto</code> (<code>SUBS.c:82</code>) then <code>fork</code> + <code>chdir(&lt;wt&gt;/&lt;subpath&gt;)</code> + <code>execvp(argv_c[0], …)</code> (<code>SUBS.c:170</code>; same at <code>:231</code> <code>BEIndexMount</code>, <code>:331</code>) — the relative path is now wrong post-<code>chdir</code> → ENOENT.
+</p>
+</div>
+<ul>
+<li>Bare name (PATH-resolved by execvp) and absolute path both work; ONLY a relative</li>
+</ul>
+<div>
+<p>
+invocation breaks. This bites local <code>build-*/bin/be</code> invocations, which is exactly how the fix-and-land worker trees run <code>be</code>.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li>A relative <code>argv[0]</code> is resolved to an ABSOLUTE self path ONCE at startup (against</li>
+</ul>
+<div>
+<p>
+the launch cwd), BEFORE any sub-recursion <code>chdir</code>, so every <code>execvp(self)</code> / <code>execvp(&lt;dog&gt;)</code> child resolves regardless of invocation form. Bare-name and absolute invocations unchanged.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Resolve against the ORIGINAL cwd before the first <code>chdir</code>; don't re-derive from a</li>
+</ul>
+<div>
+<p>
+post-<code>chdir</code> cwd. <code>beagle/SUBS.c</code> (+ maybe <code>HOMEResolveSibling</code>) only; no behaviour change for absolute/bare-name invocations. Add a recursion-via-relative-path test.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>DONE (2026-06-16) — SITE MAP CORRECTED: the three <code>SUBS.c</code> sites are not the only</li>
+</ul>
+<div>
+<p>
+spawns; the failing <code>post</code> recursion is a SEPARATE <code>bepost_spawn_sub</code> (<code>beagle/BE.cli.c:2746</code>, <code>HOMEResolveSibling</code> at <code>:2758</code>). ALL chdir'd spawns (post/get, sniff subs, woof) funnel through <code>HOMEResolveSibling</code> — so the fix is ONE point there, not in <code>SUBS.c</code>. In <code>dog/HOME.c:1027-1053</code> (app code, NOT <code>abc/</code>): in the has-slash branch, detect a relative argv0 (<code>u8csFind('/')</code> present, not leading <code>/</code>) and <code>realpath</code> it against the launch cwd (via <code>PATHu8bReal</code>, fed the original NUL-terminated argv0) BEFORE taking the dirname — resolution runs before any <code>chdir</code>, so the launch cwd is still correct. Bare names keep PATH resolution; absolute argv0 unchanged; realpath failure falls back to prior behaviour. Slice endpoints only, no ptr-arith.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: a hermetic submodule tree; run a recursing verb via <code>./rel/path/be</code>;</li>
+</ul>
+<div>
+<p>
+  assert the sub child runs (no <code>BEDOGEXIT</code>) — RED today.
+</p>
+</div>
+<ul>
+<li>] Absolutize a relative argv<a href="">0</a> before any chdir; fix the three spawn sites.</li>
+<li>] Test: relative, absolute, and bare-name invocations all recurse into the sub.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Surfaced by the worker flow (relative <code>build-debug/bin/be</code>); independent of the</li>
+</ul>
+<div>
+<p>
+submodule MODEL — it's a self-path-resolution bug at the recursion spawn.
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>453c55c2</code></strong>* (FF child of <code>3eba8e76</code>; 306/306; no <code>--force</code>): one-point fix in</li>
+</ul>
+<div>
+<p>
+<code>dog/HOME.c:1027-1053</code> (<code>HOMEResolveSibling</code> realpaths a relative argv0 before dirname) — covers every chdir'd sub-spawn (post/get/sniff/woof) uniformly; <code>beagle/SUBS.c</code> gets a 3-line doc comment only, no abc/ change. New <code>beagle/test/be-post-relpath.sh</code> (rel/abs/bare invocation forms, RED→GREEN: rel hit the exact BEDOGEXIT, all 3 green after). *<strong>306/306</strong>*. Awaiting gate. Msg: <code>SUBS-022: realpath relative argv[0] before sub-recursion chdir</code>.
+</p>
+</div>
+</body>
+</html>

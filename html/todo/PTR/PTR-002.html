@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PTR-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>PTR-002: dog/ buffer pokes, dup block-scanners, ptr+len</h1>
+<p>
+The 2026-06-15 audit found dog/ rips typed slices into raw cursors, pokes buffer internals by hand, and carries record arrays as <code>ptr+len</code> — all against CLAUDE.md §1/§10 and <a href="../rule/ABC.html">ABC</a>. Behavior-preserving, one worktree; vendored <code>dog/sha1dc/</code> and generated <code>*.rl.c</code> are out of scope.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>dog/ULOG.c:283-313,944</code> — <code>ulog_idx_*_anon</code> <code>calloc(4,sizeof ptr)</code> then hand-set <code>slot[0..3]=base / base+cap</code>, recover size via <code>idx[3]-idx[0]</code>; scan casts <code>data[0..3]</code> and advances <code>scan[0]++</code>. Buffer-internals poke.</li>
+<li><code>dog/tok/MDT.c:69-159</code> &amp; <code>dog/tok/MKDT.c:69-164</code> — near-duplicate block helpers each cast <code>u8csc line</code>→<code>u8c *p</code>/<code>*e</code> and hand-scan <code>p++</code>/<code>p&lt;e</code>.</li>
+<li><code>dog/HUNK.c:856-1042</code> — <code>hk_line{u8c *lo,*hi}</code> family does <code>*cur+1</code>, <code>a.hi[-1-i]</code>, <code>memchr(*cur, …, end-*cur)</code>, <code>memcmp(dp+1,ap+1,…)</code>.</li>
+<li><code>dog/git/IGNO.c:15-166</code> — <code>IGNOGlob</code> rips both <code>u8cs</code> args into <code>pp/pe/sp/se</code> (<code>pp+=2</code>, <code>pp[1]</code>, <code>try&lt;=se</code>); the line splitter uses <code>data[0]++</code> and <code>line_end[-1]</code>.</li>
+<li><code>dog/git/DELT.c:133-210</code> — match-extender advances <code>tp/bp/mp/ms</code> by hand (<code>base[0]+i</code>, <code>*(ms-1)</code>, <code>mp-ms</code>); <code>delt_hash4</code> reads <code>p[0..3]</code>.</li>
+<li><code>dog/tok/DEF.c:283-688</code> — <code>enr</code>+separate <code>u32 len/at</code> pairs and <code>enr[j]</code>; fixed <code>u8 enr_stack[8192]</code>+<code>malloc</code>/<code>free</code>; <code>wbuf + sizeof(wbuf)/sizeof(wbuf[0])</code> slice.</li>
+<li><code>dog/git/GIT.c:288</code> — <code>git_eat_prefix(u8cs, char const *pfx, size_t plen)</code> rebuilds <code>{pfx, pfx+plen}</code>. <code>dog/HOME.c:352</code> — split <code>at_query</code> on <code>/</code> via <code>while(*p!='/')p++</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>ULOG anon-index via <code>wh128bMap</code>/<code>wh128bAllocate</code>; scan with <code>u8bData</code>/<code>u8bIdle</code>/<code>u8csUsed1</code>, never <code>data[i]</code> casts or <code>scan[0]++</code>.</li>
+<li>Unify <code>MDT</code>/<code>MKDT</code> onto ONE slice-based block-helper set (<code>$for</code>/<code>u8csUsed1</code>/<code>u8csFind</code>); the two files should share, not diverge.</li>
+<li><code>hk_line</code> → <code>u8csc</code>; split lines via a slice line-iterator; compare with <code>u8csEq</code>/<code>u8csCommonPrefix</code>.</li>
+<li>IGNO slice-driven (<code>u8csUsed1</code>/<code>u8csFind</code>, recurse on sub-slices) + a ragel line lexer for the splitter.</li>
+<li>DELT window scan on slice cursors; emit via <code>u8cs</code> sub-slices (leave the legit varint bit-shifts).</li>
+<li>DEF <code>enr</code>/<code>map</code> → <code>u8b</code>/<code>u32b</code> buffers, scratch via <code>a_carve</code> (drop <code>enr_stack</code>+<code>malloc</code>), <code>a$(u32, ws, wbuf)</code>.</li>
+<li><code>git_eat_prefix(u8csc pfx)</code> drop the length arg; HOME split via <code>u8csFind</code>.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Behavior-preserving; <code>ctest -j16 --timeout 10</code> + dog fuzzers green; regenerate <code>*.rl.c</code> from <code>.rl</code> only via the documented ragel invocation.</li>
+<li>Leave DELT/PACK varint bit-shifts and <code>WHIFF.h</code>/<code>SHA1.h</code> raw 8-/20-byte <code>memcpy</code> (low-level format/hash primitives).</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li><code>MDT</code>/<code>MKDT</code> dedup is the highest-value structural win — extract shared helpers before micro-fixing either copy.</li>
+</ul>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: lock current outputs on the existing dog test tables (tok/HUNK/IGNO/DELT).</li>
+<li>] ULOG anon-index + scan → typed buffer API.</li>
+<li>] Unify MDT/MKDT block helpers (slice-based).</li>
+<li>] HUNK <code>hk_line</code> → <code>u8csc</code> line-iterator.</li>
+<li>] IGNO + DELT + DEF slice/buffer conversions.</li>
+<li>] <code>git_eat_prefix</code> + HOME split via <code>u8csFind</code>.</li>
+<li>] Build + ctest; report done vs skipped.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>None known; MDT/MKDT unification may touch shared tokenizer headers — keep dog/INDEX.md updated.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>pending.</li>
+</ul>
+</body>
+</html>

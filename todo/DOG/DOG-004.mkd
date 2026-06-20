@@ -1,0 +1,47 @@
+#   DOG-004: `dog/WEAVE` emit + scope-bitset + large-file cap
+
+Port the rendering surface onto `dog/WEAVE` ([DOG-003]): `WEAVEEmitDiff` (windowed), `WEAVEEmitFull` (whole-file), `WEAVEEmitMerged` (conflict framing), all over an index-bitset scope instead of `WEAVEsetfn` callbacks. Wire the 16 MiB cap + coarse large-file fallback here, folding [DIFF-007]. Output stays HUNK records via the existing renderers. Gates on [DOG-003].
+
+##  Input
+
+### Context
+ -  Today emit takes `WEAVEsetfn in_from/in_to` callbacks + a per-call decode;
+    `WEAVEEmitFull` carves a fixed 65536-tok buffer that overflows ([DIFF-007]).
+ -  A scope is naturally a set of `commits[]` indices (a rev closure), so the
+    callbacks collapse to array-membership tests.
+
+### Goals
+ -  `Emit{Diff,Full,Merged}` take `u32cs from/to` (or group sets); same hunk
+    URIs / `navver` / `scheme` as today ([DIFF-003]/[DIFF-004] preserved).
+ -  Large-file path: when weave text > 16 MiB, fall back to coarse blob-level
+    emit and REPORT it (a `capped` status row), never silently empty ([DIFF-007]).
+
+### Constraints
+ -  Output hunks stay HUNK-renderable (`HUNKu8sFeedOut`); side bits rewritten
+    eq/in/rm at emit. Byte-parity with current diff/blame/merged where uncapped.
+
+##  WIP
+
+### Design decisions
+ -  Reuse `weave_overlay_syntax` (re-tokenize hunk text for tags; the weave
+    stores none). Flush-before-overflow guards become cap-driven, not fixed.
+ -  `WEAVEEmitMerged` keeps the byte-equality group collapse (foster/cherry
+    re-absorption is not a real conflict).
+
+### TODOs
+ -[ ] `WEAVEEmitDiff`/`EmitFull`/`EmitMerged` over `u32cs` index scopes.
+ -[ ] 16 MiB detect + coarse blob-level fallback + a `capped` report row.
+ -[ ] Port the emit tests; add a >16 MiB large-file case that locks [DIFF-007].
+
+### Blockers and bummers
+ -  Gates on [DOG-003].
+
+##  Outcome
+ -  (open)
+
+[DOG-001]: DOG-001/README.mkd "umbrella"
+[DOG-003]: DOG-003.mkd "dog/WEAVE core"
+[DIFF-007]: ../DIFF/DIFF-007.mkd "diff:<largefile> silently empty"
+[DIFF-003]: ../DIFF/DIFF-003.mkd "file-scoped whole-file diff"
+[DIFF-004]: ../DIFF/DIFF-004.mkd "clickable difflet URIs"
+[Issues]: ../../meta/work.mkd "the parallel fix-and-land loop"

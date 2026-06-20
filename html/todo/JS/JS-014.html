@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-014</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-014 <a href="">cleanup</a>: adopt a least-surprising C++ style (Google C++) + prune dead surface</h1>
+<p>
+<code>js/</code> is deliberately C++ (JSC); ratify ONE external standard, add a checked-in <code>.clang-format</code>, converge naming, and prune the dead/unused surface. User-requested cleanup. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>Naming is mixed: <code>JS*</code> / <code>io_*</code> / <code>mmap_free</code> / <code>timeout_cb</code> snake-case vs</li>
+</ul>
+<div>
+<p>
+<code>JABCutf8b…</code>. No checked-in <code>.clang-format</code>; file/TU org is ad hoc.
+</p>
+</div>
+<ul>
+<li>Dead/unused surface: <code>JABC_FN_ARG_ALLOC_STRING</code> (uninitialised-pointer &quot;loaded</li>
+</ul>
+<div>
+<p>
+gun&quot;, unused), <code>JABC_FN_ARG_STRING</code> (raw VLA), the unused <code>JS_SET_PROPERTY_RO</code>/<code>JS_GET_PROPERTY</code>/<code>JS_TO_NUMBER</code>/<code>JS_ADD_METHOD</code>/ <code>JABC_FN_CALL</code> macros, the declared-but-undefined <code>JABCutf8cpMakeValueRef</code> / <code>JABCutf8bFeedStringRef</code>, the no-op <code>JABsane</code> empty-<code>if</code> assert (<code>utf8.cpp:50-61</code>), the dead <code>convert.cpp</code>/rdx chain (gate or remove), and the trace <code>printf</code>/<code>fprintf(stderr,…)</code> left in (<code>main.cpp:129/142</code>, <code>io.cpp:282/325/ 341</code> — violates CLAUDE.md §11).
+</p>
+</div>
+<ul>
+<li><code>WITH_JS</code>-gated WIP. This ticket is STYLE + dead-code only.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>One ratified external C++ standard (proposed: Google C++), a checked-in</li>
+</ul>
+<div>
+<p>
+<code>.clang-format</code>, converged naming, and the dead surface pruned/gated.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>ABC slice / <code>ok64</code> discipline STAYS at the C-data boundary (that's JS-002..005,</li>
+</ul>
+<div>
+<p>
+NOT this ticket). Ratify the exact standard in this ticket before reformatting.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Ratify Google C++ (or the chosen standard); add <code>.clang-format</code>; converge</li>
+</ul>
+<div>
+<p>
+<code>JS*</code>/<code>io_*</code>/<code>mmap_free</code>/<code>timeout_cb</code>/<code>JABCutf8b…</code> naming; remove the listed dead macros/decls/the <code>JABsane</code> no-op; gate or remove <code>convert.cpp</code>/rdx; strip the trace <code>printf</code>/<code>fprintf</code> per §11.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Ratify the exact external standard in this ticket.</li>
+<li>] Add <code>.clang-format</code>; reformat <code>js/</code>.</li>
+<li>] Prune the listed dead macros/decls; gate or remove <code>convert.cpp</code>/rdx.</li>
+<li>] Strip the trace <code>printf</code>/<code>fprintf</code> (§11).</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>Pair the convert/rdx gate-or-remove with JS-008 (fix-before-wiring).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>9c6118b4</code></strong>* (2026-06-16): Google C++ ratified + .clang-format</li>
+</ul>
+<div>
+<p>
+applied + dead surface pruned; deeper rename = optional follow-up.
+</p>
+</div>
+</body>
+</html>

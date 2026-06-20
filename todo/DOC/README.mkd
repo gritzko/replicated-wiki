@@ -1,0 +1,18 @@
+#   DOC: documentation tickets
+
+Codebase documentation — `INDEX.md` overviews and per-file `.md` docs — kept to
+the [index] format. Method: [Issues].
+
+##  Active tickets
+
+(none — DOC-001 landed)
+
+DOC-001 (rework all 11 production-dir `INDEX.md` to the [index] format, unwrapped to
+one greppable `mark`-clean line per block) landed `8bd51f9b`/`1a5d0cbf` (+ abc sub
+`4222dfab`). DESCOPED per "trim to fit": the per-file `.md` docs holding moved detail
+were not created — over-budget bullets were trimmed to terse leads. A follow-up can
+relocate that detail into `*.md` docs.
+
+[DOC-001]: DOC-001.mkd "rework all INDEX.md to the meta/index.mkd format"
+[index]: ../../meta/index.mkd "INDEX.md format spec"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-011</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-011 <a href="">MED</a>: UTF-8 correctness — <code>Encode</code> carries a spurious NUL; <code>Decode</code> is a no-op (no inbound validation)</h1>
+<p>
+<code>JABCutf8Encode</code> includes the trailing NUL in the typed-array length, and <code>JABCutf8Decode</code> is an empty stub — so there is NO inbound UTF-8 validation at all. Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>JABCutf8Encode</code> typed-array length includes the trailing NUL (<code>test.js:66</code></li>
+</ul>
+<div>
+<p>
+asserts <code>&quot;hello&quot;</code> → byteLength 6) → every encoded buffer carries a spurious +1 NUL, and U+0000 is indistinguishable from the terminator.
+</p>
+</div>
+<ul>
+<li><code>JABCutf8Decode</code> (<code>utf8.cpp:28-33</code>) is a no-op stub returning <code>undefined</code> → no</li>
+</ul>
+<div>
+<p>
+rejection of overlong forms, lone surrogates, truncated multibyte, or bad continuation bytes.
+</p>
+</div>
+<ul>
+<li><code>WITH_JS</code>-gated WIP; <code>Encode</code> is exercised by <code>test.js</code>.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>Encode(&quot;hello&quot;)</code> byteLength is 5 (NUL trimmed); <code>Decode</code> validates and rejects</li>
+</ul>
+<div>
+<p>
+malformed UTF-8.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Trim the NUL from <code>Encode</code>'s length; implement <code>Decode</code> with explicit malformed-</li>
+</ul>
+<div>
+<p>
+input rejection.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Drop the terminator from <code>Encode</code>'s reported length; write a real</li>
+</ul>
+<div>
+<p>
+validating <code>Decode</code>. Fix the <code>test.js:66</code> expectation to 5.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: <code>Encode(&quot;hello&quot;).byteLength === 5</code>; <code>Decode</code> rejects each bad</li>
+</ul>
+<div>
+<p>
+  sequence below.
+</p>
+</div>
+<ul>
+<li>] Trim the NUL; implement validating <code>Decode</code>.</li>
+<li>] Fuzz seeds: <code>C0 80</code> (overlong NUL), <code>ED A0 80</code> (lone surrogate), <code>E2 82</code></li>
+</ul>
+<div>
+<p>
+  (truncated 3-byte), <code>F4 90 80 80</code> (&gt; U+10FFFF).
+</p>
+</div>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>041e4bd5</code></strong>* (2026-06-16): <code>JABCutf8Decode</code> now validates inbound</li>
+</ul>
+<div>
+<p>
+UTF-8 via abc's <code>utf8sValid</code>/<code>utf8sDrain32</code> (rejects overlong forms, lone surrogates, truncated multibyte, bad continuation, &gt; U+10FFFF) and decodes valid bytes to a UTF-16 JS string; <code>JABCutf8Encode</code> trims the trailing NUL so the typed-array byteLength is the real UTF-8 byte count (<code>&quot;hello&quot;</code>→5). The Encode-NUL change was applied (NOT deferred): <code>test.js</code>:67 and the generated <code>test.js.c</code> blob were synced 6→5 in lockstep, and the C++ harness <code>ROWS</code> byteLengths dropped by one — <code>JABCtest</code> stays green. C++ repro rows added to <code>js/test/jabc_test.cpp</code> (<code>run_utf8_decode_repro</code>): red with the stub/incl-NUL code, green after. ASAN/LSan clean (only the suppressed JSC-internal singleton leak). All 3 JABC ctests pass.
+</p>
+</div>
+</body>
+</html>

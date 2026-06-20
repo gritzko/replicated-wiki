@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>COMMIT-002</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>COMMIT-002: <code>commit:</code> should inline the full diff as relayed hunks</h1>
+<p>
+<a href="COMMIT-001.html">COMMIT-001</a> (landed <code>dac9dab7</code>) made <code>be commit:?&lt;sha&gt;</code> append a navigable <code>diff:?&lt;sha&gt;</code> *<strong>link</strong>* after the metadata, keeping keeper diff-free.  In use that is one click too many: the user wants <code>commit:</code> to read like <code>git show</code> — commit metadata immediately followed by the FULL diff, inline, as <code>dog/HUNK</code> hunks.  Since keeper owns <code>commit:</code> and graf owns <code>diff:</code> (separate dog binaries, <a href="../../../beagle/dog/DOG.c">DOG routes</a>), keeper must NOT re-roll diff rendering; instead the dispatcher RUNS graf's <code>diff:?&lt;sha&gt;</code> for the SAME resolved sha and RELAYS its hunk stream after the commit-metadata hunk — exactly the capture-and-replay mechanism the sub recursion already uses.  This supersedes COMMIT-001's link.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>commit:</code>→keeper, <code>diff:</code>→graf in <code>DOG_PROJECTORS</code> (<code>dog/DOG.c:36,41</code>);</li>
+</ul>
+<div>
+<p>
+they are separate executables, so keeper cannot call graf's renderer.
+</p>
+</div>
+<ul>
+<li>Current link emit: <code>KEEPProjCommit</code> (<code>keeper/PROJ.c</code> ~501-508) appends a</li>
+</ul>
+<div>
+<p>
+<code>diff:?&lt;sha40&gt;</code> <code>U</code> tok32 click-target after headers+message.
+</p>
+</div>
+<ul>
+<li>BE dispatches a projector to its dog at <code>beagle/BE.cli.c:1104</code></li>
+</ul>
+<div>
+<p>
+(<code>DOGProjectorDog(u-&gt;scheme)</code> → exec).  A capture-and-relay primitive already exists for subs: <code>beagle/SUBS.c</code> <code>be_recurse_capture</code> (fork + <code>execvp</code> self, capture child TLV, re-emit) and <code>dog/HUNK.c HUNKu8sRelay</code> (rebases each child hunk's uri, re-emits in the parent's <code>HUNKMode</code>).
+</p>
+</div>
+<ul>
+<li>User intent (verbatim): &quot;commit: should include full diff, not a link to a</li>
+</ul>
+<div>
+<p>
+diff. As hunks. Just run it, relay hunks. Would that work?&quot; — yes.
+</p>
+</div>
+<h3>Goals</h3>
+<ul>
+<li><code>be commit:?&lt;sha&gt;</code> emits: (1) the commit-metadata hunk (headers + message,</li>
+</ul>
+<div>
+<p>
+subject bold per the landed tweak), then (2) the full unified diff of that commit as the hunks graf's <code>diff:?&lt;sha&gt;</code> produces — relayed, not re-rolled.
+</p>
+</div>
+<ul>
+<li>Works in every render mode (Color/Text/Html/TLV) and composes under sub</li>
+</ul>
+<div>
+<p>
+recursion the same way a bare <code>diff:</code> does (so sub-pin-bump commits inherit <a href="../DIFF/DIFF-001.html">DIFF-001</a>'s structural sub-diff for free).
+</p>
+</div>
+<ul>
+<li>Drop the now-redundant <code>diff:?&lt;sha&gt;</code> link from <code>KEEPProjCommit</code> (or keep it</li>
+</ul>
+<div>
+<p>
+only as the machine-mode <code>U</code> nav anchor if TLV consumers still want it — decide during impl).
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>Dog boundary intact: NO diff rendering in keeper; the diff comes from graf</li>
+</ul>
+<div>
+<p>
+via exec+relay.  The sha relayed to <code>diff:</code> is the one <code>commit:</code> resolved (keeper already resolves it; reuse that, don't re-resolve in two places).
+</p>
+</div>
+<ul>
+<li>Read-only <code>dog/HUNK</code> stream; no mutation; all four URI slots still compose.</li>
+<li>Reuse <code>HUNKu8sRelay</code> / <code>be_recurse_capture</code>; do not invent a second relay.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions (to confirm in session)</h3>
+<ul>
+<li>*<strong>Where to chain.</strong>* Option A (preferred): BE dispatcher special-cases</li>
+</ul>
+<div>
+<p>
+<code>commit:</code> — run keeper <code>commit:?&lt;sha&gt;</code> for the metadata hunk, then run graf <code>diff:?&lt;sha&gt;</code> and relay its hunks into the same output, single resolved sha threaded through.  Option B: keeper keeps emitting the link and BE expands any <code>diff:?</code> <code>U</code>-link into the actual relayed hunks (more general, more surface).  Lean A — it is literally &quot;run it, relay hunks&quot;.
+</p>
+</div>
+<ul>
+<li>*<strong>Ordering vs subs.</strong>* A plain <code>commit:</code> on a parent must emit parent</li>
+</ul>
+<div>
+<p>
+metadata + parent diff, THEN recurse into subs (mirror <code>diff:</code>'s existing sub fan-out so pins render once, in order) — audit against the <a href="../DIFF/DIFF-001.html">DIFF-001</a> diff-sub relay so the two stay coherent.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Confirm Option A vs B with a quick spike on <code>BE.cli.c:1104</code> dispatch.</li>
+<li>] Thread the resolved commit sha from the <code>commit:</code> step into a</li>
+</ul>
+<div>
+<p>
+  <code>diff:?&lt;sha&gt;</code> graf run; relay via <code>HUNKu8sRelay</code>.
+</p>
+</div>
+<ul>
+<li>] Remove/keep the COMMIT-001 link per the TLV-consumer decision.</li>
+<li>] Test: extend <code>test/commit/01-diff-link</code> (or a new <code>commit/02-inline-diff</code>)</li>
+</ul>
+<div>
+<p>
+  — assert <code>be commit:?&lt;sha&gt;</code> output contains BOTH the metadata header AND   the diff body (e.g. the changed token), in Color/Text/TLV; sub case   asserts the sub's pin-range diff is relayed under the subpath.
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>The inlined diff inherits whatever <code>diff:</code> shows — <a href="../DIFF/DIFF-001.html">DIFF-001</a> (landed</li>
+</ul>
+<div>
+<p>
+<code>018a59c4</code>) already fixed sub-pin-bump commits, so commit-show on a pin bump should now render the sub's content diff once chained.
+</p>
+</div>
+<ul>
+<li>Relay timing vs sub recursion: flush the parent's commit+diff hunks BEFORE</li>
+</ul>
+<div>
+<p>
+forking subs, or the sub hunks interleave ahead of the parent diff (same hazard <a href="../BRO/BRO-002/README.html">BRO-002</a> called out for status tables).
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>Landed <code>df596d0f</code> (Option A): <code>be</code> dispatcher resolves <code>?&lt;ref&gt;</code>→sha40 once</li>
+</ul>
+<div>
+<p>
+(<code>becommit_resolve_sha</code>), runs keeper <code>commit:?&lt;sha&gt;</code> as a reaped pre-producer for metadata, then relays graf <code>diff:?&lt;sha&gt;</code> hunks after via the existing diff sub-fanout (<code>BERunPipeSubs</code> pre-producer leg). COMMIT-001 link dropped from <code>KEEPProjCommit</code>. Tests 01 rewritten + 02/03 added; 372/372 green.
+</p>
+</div>
+</body>
+</html>

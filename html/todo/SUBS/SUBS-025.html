@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SUBS-025</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>SUBS-025: submodule GET recursion leaks raw fetch progress instead of hunks</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<pre><code> 14:17  new woof/test/STATIC.c          &lt;- parent hunk (beagle format)
+Enumerating objects: 2745, done.        &lt;- git side-band band-2, RAW to stderr
+Counting objects: 100% (2745/2745), done.
+Compressing objects: 100% (907/907), done.
+Total 2745 (delta 2096), reused 2415 (delta 1834), pack-reused 0 (from 0)
+keeper: fetched 1 ref(s)                 &lt;- keeper's own RAW stderr
+ 14:17  get abc?00e5d050                 &lt;- back to parent hunk
+</code></pre>
+<p>
+<code>be get</code> recursing into a submodule prints the sub's fetch progress as RAW terminal text, interleaved with the parent's real progress hunks (<code> 14:17  get abc?00e5d050</code>). Observed cloning <code>beagle.new</code> (sub <code>abc</code>):
+</p>
+<ul>
+<li>Two raw-stderr sources bypass the hunk channel: git side-band *<strong>band-2</strong>* is piped &quot;to stderr live&quot; by the ingest demux (<code>keeper/KEEP.c:2381</code>), and keeper prints <code>fprintf(stderr, &quot;keeper: fetched %u ref(s)\n&quot;, recorded)</code> (<code>keeper/WIRECLI.c:939</code>).</li>
+<li>Not a sub-only bug: the parent fetch emits the same raw text; the submodule recursion just makes it glaringly interleaved with the relayed parent hunks. Data correctness is unaffected — this is a progress-CHANNEL discipline gap.</li>
+<li>Violates the producer/renderer split (<a href="../../wiki/Submodules.html">Submodules</a>/hunk model): progress should be hunk DATA (ts/verb/uri + text) rendered by the shared bro renderer, never a raw <code>fprintf(stderr,...)</code> from a producer.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Fetch progress (parent and submodule) flows as progress hunks through the one stream the parent relays, rendered uniformly — no raw git/keeper text on the terminal.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Progress is hunk DATA, not presentation; the producer must not pick header style or write raw stderr (<a href="../../wiki/Submodules.html">Submodules</a> hunk split).</li>
+<li>Capture git side-band band-2 and re-emit it as hunk text (or suppress under non-verbose) instead of live-to-stderr; band-3 (fatal) must still surface.</li>
+<li>No pointer arithmetic / ABC style; keeper + sniff edits, not <code>abc/</code>.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+ —
+</p>
+<h3>TODOs</h3>
+<ul>
+<li>] Route keeper fetch progress into the hunk stream: the band-2 demux (<code>keeper/KEEP.c:2381</code>) and <code>keeper: fetched N ref(s)</code> (<code>keeper/WIRECLI.c:939</code>) become hunk emissions, not <code>fprintf(stderr,...)</code>.</li>
+<li>] Ensure the sub-recursion driver (<code>sniff/SUBS.c</code> SubMount) relays the child's hunk stream into the parent's, tagged with the sub URI so it reads like the parent's <code> HH:MM  get abc?…</code> rows.</li>
+<li>] Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): <code>be get</code> a repo with a submodule over a fetching source; assert the report channel carries ONLY hunks — zero raw <code>Enumerating</code>/<code>keeper: fetched</code> lines.</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<p>
+ —
+</p>
+<h2>Outcome</h2>
+</body>
+</html>

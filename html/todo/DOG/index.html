@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>README</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DOG tickets: shared dog-layer reworks</h1>
+<p>
+<code>dog/</code> is the shared layer between <code>abc/</code> and the verb dogs (sniff/keeper/graf/spot/bro). Tickets here move generic, multiply-used machinery DOWN into <code>dog/</code> and rework its APIs. Current focus: relocate the token-level history engine out of <code>graf/</code> into a columnar, <a href="../../wiki/Dog.html">HUNK</a>-compliant <code>dog/WEAVE</code> reusable by every dog and keyed on real commit ids. <a href="../../wiki/Plan.html">Plan</a>-shaped pages, cleared via the <a href="../../meta/work.html">Issues</a> loop.
+</p>
+<h2>Active tickets</h2>
+<ul>
+<li><a href="DOG-001/README.html">DOG-001</a> — umbrella: rewrite WEAVE as a columnar, HUNK-compliant</li>
+</ul>
+<div>
+<p>
+<code>dog/WEAVE</code> (<code>{text,toks,ins,rms,commits}</code>); full design in its <a href="DOG-001/api.html">api</a>.
+</p>
+</div>
+<ul>
+<li><a href="DOG-002.html">DOG-002</a> — prereq: relocate the diff core (<code>BRAM</code>+<code>NEIL</code>) from <code>graf/</code></li>
+</ul>
+<div>
+<p>
+down to <code>dog/</code>, behaviour-preserving (unblocks the dog/ layering).
+</p>
+</div>
+<ul>
+<li><a href="DOG-003.html">DOG-003</a> — core: format + <code>WEAVEParse/Next/Merge/Produce</code> + cursor +</li>
+</ul>
+<div>
+<p>
+table-driven tests (folds the <a href="../DIS/DIS-003.html">DIS-003</a> holdout in as a property case).
+</p>
+</div>
+<ul>
+<li><a href="DOG-004.html">DOG-004</a> — emit: <code>WEAVEEmit{Diff,Full,Merged}</code> + <code>Alive</code>/<code>Produce</code> over</li>
+</ul>
+<div>
+<p>
+an index-bitset scope; 16 MiB cap + large-file fallback (folds <a href="../DIFF/DIFF-007.html">DIFF-007</a>).
+</p>
+</div>
+<ul>
+<li><a href="DOG-005.html">DOG-005</a> — cut-over: repoint graf (GET/REBASE/BLAME/DIFFREF/LOG) at the</li>
+</ul>
+<div>
+<p>
+new API, delete <code>graf/WEAVE.{c,h}</code>, update both INDEX.md.
+</p>
+</div>
+</body>
+</html>

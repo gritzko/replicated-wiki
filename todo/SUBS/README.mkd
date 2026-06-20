@@ -5,20 +5,38 @@ and spec in [Submodules].  Recursion is **default-on for every source type**
 (git/ssh included); `--sub` is a dead no-op, `--nosub` is the only opt-out.
 HEAD, GET (checkout/clone/force/prune), and POST topology (post-order,
 synthetic dot-branch `?/<sub>/.<parent>/<branch>`, gitlink bumps,
-detached-refuse) all work.  SUBS-001..012, 016, 017, 018 landed; the gaps
+detached-refuse) all work.  SUBS-001..012, 016..020 landed; the gaps
 below are the deltas that remain.
 
 | Ticket | Sev | Verb | One-line |
 |--------|-----|------|----------|
-| [SUBS-019] | HIGH | post | `be post` records the git **empty sha** `e69de29b` as the parent gitlink when the sub is dirty after a `be patch` re-mount (never commits the sub first) → poisoned parent commit, later `be get`/`be patch` dies `not a commit`. Blocked MEM-021's land. Worker owns `~/todo/MEM-021`; repro-first in `test/`. |
 | [SUBS-013] | LOW | put | full `git submodule add` parity: stage a new `160000` gitlink + `.gitmodules` from `be put` — needs a chosen URL source + pin grammar (escalated from SUBS-009) |
-| [SUBS-014] | LOW | put | misleading "does not exist — skipped" PUTNONE fires for ANY plain untracked dir named without a trailing slash (not sub-specific); wants a "did you mean `dir/`?" hint |
-| [SUBS-015] | LOW | blob | `blob:<path>` WITHOUT `?ref` returns KEEPNONE even in the parent (pre-existing, not sub-related) |
+| [SUBS-025] | MED | get | sub recursion leaks raw fetch progress (git band-2 + `keeper: fetched N ref(s)`) to stderr instead of relaying it as hunks |
 
-[SUBS-019]: SUBS-019.mkd
+SUBS-014/015 (slashless-dir "did you mean `dir/`?" hint + `blob:` empty-ref resolves in
+the parent) landed `141cf77c`.
+SUBS-022 (relative `argv[0]` broke chdir'd sub-spawns — `dog/HOME.c` realpaths argv0
+before dirname) landed `453c55c2`. SUBS-023 (synthetic dot-branch `?/<sub>/.<parent>`
+won't resolve on get) CLOSED — WON'T FIX (normal recursion re-attaches by pin, tested;
+the synthetic-name get is an unused internal form).
+SUBS-020 POST mirror (push each sub to the SAME destination GET fetches from —
+beagle→peer, git-non-`.git`→parent-relative, git-`.git`→official; `bepushgit_recurse_cb`
++ KEEP.exe.c branch-strip; `post/43`+`44`) landed `3eba8e76`; GET side `4121eaaf`.
+SUBS-021 (re-post leaked a SHA into the sub dot-branch's `<subproj>` slot) landed
+`8c69c16b` — gated the `sniff/GET.c` raw-hex re-post fallback on `DOGIsHashlet` not
+`DOGIsFullSha` (sha-prefix gets still pass); test `post/41-sub-synth-no-sha-in-subproj`.
+SUBS-024 (POST/GET to a non-`.git` git remote routed an ABSOLUTE-`.gitmodules`-url sub
+to its official upstream, not parent-relative → unreachable abort) landed `b09b09bf` —
+case 4 = `<remote>/<subpath>` via `SNIFFSubCandidateGitRel` on both sides; `post/45`+`get/53`.
+Open follow-up: `subs_recover_locator` flags ssh git remotes as `src_beagle` (why GET case 3
+never fired over ssh) — worked around by keying case 3/4 on URI form; own ticket TBD.
+
 [SUBS-013]: SUBS-013.mkd
-[SUBS-014]: SUBS-014.mkd
+[SUBS-025]: SUBS-025.mkd "sub GET recursion leaks raw fetch progress instead of hunks"
+[SUBS-024]: SUBS-024.mkd "POST sub-push ignores parent-kind source resolution (live gap)"
+[SUBS-022]: SUBS-022.mkd "relative argv[0] breaks sub-recursion execvp(self)"
+[SUBS-023]: SUBS-023.mkd "synthetic dot-branch ?/<sub>/.<parent> won't resolve (GRAFNONE)"
+[SUBS-020]: SUBS-020.mkd "submodule-source resolution by parent kind (GET landed, POST mirror open)"
 [PATCH-002]: ../PATCH/PATCH-002.mkd
 [GET-017]: ../GET/GET-017.mkd
-[SUBS-015]: SUBS-015.mkd
 [Submodules]: ../wiki/Submodules.mkd "submodule model"

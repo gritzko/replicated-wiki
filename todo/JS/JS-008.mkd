@@ -1,0 +1,58 @@
+#   JS-008 [HIGH when wired]: number marshalling precision — i64 truncation, NaN/Inf mis-routing, float→int UB
+
+The convert/rdx number path truncates 64-bit ints through a JS double and
+mis-routes NaN/Inf; `POLAddTime((int)ms)` is float→int UB. Convert path is DEAD
+(rdx unwired) — fix before wiring. Method: [Issues].
+
+##  Input
+
+### Context
+ -  (a) `convert.cpp:97` `JSValueMakeNumber(ctx, top->i)` truncates `i64`
+    (`RDX.h:204`) above 2^53 → must use BigInt.
+ -  (b) `convert.cpp:65-73` number import uses `floor(d)!=d`, which mis-routes NaN
+    (→ float branch) and ±Inf (→ int branch); must gate on `isfinite` first.
+ -  (c) `io.cpp:219-222` `POLAddTime((int)ms)` is float→int UB for NaN/Inf/negative/
+    `>INT_MAX`.
+ -  `convert.cpp` is the DEAD rdx path (unwired in `main.cpp:40-42`); `io.cpp:219`
+    timer is live. Priority: fix before the rdx path is wired.
+
+### Goals
+ -  64-bit ints survive the round trip; NaN/Inf route correctly; the timer rejects
+    non-finite / out-of-range delays.
+
+### Constraints
+ -  BigInt for 64-bit ints; `isfinite` + explicit range guards before any `(int)`
+    cast.
+
+##  WIP
+
+### Design decisions
+ -  (open) Emit/parse 64-bit ints as BigInt; classify with `isfinite` first; range-
+    check `ms` before the cast.
+
+### TODOs
+ -[ ] Repro-first (once convert is wired or via a unit harness): a value > 2^53,
+      NaN, +Inf, -Inf, and `setTimeout(NaN)` each marshal/route correctly.
+ -[ ] Apply the BigInt + `isfinite` + range guards.
+
+### Blockers
+ -  Convert/rdx chain currently unwired — pair with the JS-014 gate-or-remove call.
+
+##  Outcome
+ -  **LANDED `71e5aaf8`** (2026-06-16): live `io.cpp` `JABCioWakeIn` now guards
+    the `double`->`int` timer delay (`isfinite(ms) && 0 <= ms <= INT32_MAX`)
+    before `POLAddTime((int)ms)`, throwing a clean exception on NaN/±Inf/
+    negative/`>INT_MAX` and scheduling no timer; the dead `(JSObjectRef)args[0]`
+    cast was dropped.  Repro: C++ harness `run_wake_range_repro` drives the bad
+    values (red before: +Inf/-Inf/negative/>INT_MAX leaked through with no
+    exception) and a valid ms=5 (accepted) — contract-verified, ASAN-clean.
+    `io.now()` boxes ms (`ns/POLNanosPerMSec`) through a `double`: lossless for
+    integer ms up to 2^53 — acceptable, left as-is.
+ -  DEFERRED to rdx re-wiring (out of build, same as JS-004): `convert.cpp:97`
+    `JSValueMakeNumber(ctx, top->i)` i64 truncation -> must become BigInt; and
+    `convert.cpp:65-73` `floor(d)!=d` NaN/Inf mis-routing -> must gate on
+    `isfinite` first.  `convert.cpp` is removed from the build (rdx unwired),
+    so these can't be fixed/tested live.
+ -  (open — filed 2026-06-16 from the js/ 7-lens review)
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

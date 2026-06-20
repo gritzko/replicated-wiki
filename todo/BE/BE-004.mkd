@@ -1,0 +1,73 @@
+#   BE-004: unify `home` into a process singleton (stop threading `home *`)
+
+`home` is per-invocation ambient state derived purely from **cwd** (store /
+worktree discovery) — a process property, like `&KEEP` and `&GRAF` already are.
+Yet the codebase threads `home *` through every API and embeds a borrowed
+`home *h` in every dog's state struct, and reopens a fresh local `home` at
+~16 sites. Make `home` a singleton `&HOME`; drop the pointer-passing.
+
+##  Input
+
+### Context
+ -  `dog/HOME.h:26` states the current model verbatim: "each dog embeds a
+    `home *base` in its state struct and propagates it through DOGOpen. All
+    HOME functions take `home *` as their first argument."
+ -  Borrowed `home *h` fields: `keeper/KEEP.h:117`, `graf/GRAF.h:33`,
+    `sniff/SNIFF.h:89`. Every `*Open`/`*OpenBranch` takes `home *`.
+ -  ~16 sites declare a local `home X = {}; HOMEOpen(&X,…); … HOMEClose(&X)`
+    (e.g. `beagle/BE.cli.c` ×8, `bediff_build_pins`, the get/head/patch paths).
+ -  **Precedent:** `KEEP`/`GRAF` are ALREADY process singletons (`&KEEP`,
+    `&GRAF`, with `KEEPOPEN`/`GRAFOPEN` "already open, use the global, do not
+    close" statuses). `home` is the odd one still passed by pointer.
+ -  `home` already assumes process scope: one 4 GB `arena`, one `config` mmap,
+    and "at most two branches loaded into the process at once" (`HOME.h`).
+
+### Goals
+ -  One process-global `&HOME` (mirroring `&KEEP`/`&GRAF`), opened once from
+    cwd; idempotent re-open returns a `HOMEOPEN`-style status, never reopens.
+ -  Drop the `home *h` borrowed field from the KEEP/GRAF/SNIFF state structs
+    and the `home *` first argument from the HOME/KEEP/GRAF/SNIFF APIs.
+ -  Delete the ~16 local `home X = {}` reopens; callers just use `&HOME`.
+
+### Constraints
+ -  Submodule recursion **forks child processes** (each child's cwd → its own
+    `&HOME`), so a single process never needs two homes — the singleton holds.
+ -  `home` carries a mutable `project` selector + two branch slots
+    (writable cur + one ro aux); the singleton must keep supporting
+    project/branch swap for cross-branch and sibling-shard reads.
+ -  `dog/HOME` is dog-layer, not `abc/` — no abc changes ([[abc-changes-need-review]]).
+
+##  WIP
+
+### Design decisions
+ -  Model `&HOME` exactly on `&KEEP`/`&GRAF`: file-scope global + open/close
+    refcount/status, callers never own it.
+ -  In-process project-swap is fine with the singleton, NOT a blocker:
+    `sniff/SUBS.c:617 subs_sibling_shard_has_pin(home *parent_home,…)` probes a
+    sibling sub-shard by swapping `parent_home->project` + `KEEPOpenBranch`,
+    then restores it (GET-011). Against `&HOME` it swaps `&HOME->project` and
+    restores exactly as it does today — the singleton already owns a mutable
+    `project` field, and the parent home is *already* a shared handle here, so
+    nothing changes. (It does contradict "subs always fork": this one pin
+    probe reads in-process rather than forking — a behaviour note, not a
+    migration obstacle.) No genuine *dual-home* (two live `home` structs in
+    one process) exists anywhere, so the singleton thesis holds.
+
+### TODOs
+ -[v] `&HOME` singleton (`dog/HOME.c`, `extern home HOME`), open/close on it,
+      `HOMEOPEN`/`HOMEROBR` on compatible re-open (mirrors `&KEEP`/`&GRAF`).
+ -[v] Dropped `home *h` from all six dog structs + the `home *` first arg
+      across HOME/KEEP/GRAF/SNIFF/SPOT/WOOF/BRO/REFSResolveURI/KEEPResolveURI;
+      `k->h->` → `HOME.`.
+ -[v] `&HOME` opened once in `becli_inner`; reopen sites removed.
+ -[v] Sibling-shard read save/restores `HOME.project` (no dual home).
+
+### Blockers and bummers
+ -  None. (The first land's FF-weave hit [DIS-041]; that's fixed, so the
+    re-run FF'd/wove clean.)
+
+##  Outcome
+ -  LANDED `88485deb` — `home` is now the process singleton `&HOME`; `home *`
+    params and the borrowed `home *h` struct fields are gone across all dogs +
+    dispatcher; ~70 source + ~22 test files; 291/291 green. Preserved the
+    BRO-001 banner, BLAME-004 try-wraps, DIS-041 fix in the overlapping files.

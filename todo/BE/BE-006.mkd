@@ -1,0 +1,57 @@
+#   BE-006: a single failed push reports as a stack of Error / raw lines
+
+One unreachable-remote push prints FIVE lines for ONE failure: a raw `ssh:` stderr
+leak, a `be: remote … unreachable` line, then `Error: WIREUNRCH` and `Error:
+BEDOGEXIT` twice (one per spawned `be` process level). Collapse to ONE uniform
+error line — name + verb + URI + code, single-sourced (the [BE-003] contract). See
+[BE-003], [POST-020].
+
+##  Input
+
+### Context
+`be post ssh://localhost/src/dogs` to an unreachable git remote, verbatim:
+
+ -  `ssh: connect to host github.com port 22: Connection refused` — the ssh
+    subprocess's OWN stderr, inherited through the transport.
+ -  `be: remote <url> is unreachable (transport refused or timed out).` —
+    `keeper/WIRECLI.c:86`; the same failure, restated.
+ -  `Error: WIREUNRCH` then `Error: BEDOGEXIT` ×2 — `abc/PRO.h:384`'s `MAIN`
+    error printer fires once PER spawned `be` process (sub-recursion), so the
+    code re-announces at every level as the exit propagates up.
+
+### Goals
+A failed push (or any error exit) reports ONCE, uniformly.
+
+ -  One `name + verb + URI + code` line per failure ([BE-003]); no `Error:
+    <code>` stack from nested `be` processes.
+ -  The real cause (`WIREUNRCH`) wins; the generic `BEDOGEXIT` re-throws from
+    parent frames are suppressed or collapsed.
+ -  Raw transport (`ssh:`) stderr is captured/labelled, not leaked alongside the
+    be-level `unreachable` line (one transport message, not two).
+
+### Constraints
+ -  General form of [BE-003]; the `PRO.h` `MAIN` printer is process-global, so the
+    fix must gate per-process re-printing or thread the code up without re-announcing.
+ -  A child `be`'s exit code must still propagate (BEDOGEXIT carries the failure),
+    only its user-facing line is suppressed at non-root levels.
+
+##  WIP
+
+### Design decisions
+(pending — needs a ruling on where the single error line is sourced: root `be`
+process only, vs. each dog, vs. the spawning frame.)
+
+### TODOs
+ -[ ] Repro: `be post` to an unreachable remote; assert exactly one error line.
+ -[ ] Suppress nested-process `Error:` re-prints (PRO.h `MAIN` / the sub-spawn path).
+ -[ ] Capture/label raw `ssh:` transport stderr instead of leaking it.
+
+### Blockers and bummers
+(none yet)
+
+##  Outcome
+(pending)
+
+[BE-003]: BE-003.mkd "uniform dog error exit: name + verb + URI + code"
+[POST-020]: ../POST/POST-020.mkd "git-push post path still emits raw stderr printfs"
+[Issues]: ../../skill/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>DIFF-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>DIFF-003: file-scoped <code>diff:</code> shows the whole file, changes highlighted</h1>
+<p>
+A hunk nav-URI like <code>diff:ast/BAST.c#L362</code> (the <code>U</code> link bro emits on each diff hunk) currently opens a FILE-SCOPED <code>diff:</code> that shows only that file's changed hunks, scrolled to the line.  For a single file the user wants the opposite of the dir/tree view: render the WHOLE file content with the changed lines highlighted in place (like <code>git diff --color</code> over the full file, a review pane), so a change reads in full surrounding context.  Tree/dir <code>diff:</code> keeps showing only changed hunks.  Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li><code>diff:</code> is URI-driven (<code>graf/DIFFREF.c</code>: &quot;file or whole tree, ref vs wt or</li>
+</ul>
+<div>
+<p>
+ref vs ref&quot;).  A file path scopes to that file; today it emits only the file's changed hunks.
+</p>
+</div>
+<ul>
+<li>bro emits a <code>U</code> nav-URI per hunk carrying a <code>#L&lt;n&gt;</code> line anchor (<code>dog/HUNK.c</code></li>
+</ul>
+<div>
+<p>
+fragment grammar; built via <code>HUNKu8sMakeURI</code>, <code>graf/WEAVE.c</code>).  Clicking it re-dispatches <code>diff:&lt;path&gt;#L&lt;n&gt;</code> — the entry point for this view.
+</p>
+</div>
+<ul>
+<li>Distinct from dir/tree <code>diff:</code> (changed-hunks-only), which must NOT change.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li><code>be diff:&lt;file&gt;#L&lt;n&gt;</code> (file-scoped) renders the FULL file, every line, with</li>
+</ul>
+<div>
+<p>
+added/removed/changed lines highlighted in place and the <code>#L&lt;n&gt;</code> anchor honored for scroll/jump.
+</p>
+</div>
+<ul>
+<li>Tree/dir-scoped <code>diff:</code> (no single-file path) stays changed-hunks-only.</li>
+<li>Works in Plain/Color/TLV; composes the same under sub recursion.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Producer/renderer split: graf decides the EMIT scope (full-file lines vs</li>
+</ul>
+<div>
+<p>
+changed-hunks-only) keyed off file-vs-tree URI scope; bro owns the change highlighting/presentation — producers must not decide presentation.
+</p>
+</div>
+<ul>
+<li>No new diff engine — reuse graf's existing file diff (<code>graf/DIFFREF.c</code>,</li>
+</ul>
+<div>
+<p>
+<code>graf/WEAVE.c</code>); emit unchanged context lines tagged so bro highlights.
+</p>
+</div>
+<ul>
+<li><code>abc/</code> untouched; read-only <code>dog/HUNK</code> stream; all four URI slots compose.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions (open — confirm in a design pass before forking)</h3>
+<ul>
+<li>Where full-file scope is decided: a file-scoped <code>diff:</code> URI should make</li>
+</ul>
+<div>
+<p>
+DIFFREF emit all file lines (change-tagged), not just hunks — confirm the branch/flag, and whether the ref-vs-ref line cap must lift for one file.
+</p>
+</div>
+<ul>
+<li>Highlight encoding: which <code>dog/HUNK</code> tok tags bro already has for add/del/</li>
+</ul>
+<div>
+<p>
+change lines, and whether full-file context needs an &quot;unchanged&quot; tag.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Design pass: confirm the DIFFREF file-scope branch + bro's tok tagging.</li>
+<li>] Implement full-file emit for a file-scoped <code>diff:</code>; keep tree/dir scope</li>
+</ul>
+<div>
+<p>
+  changed-hunks-only.
+</p>
+</div>
+<ul>
+<li>] Honor the <code>#L&lt;n&gt;</code> anchor for jump/scroll in the full-file view.</li>
+<li>] Tests: file-scoped <code>diff:&lt;file&gt;#L&lt;n&gt;</code> output contains an UNCHANGED line</li>
+</ul>
+<div>
+<p>
+  far from any change AND the highlighted changed line, in Plain/Color/TLV;   tree-scope <code>diff:</code> still hunks-only (regression).
+</p>
+</div>
+<h3>Blockers and bummers</h3>
+<ul>
+<li>Whole-file emit on a huge file ⇒ large output; the per-file line cap may</li>
+</ul>
+<div>
+<p>
+need a file-scope override (verify the BNOROOM-class limits).
+</p>
+</div>
+<h2>Outcome</h2>
+<ul>
+<li>Landed <code>eaa75793</code>: file-scope <code>diff:</code> reuses the <code>cat:</code> emitter</li>
+</ul>
+<div>
+<p>
+<code>WEAVEEmitFull</code> (change-tagged, no windowing) via a <code>b8 full</code> flag threaded through <code>GRAFDiff2Layer</code>; tree-scope keeps windowed <code>WEAVEEmitDiff</code>.
+</p>
+</div>
+<ul>
+<li><code>WEAVEEmitFull</code> gained a <code>scheme</code> param so <code>dog/HUNK</code> routes the full-file</li>
+</ul>
+<div>
+<p>
+hunk to the unified +/- formatter (<code>cat:</code> passes empty → byte-identical). Test <code>test/diff/11-file-scope-full</code>; 373/373 green.
+</p>
+</div>
+</body>
+</html>

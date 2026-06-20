@@ -1,0 +1,54 @@
+#   HEAD-003: `be head` hunk output is plain on a TTY (should be color)
+
+`be head` (e.g. `be head be://localhost/beagle`) prints its change hunks —
+the `+ <sha> <ts> <subject>` commit line and the `+`/`- <path>` file rows —
+in PLAIN text even on an interactive terminal, where it should render in
+color like the other hunk verbs. The three-mode rule (`dog/CLI.c:203`:
+`HUNKMode = ANSIIsTTY() ? HUNKOutColor : HUNKOutPlain`) is in place, so the
+defect is in how HEAD's (possibly sub-aggregated) stream reaches the
+renderer, not in tty detection. Presentation is the shared bro renderer's
+job ([Hunk-producer-renderer-split]); HEAD must not ship pre-flattened plain.
+
+##  Input
+
+### Context
+ -  Repro: `be head be://localhost/beagle` on a TTY → commit + file rows print
+    with no ANSI color (`--color` and a piped `| cat` look identical).
+ -  Lead: `beagle/BE.cli.c:522-619` forces `HUNKMode = HUNKOutTLV` while
+    CAPTURING sub reports (bro can't index pre-rendered ANSI), then restores.
+    Hypothesis (verify): the aggregated parent stream is emitted without a
+    final color re-render, so a TTY sees plain. Do not assume — trace it.
+ -  `bro/BRO.exe.c:103` sets `b->color = (HUNKMode == HUNKOutColor)`; `NO_COLOR`
+    still wins. Confirm whether HEAD's hunks even traverse the bro renderer.
+
+### Goals
+ -  On a TTY (no `--plain`, no `NO_COLOR`), `be head` renders commit/file rows
+    in color, matching `be diff:`/`be status` hunk coloring.
+ -  `--plain`, `--tlv`, `NO_COLOR`, and a non-tty pipe still emit plain/TLV.
+
+### Constraints
+ -  Color is the shared renderer's call only (`HUNKu8sFeed*`); producers stay
+    presentation-free per [Hunk-producer-renderer-split].
+ -  No double-render: a sub stream captured as TLV must be color-rendered
+    ONCE at the top, never fed pre-ANSI into bro (the `522-619` trap).
+
+##  WIP
+
+### Design decisions
+ -  (pending) Decide where the top-level HEAD aggregation re-renders to color
+    on a TTY — at the parent's final emit, after sub TLV is merged.
+
+### TODOs
+ -[ ] Repro on a TTY; capture plain output and the `HUNKMode` value at emit.
+ -[ ] Trace HEAD's emit path; find where color is dropped (parent vs sub).
+ -[ ] Fix so TTY HEAD is colored; `--plain`/`--tlv`/`NO_COLOR`/pipe unchanged.
+ -[ ] Land + test (a tty-forced or `--color` golden compare).
+
+### Blockers and bummers
+ -  None known; isolated to HEAD's render path.
+
+##  Outcome
+ -  (pending)
+
+[Hunk-producer-renderer-split]: ../../wiki/Bro.mkd "shared bro renderer owns presentation"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

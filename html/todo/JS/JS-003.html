@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JS-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>JS-003 <a href="">HIGH</a>: JSC boundary not validated before use — ignored <code>exception</code>, NULL typed-array bytes ptr</h1>
+<p>
+JS* calls set an <code>exception</code> out-param that is ignored before the code proceeds to the syscall, and a detached ArrayBuffer's NULL bytes ptr is deref'd. Flagged by 3-4 of 7 lenses (high confidence). Method: <a href="../../rule/Issues.html">Issues</a>.
+</p>
+<h2>Input</h2>
+<h3>Context</h3>
+<ul>
+<li>(a) <code>exception</code> out-param ignored, then the syscall runs anyway:</li>
+</ul>
+<div>
+<p>
+<code>JABCioFileWrite</code> (<code>io.cpp:97-111</code>), <code>JABCioFileRead</code> (<code>io.cpp:137-160</code>), <code>JABCioNetConnect</code> (<code>io.cpp:374-376</code>), <code>JABCioStdio</code> (<code>io.cpp:385-392</code>), <code>JABCutf8Encode</code> (<code>utf8.cpp:18</code>).
+</p>
+</div>
+<ul>
+<li>(b) <code>JSObjectGetTypedArrayBytesPtr</code> returns NULL for a detached/neutered</li>
+</ul>
+<div>
+<p>
+ArrayBuffer; <code>io.cpp:100-105</code> / <code>137-141</code> form <code>ta[1]=ta[0]+len</code> off NULL and read/write-deref it → NULL-deref crash.
+</p>
+</div>
+<ul>
+<li><code>WITH_JS</code>-gated WIP, but these are live binding entry points.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>A thrown JS exception or a detached buffer is detected and aborts the op before</li>
+</ul>
+<div>
+<p>
+any syscall / deref.
+</p>
+</div>
+<h3>Constraints</h3>
+<ul>
+<li>After each JS* call: <code>if (*exception) return undefined</code>. NULL-check the bytes</li>
+</ul>
+<div>
+<p>
+ptr before forming the ABC slice. No bypassing the existing throw plumbing.
+</p>
+</div>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<ul>
+<li>(open) Add post-call exception checks at every listed site; guard the bytes ptr</li>
+</ul>
+<div>
+<p>
+so a detached buffer throws (or returns undefined) rather than deref'ing NULL.
+</p>
+</div>
+<h3>TODOs</h3>
+<ul>
+<li>] Repro-first: pass a detached ArrayBuffer (transferred/neutered) and a value</li>
+</ul>
+<div>
+<p>
+  with a throwing <code>toString</code> into <code>file.write</code> / <code>file.read</code>; assert no crash.
+</p>
+</div>
+<ul>
+<li>] Add the exception + NULL-ptr guards at each listed site.</li>
+</ul>
+<h3>Blockers</h3>
+<ul>
+<li>None.</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>*<strong>LANDED <code>07f858b7</code></strong>* (2026-06-16): post-call <code>*exception</code> checks +</li>
+</ul>
+<div>
+<p>
+NULL bytes-ptr guards at file.write/read, net.connect, stdio, utf8.Encode; detached-buffer (<code>b.transfer()</code>) repro now throws instead of write(NULL,0).
+</p>
+</div>
+</body>
+</html>

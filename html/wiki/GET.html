@@ -35,7 +35,7 @@ The forms span branch switching, detached checkout, single-file restore, and rem
 <li>The bareword <code>file.c</code> promotes to the path slot (it matches a tracked entry) — type <code>?feat</code> to force a branch switch.</li>
 <li><code>//origin?feat</code> resets from the cached store; <code>ssh://host?feat</code> fetches then checks out (logging the URL to the reflog).</li>
 <li><code>be get file:../proj?feat</code> wires an empty cwd as a sibling wt sharing <code>../proj</code>'s store, resetting to <code>feat</code>'s tip.</li>
-<li>Bare <code>be get</code> is a no-op status (≡ bare <code>be</code>).</li>
+<li>Bare <code>be get</code> is the default GET: it fast-forwards the wt to cur's branch tip, reporting the <code>?branch#hashlet</code> state banner.</li>
 </ul>
 <h2>Flags</h2>
 <p>

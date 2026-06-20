@@ -1,0 +1,56 @@
+#   JS tickets: the JABC (JavaScriptCore) bindings
+
+`js/` is JABC — a thin, anti-bloat JavaScriptCore binding (stock
+`libjavascriptcore`; bindings "hold no memory"; JS owns the buffers, no shared
+custody). Tickets here cover exposing ABC primitives/containers to JS and the
+binding surface. The fix-and-land method is [Issues].
+
+##  Closed — all JS tickets landed
+
+The `js/` 7-lens code review (2026-06-16) produced JS-002..JS-014; ALL were fixed
+on branch `?/dogs/js` (worktree `~/todo/dogs-js`), each repro-tested red→green and
+verified green under `WITH_JS`+ASAN (`ctest -R JABC` 3/3, LSan clean), and MERGED
+to trunk. The build was first restored (`c4f03a7c`: dropped dead `convert.cpp`/`rdx`
+— no `rdx/` dir — and mapped `ABC_BASS`). Tests are C++ (`js/test/jabc_test.cpp` +
+`run-007.sh`) since `test.js` can't be regenerated (no node). JS-001 (the ABC-container
+binding proposal) is also closed. Topic closed. Per-ticket Outcome + hash in each `.mkd`.
+
+ -  JS-002 `5ee417eb` — file.write/io.log heap corruption (CRIT).
+ -  JS-003 `07f858b7` — validate JSC `exception` + NULL typed-array ptr.
+ -  JS-004 `bd3a9c67` — guard `len-1` underflow (live sites; convert/macro sites deferred).
+ -  JS-005 `08df5879` — `JS_FILES` fd-table custody (leak, double-unprotect, std-fd close).
+ -  JS-006 `abc29c84` — `JABCioLog` logs `args[i]`.
+ -  JS-007 `24f890ed` — `main()` opens `script_file` + IO guards.
+ -  JS-008 `71e5aaf8` — io timer `double→int` guard (convert.cpp i64→BigInt deferred to rdx).
+ -  JS-009 `621f4633` — `io.mmap` argc guard + unmap-on-fail + path overflow.
+ -  JS-010 `f20e2ec7` — callback exception-safety + re-entrancy guard (no live JSStringRef leaks left).
+ -  JS-011 `041e4bd5` — utf8 `Decode` validation + `Encode` NUL trim.
+ -  JS-012 `0b1006d4` — C++ test harness, ctest fails on a bug.
+ -  JS-013 `23d71efc` — `js2c.js` escaping (blobs need a node-regen to benefit).
+ -  JS-014 `9c6118b4` — Google-C++ `.clang-format` + prune dead surface (deeper rename = optional follow-up).
+
+Deferred (dead code, out of build): the `convert.cpp` i64→BigInt (JS-008) and
+convert/`JABC.hpp`-macro underflow sites (JS-004) — revisit when rdx is re-wired.
+
+##  Closed proposal
+
+ -  [JS-001] — (PROPOSAL, research-only) ABC containers in JS — `u64`/`u32` buffers,
+    `kv64`/`kv32` maps, `wh64`/`wh128` sorted runs — backed by JS-owned `ArrayBuffer`s /
+    `mmap` (not C-side BASS). Recommends model-A view-over-ArrayBuffer (BASS confined to
+    per-call scratch), per-class JSC bindings, BigInt for u64. CLOSED.
+
+[JS-001]: JS-001.mkd "ABC-container JS bindings proposal (BASS/mmap, u64/u32/kv/wh)"
+[JS-002]: JS-002.mkd "CRIT file.write/io.log heap corruption (invalid free + uninit write)"
+[JS-003]: JS-003.mkd "HIGH JSC boundary not validated (ignored exception, NULL bytes ptr)"
+[JS-004]: JS-004.mkd "HIGH len-1 size_t underflow on empty strings"
+[JS-005]: JS-005.mkd "HIGH JS_FILES fd-table custody (GC leak, double-unprotect, std close)"
+[JS-006]: JS-006.mkd "MED JABCioLog logs args[0] not args[i]"
+[JS-007]: JS-007.mkd "MED main() script load (wrong file, ftell -1, ignored fread)"
+[JS-008]: JS-008.mkd "HIGH-when-wired number marshalling precision (i64/NaN/Inf/float→int)"
+[JS-009]: JS-009.mkd "MED io.mmap leak/argc/path-truncation"
+[JS-010]: JS-010.mkd "MED JSStringRef leaks + callback re-entrancy/exception safety"
+[JS-011]: JS-011.mkd "MED UTF-8 correctness (Encode NUL, Decode no-op)"
+[JS-012]: JS-012.mkd "structural test/fuzz/bench absent; test.js always exit(0)"
+[JS-013]: JS-013.mkd "LOW js2c.js generator escaping + no build-time regen"
+[JS-014]: JS-014.mkd "cleanup Google-C++ style + prune dead surface"
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

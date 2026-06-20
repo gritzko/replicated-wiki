@@ -1,0 +1,49 @@
+#   PTR-005: sniff/ sha-hex decode, memcmp, raw record arrays
+
+The 2026-06-15 audit found sniff/ builds a 20-byte writable slice via `sha.data+20` to feed a hex decode (11 sites), uses `memcmp` where typed equality exists, and carries record arrays as `T*`+count. Behavior-preserving, one worktree; hermetic `.be` tests stay green.
+
+##  Input
+
+### Context
+ -  sha-hex decode pattern (`u8s bin={sha.data, sha.data+20}; HEXu8sDrainSome(bin, hex)`), 11×: `sniff/AT.c:848`, `sniff/CLASS.c:313`, `sniff/GET.c:500,1296,1774,1791,1857`, `sniff/PATCH.c:991,1195,1230,1266`.
+ -  `memcmp(...,20)` sha-equality: `sniff/PATCH.c:131` (`sha_eq` reimplements `sha1Eq`), `sniff/GET.c:143` (vs `EMPTY_BLOB_SHA`), `sniff/GET.c:504`.
+ -  `sniff/SNIFF.c:358-393` (+ decls `sniff/SNIFF.h:168,173`) — `sniff_step_fn(ulogreccp recs, u32 n, void *ctx)` fed from a raw `ulogrec group[LSM_MAX_INPUTS]`: classic `ptr+len`.
+ -  `sniff/PATCH.c:88` — `parse_tree(entry *out, u32 *nout, u32 cap, …)`; `sniff/PATCH.c:118,69,108` — insertion sort over raw `entry*`+`n` and `memcmp` name compares.
+ -  `sniff/DEL.c:616-638` — raw `p/end/q` NUL-separated tokenizer (`q++`, `q-p`, `best_b+best_len`, `q+1`). `sniff/PUT.c:753-859` — `mvsrc[0]+=2`, `*(probe[1]-1)`, `probe[1]--`, direct `urow.path[0]=…`. `sniff/LS.c:67-109` — `path[0]+plen`, `{path[0], slash+1}`, `memchr(lo, …, hi-lo)`.
+ -  field-literal matching: `memcmp(field[0],"parent",6)` at `sniff/PATCH.c:1193,1228,1261`, `sniff/GET.c:1149,1293,1461`; `{tv[0], tv[0]+40}` hex slices alongside.
+
+### Goals
+ -  Replace every sha-hex site with `call(sha1FromHex, &sha, frag)` (bounds-checked, BADRANGE if <40). Highest-volume cleanup.
+ -  Delete `sha_eq`, use `sha1Eq`; wrap `EMPTY_BLOB_SHA` once via `sha1FromBin` and compare with `sha1Eq`.
+ -  `sniff_step_fn` → a typed `ulogrecsc` slice built once; the callee can't desync `recs`/`n`.
+ -  `parse_tree` → an `entryb`/gauge + `entrybFeed1` (the `Bx.h` instantiation exists); sort the `entry` slice via `abc/Sx.h`+`entryZ`; comparator via `u8csZ`/`u8csEq`.
+ -  DEL/PUT/LS: `u8csFind`/`$eat` for the NUL scan, `u8csUsed(s,2)`/`u8csLast`/`u8csShed`/`u8csMv` for the slice juggling, `a_rest(u8c, rel, path, plen)` for prefix-skip; build the synthetic URI via `a_path`/`PATHu8bFeed`.
+ -  Field literals → `u8csEq(field, a_cstr(p,"parent"))`.
+
+### Constraints
+ -  Behavior-preserving; hermetic `.be` store tests + sniff fuzzers green; the `sniff` binary needs its own rebuild (separate target from `be`).
+ -  `void *ctx` callback contexts (AT/CLASS/POST/DEL/GET/SUBS) are the sanctioned idiom — out of scope.
+
+##  WIP
+
+### Design decisions
+ -  Land the 11-site sha-hex swap first as one mechanical pass (single canonical helper), then the `memcmp` and array conversions.
+
+### TODOs
+ -[ ] Repro-first: lock outputs on the sniff test tables.
+ -[ ] sha-hex decode 11× → `sha1FromHex`.
+ -[ ] `sha_eq`/`memcmp` sha-eq → `sha1Eq`; `EMPTY_BLOB_SHA` via `sha1FromBin`.
+ -[ ] `sniff_step_fn` → `ulogrecsc`.
+ -[ ] `parse_tree`/`sort_entries` → `entryb`+`entryZ` sort.
+ -[ ] DEL/PUT/LS pointer juggling → slice helpers; field literals → `u8csEq`.
+ -[ ] Rebuild `sniff` + ctest; report done vs skipped.
+
+### Blockers and bummers
+ -  None known; `sniff` is a separate binary — rebuild it, not just `be`.
+
+##  Outcome
+
+ -  pending.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

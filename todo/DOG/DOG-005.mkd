@@ -1,0 +1,67 @@
+#   DOG-005: graf cut-over to `dog/WEAVE`; delete `graf/WEAVE`
+
+Repoint graf at `dog/WEAVE` and delete `graf/WEAVE.{c,h}`. GET, REBASE, BLAME, DIFFREF and LOG call the new API; the parent-closure `WEAVEApply` path becomes `WEAVEMerge` + scope bitsets resolved at the graf/DAG boundary. Finishes the move, updates both INDEX.md, and retires the superseded tickets. Gates on [DOG-003]/[DOG-004].
+
+##  Input
+
+### Context
+ -  Callers: `graf/GET.c` (`build_tip_weave*`), `graf/REBASE.c`, `graf/BLAME.c`
+    (`GRAFFileWeave`), `graf/DIFFREF.c`, `graf/LOG.c`.
+ -  `GRAFFileWeave` folds the closure via `WEAVEApply`/`Diff`; this becomes
+    `WEAVENext` along first-parent + `WEAVEMerge` at merges, scope from the DAG.
+ -  THE bug: `be-patch-15` step 2 fails 5/5 under the dog cut-over. [DIS-045]
+    PROVED the dog engine correct — `dog/test/WEAVE03` drives step-2 as a
+    shared-base 3-way merge (base F2 → ours, base F2 → theirs, then
+    `WEAVEMerge`) and gets `08.lib.want_step2.c` byte-exact (322/322, 4.7M
+    fuzz). So the fault is graf's GLUE: `WEAVEApply`-against-parent-closure
+    replay is NOT byte-identical to that first-parent `WEAVENext`+`WEAVEMerge`
+    shared-base model for the ancestor-skip topology. Fix the modeling, not
+    the engine.
+
+### Goals
+ -  All graf weave ops on `dog/WEAVE`; `graf/WEAVE.{c,h}` deleted; suite green;
+    `graf blame/diff/merge` + `be get`/`be patch` byte-parity (modulo capped).
+ -  [GET-001]'s per-version BASS blowup gone by construction (no per-call decode).
+
+### Constraints
+ -  Behaviour-preserving for uncapped files; conflict-marker output shape
+    unchanged so [POST-006]/[DIS-040] detection is unaffected.
+
+##  WIP
+
+### Design decisions
+ -  Resolve closures to scope bitsets at the graf/DAG edge: map a rev's
+    ancestor `u64` ids → `commits[]` indices once per op (reuse `DAGAncestors`).
+ -  Model the ancestor-skip merge as the [DIS-045] WEAVE03 shared-base 3-way:
+    fold ours AND theirs onto the SAME merge-base weave (the skip ancestor,
+    NOT a per-branch closure replay), then `WEAVEMerge`; that is what the
+    engine is byte-parity-correct for. Make `GRAFFileWeave`'s glue match it.
+ -  Land file-disjoint where possible; cut over one caller at a time if needed.
+
+### TODOs
+ -[ ] Repro `be-patch-15` step 2 5/5 fail through the graf glue (the dog
+      engine is already pinned by WEAVE03 — isolate the closure→fold model).
+ -[ ] Repoint GET/REBASE/BLAME/DIFFREF/LOG; closure→scope at the DAG boundary,
+      shared-base 3-way at ancestor-skip merges (per WEAVE03).
+ -[ ] Delete `graf/WEAVE.{c,h}`; update `graf/INDEX.md` + `dog/INDEX.md`.
+ -[ ] Full ctest + blame/diff/merge ident; close [GET-001]/[DIS-003]/[DIFF-007]
+      and re-confirm [MEM-036]/[MEM-040] are moot.
+
+### Blockers and bummers
+ -  Gates on [DOG-003]+[DOG-004]. [DIS-045] no longer blocks — engine proven
+    correct, the fault is the graf cut-over glue (closure replay ≠ shared-base
+    3-way). Watch [DIS-041] (FF-weave needs indexed commits) during GET cut-over.
+
+##  Outcome
+ -  (open)
+
+[DOG-001]: DOG-001/README.mkd "umbrella"
+[DOG-003]: DOG-003.mkd "dog/WEAVE core"
+[DIS-045]: ../DIS/DIS-045.mkd "blank/EOL engine proven correct; WEAVE03 oracle"
+[DOG-004]: DOG-004.mkd "dog/WEAVE emit + scope + cap"
+[GET-001]: ../GET/GET-001.mkd "weave merge exhausts BASS"
+[DIS-003]: ../DIS/DIS-003.mkd "WEAVEMerge token identity is positional"
+[DIS-041]: ../DIS/DIS-041.mkd "FF-weave bails when commits not indexed"
+[DIFF-007]: ../DIFF/DIFF-007.mkd "diff:<largefile> silently empty"
+[POST-006]: ../POST/POST-006.mkd "POSTCFLCT false-fires on marker strings"
+[Issues]: ../../meta/work.mkd "the parallel fix-and-land loop"

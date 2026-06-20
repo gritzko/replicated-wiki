@@ -30,7 +30,7 @@ Each populated URI slot adds its effect orthogonally, and the slot combination d
 <li><code>be patch ?feat</code> absorbs one commit, <code>?feat!</code> the whole branch, <code>#sha</code> one named commit — scope at <a href="PATCH.html">PATCH</a>, provenance at <a href="">POST</a>.</li>
 <li>A bare <code>//host</code> reads the cache while <code>ssh://host</code> opens the wire — the scheme alone flips cached vs network.</li>
 <li>The scheme also picks the protocol: <code>ssh:</code>/<code>https:</code>/<code>http:</code>/<code>git:</code> run git's pack wire, <code>be:</code> runs beagle's keeper wire (a <code>.git</code> path forces git).</li>
-<li><code>diff:</code> vs <code>diff:?br</code> vs <code>diff:?a#b</code> change the diff from/to sides — projector slots compose like verb slots.</li>
+<li><code>diff:</code> vs <code>diff:?br</code> vs <code>diff:?a..b</code> change the diff from/to sides; the <code>..</code> range keeps the fragment free for a <code>#L&lt;n&gt;</code> line anchor (<code>diff:&lt;path&gt;?a..b#L12</code>, clickable). Legacy <code>?a#b</code> (fragment = to) still parses. Slots compose like verb slots.</li>
 <li>An empty <code>?</code> slot in a URI means the project trunk; no <code>?</code> slot at all means cur (see Refs rule 0).</li>
 </ul>
 <h2>Relative URIs</h2>

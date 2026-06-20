@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GIT-003</title>
+<link rel="stylesheet" href="/assets/css/style.css">
+</head>
+<body>
+<a class="banner" href="/">
+<img class="banner-logo" src="/assets/img/tool.jpg" alt="">
+<span class="banner-title">Beagle SCM</span>
+</a>
+<h1>GIT-003: ingest re-encoder — per-object normalize foreign packs into the OFS-only stream, with dedup</h1>
+<h2>Input</h2>
+<h3>Context</h3>
+<p>
+Child of <a href="">[GIT-001</a>]; depends on <a href="">[GIT-002</a>]. <code>KEEPIngestFile</code> (<code>keeper/KEEP.c:2238</code>) and <code>KEEPIngestStream</code> (<code>:2431</code>) append the received object stream verbatim, patch one PACK count, drop a <code>(count, byte_len)</code> bookmark, then <code>UNPKIndex</code> the slice. A verbatim foreign pack carries REF_DELTA / thin bases / arbitrary offsets — incompatible with the OFS-only invariant. Replace the verbatim append with a dependency-ordered per-object re-emit through the GIT-002 writer: foreign packs may use whatever, the stored result is uniform OFS-only. <code>UNPK</code> already walks and resolves every object (OFS forest + REF waiters + Phase-C thin fallback), so the re-emit fuses into that existing pass rather than adding a second one. See <a href="../../wiki/PackLog.html">PackLog</a>, <a href="../../../beagle/CLAUDE.md">CLAUDE</a>.
+</p>
+<ul>
+<li>Verbatim append injects foreign deltas into storage: a received pack's REF_DELTA and thin bases would persist, violating OFS-only and the droppable-shard rule.</li>
+<li>Offsets are throwaway: the foreign pack's internal offsets don't match our log, so OFS bases must be re-pointed; a thin REF base may live in an already-stored pack (UNPK Phase C, <code>UNPK.c:525</code>).</li>
+<li>No dedup today: whole-pack append re-stores objects the shard already has; per-object ingest can skip them (a storage win on overlapping incremental fetches).</li>
+<li>Ordering: streaming arrival order can present a delta before its base for REF/thin; emit must be base-before-dependent.</li>
+</ul>
+<h3>Goals</h3>
+<ul>
+<li>Replace the verbatim foreign-pack append with a dependency-ordered per-object re-emit through the GIT-002 writer, so the stored result is uniform OFS-only regardless of foreign format.</li>
+<li>Fuse the re-emit into UNPK's existing resolve pass (no second parse) and dedup objects the shard already holds.</li>
+</ul>
+<h3>Constraints</h3>
+<ul>
+<li>Quarantine foreign formats in <code>UNPK</code> + this funnel only; the native writer/resolver stay OFS-only (<a href="">[GIT-001</a>] design). Keep <code>UNPK</code>'s full REF/OFS/thin reader — it is the foreign reader, not deleted.</li>
+<li>Keep deflated bytes where possible: a foreign OFS/REF delta re-emits as OFS by rewriting only the header offset against the base's new log offset (reuse GIT-002's append entry); re-deltify only when the base was dropped by dedup.</li>
+<li>Map incoming→local: thread an (incoming-offset / base-sha → local-offset) map for the ingest duration off UNPK's resolved forest — no second parse pass; respect <a href="../../../beagle/CLAUDE.md">CLAUDE</a> §10 (slices, no ptr math).</li>
+<li>RECV push-receive (<code>keeper/RECV.c</code>) feeds the same funnel, so pushed packs normalize identically.</li>
+</ul>
+<h2>WIP</h2>
+<h3>Design decisions</h3>
+<p>
+ —
+</p>
+<h3>TODOs</h3>
+<p>
+Drain → resolve (UNPK forest) → topo-emit per object through the GIT-002 writer.
+</p>
+<ul>
+<li>] Re-emit objects in dependency order from UNPK's forest: raw objects appended as-is; OFS/REF deltas re-pointed to the base's local offset and written as OFS_DELTA; thin bases resolved via the existing <code>KEEPGet</code>/Phase-C path then OFS-referenced.</li>
+<li>] Dedup: before appending, probe the index (<code>KEEPHas</code>); skip objects already present, but still record their local offset in the map so dependents re-point correctly.</li>
+<li>] Remove the verbatim path: drop the whole-pack <code>u8bFeed</code> + count-patch (<code>:2308-2323</code>) and the single PACK bookmark push (<code>:2360</code>); indexing now happens per appended object inside the writer.</li>
+<li>] Repro-first (<a href="../../../beagle/CLAUDE.md">CLAUDE</a> §17): extend <code>test/UNPK.c</code> / <code>test/PSTR.c</code> fixtures — ingest (a) a non-thin OFS pack, (b) a thin REF_DELTA pack whose base is already stored, (c) a pack overlapping existing objects; assert the resulting log is OFS-only, dedup'd, and every object round-trips via <code>KEEPGet</code>. A be↔git clone+incremental-fetch round-trip stays green (build WITH_SSH per <a href="">[GIT-001</a>] note).</li>
+</ul>
+<h3>Blockers and bummers</h3>
+<ul>
+<li><a href="">[GIT-002</a>] dependency satisfied (<code>PACKu8sFeedObj</code> landed <code>e59a1c91</code>).</li>
+</ul>
+<h2>Outcome</h2>
+<ul>
+<li>Landed <code>fa52117d</code> on <code>dogs</code> trunk: ingest re-encodes foreign packs to OFS-only via a <code>reemit</code> sink fused into UNPK's resolve pass (<code>keep_ingest_reemit</code> → <code>KEEPPackFeed</code> → <code>PACKu8sFeedObj</code>), with <code>KEEPHas</code> dedup; the verbatim whole-pack append + count-patch + foreign PACK bookmark are removed; RECV funnels through the same path unchanged. Took the re-deltify floor (not deflate-passthrough) per the ticket. build-ssh <code>ctest</code> 394/394 (the 66 ssh-localhost clone/fetch/push round-trips RAN, not skipped); a real 3-fetch incremental store inspected → <code>ref_delta=0</code>, every object round-trips via <code>KEEPGetExact</code>.</li>
+</ul>
+</body>
+</html>

@@ -1,0 +1,72 @@
+#   SUBS-022: a RELATIVE `argv[0]` breaks sub-recursion — `execvp(self)` after `chdir` into the sub mount fails (BEDOGEXIT)
+
+When `be` is invoked via a RELATIVE path (e.g. `./build-debug/bin/be`), its
+submodule recursion `fork`s, `chdir`s into `<wt>/<subpath>`, then `execvp`s itself —
+but `argv[0]` (and the bin dir `HOMEResolveSibling` derived from it) is still
+relative to the ORIGINAL cwd, so after the `chdir` it no longer resolves and the
+child `execvp` fails → `BEDOGEXIT`, the whole recursing verb aborts. Hit twice this
+session (a `be post` default sub-recursion, and the bare `be diff:` investigation).
+Method: [Issues].
+
+##  Input
+
+### Context
+ -  Repro: `cd $HOME/todo/<wt> && ./build-debug/bin/be post -m '…'` on a tree with a
+    mounted submodule → `be: BERecurseInto: execvp …: No such file or directory` /
+    `BEDOGEXIT`. Workaround used by the worker flow: `be post --nosub` (top-level only),
+    or invoke `be` by an ABSOLUTE path / bare name on `PATH`.
+ -  Code: `beagle/SUBS.c:90 be_resolve_self` → `HOMEResolveSibling` (`SUBS.c:88-89`:
+    "walks PATH for a bare argv[0] and uses dirname for an ABSOLUTE one … falling back
+    to the bare name"). A RELATIVE argv[0] (has a `/`, not leading `/`) hits the
+    `dirname` arm → a relative bin dir. `BERecurseInto` (`SUBS.c:82`) then `fork` +
+    `chdir(<wt>/<subpath>)` + `execvp(argv_c[0], …)` (`SUBS.c:170`; same at `:231`
+    `BEIndexMount`, `:331`) — the relative path is now wrong post-`chdir` → ENOENT.
+ -  Bare name (PATH-resolved by execvp) and absolute path both work; ONLY a relative
+    invocation breaks. This bites local `build-*/bin/be` invocations, which is exactly
+    how the fix-and-land worker trees run `be`.
+
+### Goals
+ -  A relative `argv[0]` is resolved to an ABSOLUTE self path ONCE at startup (against
+    the launch cwd), BEFORE any sub-recursion `chdir`, so every `execvp(self)` /
+    `execvp(<dog>)` child resolves regardless of invocation form. Bare-name and
+    absolute invocations unchanged.
+
+### Constraints
+ -  Resolve against the ORIGINAL cwd before the first `chdir`; don't re-derive from a
+    post-`chdir` cwd. `beagle/SUBS.c` (+ maybe `HOMEResolveSibling`) only; no behaviour
+    change for absolute/bare-name invocations. Add a recursion-via-relative-path test.
+
+##  WIP
+
+### Design decisions
+ -  DONE (2026-06-16) — SITE MAP CORRECTED: the three `SUBS.c` sites are not the only
+    spawns; the failing `post` recursion is a SEPARATE `bepost_spawn_sub`
+    (`beagle/BE.cli.c:2746`, `HOMEResolveSibling` at `:2758`). ALL chdir'd spawns
+    (post/get, sniff subs, woof) funnel through `HOMEResolveSibling` — so the fix is
+    ONE point there, not in `SUBS.c`. In `dog/HOME.c:1027-1053` (app code, NOT `abc/`):
+    in the has-slash branch, detect a relative argv0 (`u8csFind('/')` present, not
+    leading `/`) and `realpath` it against the launch cwd (via `PATHu8bReal`, fed the
+    original NUL-terminated argv0) BEFORE taking the dirname — resolution runs before
+    any `chdir`, so the launch cwd is still correct. Bare names keep PATH resolution;
+    absolute argv0 unchanged; realpath failure falls back to prior behaviour. Slice
+    endpoints only, no ptr-arith.
+
+### TODOs
+ -[ ] Repro-first: a hermetic submodule tree; run a recursing verb via `./rel/path/be`;
+      assert the sub child runs (no `BEDOGEXIT`) — RED today.
+ -[ ] Absolutize a relative argv[0] before any chdir; fix the three spawn sites.
+ -[ ] Test: relative, absolute, and bare-name invocations all recurse into the sub.
+
+### Blockers and bummers
+ -  Surfaced by the worker flow (relative `build-debug/bin/be`); independent of the
+    submodule MODEL — it's a self-path-resolution bug at the recursion spawn.
+
+##  Outcome
+ -  **LANDED `453c55c2`** (FF child of `3eba8e76`; 306/306; no `--force`): one-point fix in
+    `dog/HOME.c:1027-1053` (`HOMEResolveSibling` realpaths a relative argv0 before
+    dirname) — covers every chdir'd sub-spawn (post/get/sniff/woof) uniformly; `beagle/SUBS.c`
+    gets a 3-line doc comment only, no abc/ change. New `beagle/test/be-post-relpath.sh`
+    (rel/abs/bare invocation forms, RED→GREEN: rel hit the exact BEDOGEXIT, all 3 green
+    after). **306/306**. Awaiting gate. Msg: `SUBS-022: realpath relative argv[0] before sub-recursion chdir`.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

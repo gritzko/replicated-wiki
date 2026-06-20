@@ -1,0 +1,69 @@
+#   BRO-002: unify action/status output — one table-hunk per (sub)module
+
+Beagle today models the SAME `<time> <verb> <path>` row two incompatible ways: the action verbs (`get`/`put`/`delete`, plus `post`/`patch`/keeper banners) emit ONE status hunk **per event** carrying the row in the hunk's `ts`/`verb`/`uri` HEADER fields with empty body, while `be status` and the `ls:` projector emit ONE content hunk whose `text` body is the WHOLE formatted table with per-column `tok32` colors. The split is a pure renderer heuristic (`hunk_is_status`) with no field backing it, so two render paths draw one visual line. This ticket converges everything onto ONE model: every verb emits **a content hunk per (sub)module**, body = a row table with colored `tok32` tokens AND `U`-tok links (paths→`blob:`/`cat:`, commits→`commit:?<sha>` via the [COMMIT-001] primitive), headed by that module's uri. The `hunk_is_status` dual path is deleted. This **subsumes** [BRO-001] (the banner becomes the per-module hunk header) and unblocks [BLAME-005]. See [Projector], [Bro], [Verb channels], [CLAUDE].
+
+##  Input
+
+### Context
+ -  Two encodings of one status row exist; `hunk` (`dog/HUNK.h:44`) has NO status/content flag — the split is the inferred heuristic `hunk_is_status` (`dog/HUNK.c:52` = `(ts||verb) && $empty(text) && $empty(toks)`).
+ -  Encoding A (per-event header hunk): `ULOGToHunk`/`ULOGPrintStatusLine` (`dog/ULOG.c:1245,1261`) build a hunk with `ts`/`verb`/`uri` set, body empty; the renderer routes it to the banner path `hunk_feed_status_color` (`dog/HUNK.c:89`) / `_plain` (`:63`) / `_html` (`:671`).
+ -  Encoding B (content table hunk): `sniff/LS.c` `ls_run`/`ls_emit_row` (`:94,261`) and `be status` `sniff/SNIFF.exe.c` `status_step`/`status_emit_row_buf`/`sniff_status_work` (`:168,297,447`) buffer ALL rows into one `(text,toks)` hunk with per-column tags (`L` date, verb-palette letter, `F`/`S` path) plus a trailing `U`-tagged nav uri per row; `ts`/`verb` unset → content path.
+ -  Encoding A producer call sites (every per-event emit): `sniff/GET.c:163,205,290,658,690,777,977`; `sniff/PUT.c:155`; `sniff/DEL.c:269`; `sniff/PATCH.c:307`; `sniff/POST.c:1256` (`post_drain_mad_cb`, via `ULOGToHunk`+`HUNKu8sFeedOut`); `keeper/WALK.c:578,619` (`KEEPEmitCommitRangeBanner`, `KEEPEmitTreeDiffFiles`).
+ -  Recursion: a parent + each mounted sub run as separate child processes forced to `--tlv` (`BERelaySub` `beagle/SUBS.c:371`, `BE.cli.c:2548`); the child's TLV hunk stream is captured and replayed path-prefixed via `HUNKu8sRelay` (`dog/HUNK.c:334`) which rebases each hunk's uri under the subpath and re-emits in the parent's `HUNKMode`. "Per (sub)module" = one table hunk per such process boundary.
+ -  Channels ([Verb channels]): `get`/`status`/`head` emit stdout hunks; `post`/`put`/`delete` emit only in `--tlv` mode (relayed). Both the human (Color/banner) and machine (Text/TLV) renderings must stay coherent under one mode.
+
+### Goals
+ -  `get`/`put`/`delete`/`status` (and the `post`/`patch`/keeper banner emitters) ALL produce **one content hunk per (sub)module**: `uri` = the module's address (parent uri, child uri rebased by `HUNKu8sRelay`), `text` = the per-row table, `toks` = per-column color tags + a `U`-tok nav/link per row.
+ -  Reuse `sniff/LS.c`'s scheme exactly: row = `<7-date> <3-verb> <path>[ -> <dst>]\n<nav-uri>` with packs `L`/verb-slot/`F`/`U`; commit-range rows link to `commit:?<sha>` per [COMMIT-001]; file rows link to `cat:`/`blob:`/`diff:` as today.
+ -  ONE display mode: delete `hunk_is_status` and the three `hunk_feed_status_*` fns; every hunk renders through the single content+table path across Text/Color/Html/TLV.
+ -  The per-module hunk header IS the [BRO-001] banner (abbrev date + verb + uri, full-width band) — folded into the content-hunk header, no separate status shape.
+
+### Constraints
+ -  Text and TLV stay machine-parseable: TLV keeps the `H` record with `T`/`V`/`U`/`X`/`K` sub-records (now `X`/`K` always populated, `T`/`V` optional per-module-summary metadata); Text emits the table body verbatim with a stable `<date>\t<verb>\t<path>` column grammar tooling can split on (preserve the tab-separated machine grammar `ULOGu8sDrain` round-trips).
+ -  Renderer rework is `dog/HUNK.c`-local; producers only PRODUCE hunks (presentation is bro's job, per [Projector]).
+ -  No pointer arithmetic; rows buffered via BASS `a_carve`/`Bu8`/`Bu32` mirroring `sniff/LS.c` and `sniff/SNIFF.exe.c`; per-module flush bounded by the recursion process boundary.
+ -  `abc/` untouched; all changes in `dog/`+`sniff/`+`keeper/`.
+
+##  WIP
+
+### Design decisions
+ -  **Builder converges on `sniff/LS.c`.** Extract the row-table accumulator (`ls_ctx` text+toks, `ls_pack`, `ls_emit_row`) into a shared dog-level builder (candidate: `dog/ULOG.c` or a new `dog/ROWS.{h,c}`) so GET/PUT/DEL/POST/PATCH/keeper and `be status` all feed the same `(text,toks)` table and flush ONE hunk. `ULOGToHunk` (header-only lift) is retired; `ULOGPrintStatusLine` becomes "append one row to the active table", not "emit one hunk".
+ -  **Per-module flush.** Each verb opens a table accumulator at the top of its module-local work, appends a row per event, and flushes ONE `HUNKu8sFeedOut` at the end of its own (sub)module pass — BEFORE recursing into subs (or the relay interleaves a parent's late rows after a child's hunk). The child process's single hunk is its whole module; `HUNKu8sRelay` already rebases+re-emits it, so per-module grouping falls out of the existing process boundary with no new plumbing.
+ -  **Flush is mode-keyed (RULED).** `--tlv` (relay/recursion, machine): buffer the module's rows and flush ONE table hunk per module — batched, clean for relay + per-module grouping + parsing; flush before recursing. Direct-tty (`stderr`, human): STREAM each row live as its event occurs — preserve line-by-line progress on a long `get`/clone, no batching. So the producer always appends to the table; tty also emits the row immediately, TLV emits the single hunk at module end. Reuse `sniff/LS.c`'s 4 MiB mmap `text` + 256K `toks` caps (`a_carve`, not heap).
+ -  **Header = banner.** The single content-hunk header carries `ts`/`verb`/`uri` when present and renders as the [BRO-001] full-width band; for a module table the `uri` is the module address and `verb` may name the action (`get`/`post`/…). Drop `hunk_feed_header_color`'s historical `isdst=0` asymmetry (align to `-1`, the SUBS-003 fix) while here.
+ -  **RULED — channels:** mutators in direct-tty mode stream rows incrementally to `stderr` (via the unified renderer), as today; the batched table hunk is a `--tlv`/relay-only artifact. [Verb channels] rule kept.
+ -  **RULED — one commit:** land St.0-4 as a SINGLE commit (the stages are internal build order, not separate lands). `ULOGPrintStatusLine` is reworked to "append a row" in place and renamed to the builder verb within the same change — no cross-commit shim.
+
+### TODOs
+ -[ ] St.0 — extract the `sniff/LS.c` row-table accumulator into a shared dog builder (text+toks+pack+emit-row+flush-one-hunk); add a table-driven test fixture for the row grammar (date/verb/path columns + `U` nav uri) across Text/Color/Html/TLV.
+ -[ ] St.1 — convert `be status` (`sniff/SNIFF.exe.c`) and `ls:` (`sniff/LS.c`) onto the shared builder (they already match its shape — mechanical), keeping output byte-identical; regression on existing status/ls tests.
+ -[ ] St.2 — convert action producers to buffer rows then flush one table hunk per module: `sniff/GET.c` (7 sites), `sniff/PUT.c`, `sniff/DEL.c`, `sniff/PATCH.c`, `sniff/POST.c` `post_drain_mad_cb`, `keeper/WALK.c` (2 banner emitters). Replace per-event `ULOGPrintStatusLine` with append-to-active-table; flush at module-pass end before sub recursion.
+ -[ ] St.3 — delete `hunk_is_status` + `hunk_feed_status_plain`/`_color`/`_html`; route every hunk through the content+table path; fold the [BRO-001] banner into the content-hunk header; fix the `hunk_feed_header_color` `isdst` asymmetry; fix the [BLAME-005] blob/blame color-path inconsistency in the same renderer pass.
+ -[ ] St.4 — verify `HUNKu8sRelay` round-trips the new table hunks (one per child module), uri rebased; confirm Text/TLV machine grammar still `ULOGu8sDrain`-parseable; update `dog/INDEX.md`, `sniff/INDEX.md`, `dog/ULOG.md`, `wiki/Bro.mkd`/`Projector.mkd`.
+ -[ ] Tests: extend the existing table-driven get/put/delete/status/ls fixtures with a recursive (parent+sub) case asserting one table hunk per module headed by that module's uri; add a TLV-parse round-trip case.
+
+### Blockers and bummers
+ -  TLV consumers (bro, `HUNKu8sRelay`, any `be --tlv` tooling) must keep parsing `H` records — the wire shape is preserved (header sub-records stay optional), but `bro` rendering of the now-always-content hunks needs a check; the `T`/`V` banner-only hunk shape disappears, so any consumer special-casing it must migrate.
+ -  Per-module flush timing vs. the relay: a parent that emits late rows AFTER a child hunk would interleave wrong — St.2 must flush the parent's own table before `BERelaySub`/the sub fork, not after.
+ -  Links resolving: `U`-tok nav uris must resolve in bro (`cat:`/`blob:`/`diff:`/`commit:?<sha>`); the commit-range banners (`keeper/WALK.c`) currently carry the sha in `uri.query`+subject in `.fragment` (no `U` link) — St.2 must add the `commit:?<sha>` `U`-tok per [COMMIT-001] so range rows become clickable.
+ -  [BLAME-005] blob/blame color-path inconsistency: the content renderer's no-toks fallback (`HUNKu8sFeedColor` `:584`) emits verbatim while the toks path paints per-span — the rework should make blob/blame highlight consistently; coordinate so BLAME-005's producer half lands against the unified renderer.
+ -  Behavioral change (streaming→batched) may surface in any test asserting incremental per-line output ordering; audit get/post tests in St.2.
+
+##  Outcome
+ -  LANDED `25abfece` (+ `acbda302` fixup adding the untracked `dog/ROWS.{c,h}`).
+    ONE hunk-header drawer `HUNKu8sFeedBanner` (banner, Text/Color/Html); the
+    four old drawers (`hunk_feed_header_{plain,color,html}` + bro's
+    `scr_emit_title_color`/`bro_render_ulog_title`) deleted, bro routed through
+    it; zero violet `THEMEAt('T')` in any header (verified be/diff/commit/
+    blame/log/status/ls, tty+pipe). Producers emit per-(sub)module table hunks
+    via shared `dog/ROWS`; mode-keyed flush; `ULOGToHunk`/`ULOGPrintStatusLine`
+    retired. Subsumes BRO-001. 292/292 green. Blame body color-via-toks split
+    to a [BLAME-005] producer follow-up.
+
+[Projector]: ../../wiki/Projector.mkd "read-only verbless views"
+[Bro]: ../../wiki/Bro.mkd "the bro pager / shared hunk renderer"
+[Verb channels]: ../../wiki/Sniff.mkd "verb report channels (stdout vs TLV)"
+[BRO-001]: ../BRO/BRO-001.mkd "hunk status-line full-width banner (subsumed)"
+[COMMIT-001]: ../COMMIT/COMMIT-001.mkd "commit: link via U tok32 click-target"
+[BLAME-005]: ../BLAME/BLAME-005.mkd "blame per-commit hunks (renderer half rides this)"
+[CLAUDE]: ../../../beagle/CLAUDE.md "coding guidelines"

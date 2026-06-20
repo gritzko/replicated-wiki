@@ -1,0 +1,49 @@
+#   PTR-008: mark/+js/+beagle/ argv offset-math, Fork/Join
+
+The 2026-06-15 audit found beagle/ does execvp argv assembly with hand-rolled offset↔pointer math (duplicated 3×) and hand Fork/Join; mark/ hands back a bare interior pointer from a marker scan; js/ builds slices from typed-array base+bytelength. Behavior-preserving, one worktree; js parts may be CI-unbuildable (JSC), note like the MEM js tickets.
+
+##  Input
+
+### Context — beagle/
+ -  `beagle/SUBS.c:99-103,148-151,280-306` & `beagle/BE.cli.c:2772-2812` — execvp argv builder: `*off_out=(size_t)(u8bIdleHead(pool)-u8bDataHead(pool))` and `argv_c[i]=(char*)(u8bDataHead(pool)+offs[i])`; `BE.cli.c` re-inlines `be_pool_push`'s body. Duplicated 3×.
+ -  `beagle/BE.cli.c:4096,4296,4388,4456` — `before=u8bIdleHead(scratch); …feed…; after=u8bIdleHead(scratch); {before,after}` hand Fork/Join. `:4098` `u8 _qpad[320]`+`{_qpad,_qpad+sizeof}`. `:2912` split on `=` via raw `eq` pointer + `eq+1`. `:2130` `{spot_lit, spot_lit+4}`.
+ -  `beagle/SUBS.c:625` (decl `SUBS.h:117`) — `BEGetDrainSubs(u8cs *flag_head, u8cs *flag_term)` head/term pair, iterated `for (fp=head; fp<term; fp++)`.
+
+### Context — mark/ & js/
+ -  `mark/MARK.c:531-579` — `MKDTLineMarker(linef, depth, &mend)` returns a bare `u8c *mend`, then `{mend, linec[1]}` rebuilds slices ×4. `:34,605` — `markref refs[MARK_MAX_REFS]`+`int nrefs` (silent truncation at 512). `:46` — `{(u8c*)s, (u8c*)s+strlen(s)}`.
+ -  `js/main.cpp:138-141` — `page[len-1]='\n'; JSStringGetUTF8CString(…, page+len, PAGESIZE-len)`: `page+len` offset + `len-1` underflows if `len==0`; recurring raw `char page[PAGESIZE]`.
+ -  `js/JABC.hpp:40-65` — `{_##varn,_##varn}` then `varn[1]+=len-1`; raw VLA `u8 _##varn[maxlen]`. `js/io.cpp:102-105` — `ta[0]=(u8*)…BytesPtr(); ta[1]=ta[0]+…ByteLength()`. `js/io.cpp:56-60` — `ptr-JS_FILES` fd-index recovery.
+
+### Goals
+ -  One shared `BEArgvPack(pool, argv, char **out)` helper owning the offset↔pointer math; the three sites call it (keep the `char**` execvp ABI, move only the arithmetic).
+ -  Hand Fork/Join → `u8sFork`/`u8sJoin`; `_qpad`→`a_pad(u8, qpad, 320)`; `=`-split→`u8csFind`+`a_head`/`a_rest`; `{spot_lit,spot_lit+4}`→`u8slit`; `BEGetDrainSubs`→one `u8css` iterated with `$for`.
+ -  mark: `MKDTLineMarker` returns a rest-slice (`u8csp`), not a loose `mend`; `refs`→a typed `markref` buffer (drop the `MARK_MAX_REFS` cap); `{s,s+strlen}`→`a_cstr`.
+ -  js: a `u8sFromTypedArray(ctx,obj)` wrapper for the base+bytelength slice; fix the `len-1` underflow + `a_pad` the `char page[]`; isolate the JSC-string→buffer step in one `JSu8bFeedStringRef` helper.
+
+### Constraints
+ -  Behavior-preserving; `ctest -j16 --timeout 10` green. beagle execvp argv genuinely needs `char**` for the ABI — keep it, only the math moves into the helper.
+ -  js JSC-ABI `void*` deallocator/context contracts (`io.cpp:410`, `utf8.cpp:9`) are fixed — leave. js may be CI-unbuildable (no JSC); note skipped js items like the MEM js tickets.
+ -  `void *ctx` action fns (`besub_cb`, `be_known_cb`, `cli *c`) are the sanctioned idiom — out of scope; `DISPATCH.c` is already clean.
+
+##  WIP
+
+### Design decisions
+ -  The 3× duplicated argv offset-math is the priority (one `BEArgvPack` deletes two re-inlined copies); the js typed-array/string helpers are lower value and may not build in CI.
+
+### TODOs
+ -[ ] Repro-first: lock outputs on the beagle/mark test tables.
+ -[ ] `BEArgvPack` shared helper; fold the 3 sites.
+ -[ ] beagle Fork/Join → `u8sFork`/`u8sJoin`; `_qpad`/literal/`=`-split/`BEGetDrainSubs` → slice idioms.
+ -[ ] mark: `MKDTLineMarker` rest-slice; `refs` typed buffer; `a_cstr`.
+ -[ ] js (if it builds): typed-array slice wrapper, `len-1` underflow fix, JSString→buffer helper.
+ -[ ] Build + ctest; report done vs skipped (incl. js skipped-for-JSC).
+
+### Blockers and bummers
+ -  js/ likely unbuildable in CI (JSC) — do beagle/mark regardless and list js as deferred, mirroring the MEM js tickets.
+
+##  Outcome
+
+ -  pending.
+
+[ABC]: ../rule/ABC.mkd "ABC refactoring policies"
+[Issues]: ../rule/Issues.mkd "the parallel fix-and-land loop"

@@ -1,0 +1,72 @@
+#   BLAME-006: `be blame:` mis-attributes lines to the root commit + slow commit load (research)
+
+`be blame:ABC.md` attributes 5 pieces to `c7184818` ("initial", 31Jul24) — the
+ROOT commit — but ABC.md is a recent doc that almost certainly did NOT exist at
+that 31Jul24 import. So the line-trace appears to FALL BACK to root when it
+loses a line's true origin. Separately, clicking/loading `c7184818` takes
+SECONDS. Two suspected defects (one correctness, one perf) — research first, then
+decide fixes. Method: [Issues].
+
+##  Input
+
+### Context
+ -  `be blame:ABC.md` (307 hunk lines) pins **5** pieces to `?c7184818#initial`
+    (first piece is line 1). `be log:` tail confirms `c7184818` (31Jul24
+    "initial", parent of `31902055` "compat: bswap") is the **root** commit.
+ -  ABC.md (the ABC refactoring-policies one-pager) is recent; it almost certainly
+    was NOT in the 31Jul24 initial tree. Blaming its lines to root ⇒ the blame
+    DAG/line-trace likely falls through to root instead of stopping at the file's
+    real introduction (or a diff mis-attributes context onto the boundary commit).
+ -  Perf: clicking the `c7184818` link in the blame view takes **seconds** to load.
+    The initial import is large, so `commit:?c7184818` may inflate/serve a huge
+    tree/diff, or the load path is inefficient.
+ -  "Something fishy" — surfaced 2026-06-16 while reading `be blame:ABC.md`.
+
+### Goals
+ -  Explain WHY blame lands on the root commit for ABC.md lines: does ABC.md exist
+    in `c7184818`'s tree at all? where was it actually introduced? is there a
+    root-fallback / lost-origin path in the line trace?
+ -  Explain (and scope a fix for) the seconds-long `commit:?c7184818` load.
+
+### Constraints
+ -  Research-first: scan + a repro before any fix. graf/keeper changes gate.
+ -  Any blame fix must keep correct attributions byte-identical (`GRAFblameident`).
+
+##  WIP
+
+### Design decisions (scan done 2026-06-16 — TWO independent bugs, SPLIT)
+ -  Root cause / data: `ABC.md` was DELETED at `006b9039` (18Nov24 repo reorg) and
+    RE-ADDED as a different doc at `8948262e` (22May) — its true add commit, owning
+    20/28 pieces. The 5 root-pinned pieces (line 1 H1 title + 4 blank lines before
+    `##` headers) are structural tokens whose content-only RAPHash (BLAME/WEAVE.c
+    :502,510) COLLIDES across the delete/readd.
+ -  CORRECTNESS bug — `graf/BLAME.c:480` (`if (dr==BLAME_DESC_ABSENT) continue;`)
+    + the twin at `:492`: when the file is absent at a commit, `GRAFFileWeave`
+    SKIPS it instead of folding an empty (delete) layer, so the old root tokens
+    never die; the readd's matching tokens then inherit root's seq via the WEAVE EQ
+    keep-seq branch (`WEAVE.c:579-586`). Fix: fold a delete as an explicit empty
+    layer (the all-delete path `WEAVE.c:534-540` already exists) so tokens die at
+    the delete commit → readd is a clean all-INS at `8948262e`.
+ -  PERF bug — `commit:?<root>` (`BE.cli.c:332`/relay `:453-459`) runs graf
+    `diff:?<root>`; `graf_first_parent_hex` GRAFNONEs the parentless root, falling
+    to `GRAF.exe.c:505` → `GRAFDiffTreeRefs` (`DIFFREF.c:564`) which token-diffs the
+    ENTIRE 291-file initial tree as all-INS — O(repo), 4.35s (vs 0.16s typical).
+    Fix: emit raw all-add when one side is empty (skip token-level weave diff).
+ -  SPLIT recommended: **BLAME-006a** (blame delete-fold correctness, `BLAME.c`
+    480/492 + WEAVE fold-on-delete) and **BLAME-006b** (root/whole-tree `diff:`
+    perf, `GRAF.exe.c:505`/`DIFFREF.c:564`). Independent; any blame fix keeps
+    `GRAFblameident` byte-identical.
+
+### TODOs
+ -[v] Scanned: ABC.md add-commit `8948262e` (deleted `006b9039`, root not it); the 5
+      mis-attributed = title + blank lines that RAPHash-collide across the readd.
+ -[v] Root-fallback located: `graf/BLAME.c:480/492` skip-on-absent, no empty fold.
+ -[v] Slow-load profiled: `GRAFDiffTreeRefs` whole-tree all-INS (`DIFFREF.c:564`).
+ -[ ] SPLIT into 006a (correctness) + 006b (perf); fork a fix worker per split.
+
+##  Outcome
+ -  SPLIT (2026-06-16) into [[BLAME-006a]] (blame delete-fold correctness) and
+    [[BLAME-006b]] (root/whole-tree `diff:` perf). This ticket = the umbrella scan;
+    fixes land under 006a/006b.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

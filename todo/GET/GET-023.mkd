@@ -1,0 +1,93 @@
+#   GET-023: `be get '?#<sha>...'` (trailing dots) silently resolves to the PARENT, not the sha
+
+A ref with trailing dots — `?#<sha>...` — resolves to the commit's PARENT instead of
+`<sha>` (or a clean error). The `...` is read as range/ellipsis syntax and the
+resolver lands on the wrong commit SILENTLY. It bit the BLAME-006b land worker: a
+`be get '?#3dc19b0a...'` (meant to check out `3dc19b0a`) reverted the worktree to the
+parent `f6bea1c5` and dropped a merge hunk, forcing a hand-recovery. A trailing-dots
+ref must resolve to `<sha>` or fail loudly — never silently pick the parent. Method:
+[Issues].
+
+##  Input
+
+### Context
+ -  Repro: `be get '?#<sha>...'` (literal trailing `.`/`..`/`...`) → the worktree cur
+    becomes the sha's PARENT, not `<sha>`. Observed `be get '?#3dc19b0a...'` →
+    `f6bea1c5` (3dc19b0a's parent). No error; exit 0.
+ -  Likely cause: the `#fragment` `<sha>...` is parsed as a git-style range
+    (`A...B` symmetric-difference / `A...` against an implicit endpoint), and the
+    resolver picks the merge-base / parent endpoint instead of treating the leading
+    40-hex as the target. Resolution path: `REFSResolve` (`keeper/REFS.c:467`) /
+    `keeper/RESOLVE.c` (the `#hex` → 40-hex decode). A 40-hex followed by `...` should
+    not be a range with an empty/implicit side.
+ -  Severity: silent wrong-checkout is dangerous — it reverted real work (caught only
+    because the worker verified the tree). Pairs with the GET-021 stale-worktree class
+    (a wrong cur with no warning).
+
+### Goals
+ -  **SAFEGUARD (the core fix):** the ref resolver CLASSIFIES the target as (valid
+    sha | valid hashlet-prefix | known branch). If it matches NONE of those, it
+    REFUSES with a clear error — it MUST NEVER silently fall through to a parent /
+    merge-base / nearest-prefix / no-op resolution. `?#<sha>...` is one instance: the
+    trailing `...` makes it neither a valid sha nor a branch → reject, don't guess.
+ -  `be get '?#<sha>...'` then either resolves to `<sha>` (if trailing dots are
+    explicitly stripped as a tolerated form) OR errors — but NEVER lands on the parent.
+ -  A genuine `A...B` / `A..B` range, if supported, resolves to the documented endpoints;
+    a malformed/one-sided range errors rather than guessing.
+
+### Constraints
+ -  Fix in the ref-resolution / URI-fragment parse (`keeper/REFS.c` / `RESOLVE.c` /
+    the canon query parse), not by special-casing `be get`. Don't regress valid
+    hashlet / branch / `?#<sha>` resolution. Add table cases: `?#<sha>`, `?#<sha>.`,
+    `?#<sha>...`, plus any real range form.
+
+##  WIP
+
+### Design decisions
+ -  ROOT CAUSE (2026-06-16): `be get '?#<sha>'` carries an EMPTY query + a `#fragment`,
+    but `sniff/GET.c::SNIFFGetURI` (~`:2067`) only read the QUERY — the empty `?`
+    matched the trunk row and the `#fragment` was SILENTLY DROPPED (landing on the
+    trunk tip, not the sha). A trailing-dots `?#<sha>...` additionally mis-decoded via
+    `WHIFFHexHashlet60` (ignored the non-hex tail → wrong object). [The trailing-dots
+    *query* form `?<sha>...` was already rejected on trunk by `REFSResolveURI`'s
+    `HEXu8sValid` gate — the bug is the *fragment* form.]
+ -  FIX: a classify-or-reject arm at `sniff/GET.c:2069` —
+    `if (has_q && $empty(query) && !$empty(fragment))` classify the fragment as
+    full-sha (`DOGIsFullSha`) or hashlet (`DOGIsHashlet`) → `GETCheckout`, else REFUSE
+    (`SNIFFFAIL`); plus the shared-resolver guard `keeper/KEEP.c:1908`
+    (`KEEPResolveTree`, `KEEPFAIL`). Reused existing error codes (no hand-rolled ron60).
+ -  REFINED (maintainer): the first cut added a `frag_is_spoilt_hex` helper in
+    `graf/LOG.c` with a `hexrun>=6 && <len` "botched-sha" heuristic — a MISNOMER (a
+    fragment is valid hex or not; the heuristic also false-positived a `#msg-search`
+    starting with ≥6 hex). REMOVED it: `GRAFResolveTip` now does the clean binary —
+    `KEEPResolveRef` resolves it (sha/hashlet/branch) → object selector; else the only
+    legit non-object form is a `#<N>`/`#Ln` COUNT (`HUNKu8sFragSplit != 0`, load-bearing
+    so counts aren't refused); anything else returns the resolver's miss (refuse). So
+    `log:?#<sha>...` → `RESLVNONE` (no silent trunk-log), `#msg-search` is a separate verb
+    path (`graf_head_msg_search`), counts still resolve+cap.
+
+### TODOs
+ -[ ] Repro-first: `be get '?#<sha>...'` lands on the parent (RED); table over
+      `?#<sha>` / `.` / `..` / `...`.
+ -[ ] Root-cause the range/ellipsis interpretation in `REFSResolve`/`RESOLVE.c`.
+ -[ ] Fix: resolve to `<sha>` or error; never silent-parent. Test green.
+
+### Blockers and bummers
+ -  Shared resolver — verify all verbs (get/head/diff/blame) get the corrected
+    behaviour, not just get.
+
+##  Outcome
+ -  **LANDED `d6f35358`** (FF child of `453c55c2`; 307/307): the classify-or-reject
+    safeguard + the `frag_is_spoilt_hex` removal + the source URI now built via the
+    composer (`URIutf8Feed` off a query-only `uri`, `call()`-checked at `sniff/GET.c:2095`,
+    replacing the hand-rolled `?`+feed). Reconciled clean onto trunk (disjoint from
+    PTR-008/SUBS-020/SUBS-022).
+ -  (history) FIX-READY (`$HOME/todo/GET-023`, base `b71eba2a`): classify-or-
+    reject arm in `sniff/GET.c` (the empty-query+`#fragment` get/head path) + shared-resolver
+    guards in `graf/LOG.c`/`keeper/KEEP.c` (covers head/diff/blame too). RED→GREEN proved with
+    a trunk-only `sniff` binary (`SNIFFfragref`: `?#<sha>` was silently landing on the trunk
+    tip). Reused `SNIFFFAIL`/`KEEPFAIL`. Files: `sniff/GET.c`, `graf/LOG.c`, `keeper/KEEP.c`,
+    new `sniff/test/fragref.sh` (+ CMake), `keeper/test/RESOLVEURI.c` (regression doc).
+    **305/305**; no regression in valid sha/hashlet/branch resolution. Awaiting gate.
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

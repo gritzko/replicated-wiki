@@ -1,0 +1,36 @@
+#   JS-006 [MED]: `JABCioLog` logs `args[0]` not `args[i]` — repeats the first argument
+
+`io.cpp:243-257` loops over `args[i]` but the string branch copies `args[0]`, so
+every argument after the first prints the first instead. Quick, single-lens
+finding. Method: [Issues].
+
+##  Input
+
+### Context
+ -  `JABCioLog` (`io.cpp:243-257`) iterates `args[i]`, but the string branch at
+    `io.cpp:245` copies `args[0]` → a 2nd+ argument prints the first repeatedly.
+ -  The inner `write` return is also ignored.
+ -  `WITH_JS`-gated WIP; cosmetic but trivially wrong.
+
+### Goals
+ -  `io.log(a, b, c)` prints `a b c`, not `a a a`.
+
+### Constraints
+ -  One-line fix: use `args[i]`. Optionally check the `write` return.
+
+##  WIP
+
+### Design decisions
+ -  (open) Change `args[0]` → `args[i]` in the string branch.
+
+### TODOs
+ -[ ] Repro-first: `io.log("a", "b")` asserts output contains `b`.
+ -[ ] Fix the index; check the `write` return.
+
+### Blockers
+ -  None.
+
+##  Outcome
+ -  **LANDED `abc29c84`** (2026-06-16): `JABCioLog` now converts `args[i]` (was `args[0]`), strips the NUL and honours `write()`'s short return; C++ harness row `run_log_args_repro` drives two strings over a piped STDERR and asserts both appear (red→green).
+
+[Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

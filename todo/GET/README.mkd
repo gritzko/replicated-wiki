@@ -6,14 +6,48 @@
 
  -  [GET-009] — efficient beagle↔beagle (`be://`) sync umbrella: replace `WIRE.c`'s byte-offset watermark with object-level reachability serving (`closure(wants) − closure(haves)`), cross-`file_id` serving, and a redundant-pack GC/compaction for already-bloated shards. St.1 ([[GET-007]] latest-copy) landed; St.2-4 open.
 
+ -  [GET-028] — `be get ssh://…` aborts `ZINFFAIL`/`WIRECLFL` mid-ingest when the spawned `keeper` helper is stale: `be-cli` had no build dep on `keeper-cli`/`spot`/`graf`/`sniff`, so `ninja be` relinks none of them. Fix: `add_dependencies` in `beagle/CMakeLists.txt`. Verified (clone exit 0); pending land.
+
  -  [GET-017] — `be get --nosub` won't advance a store-backed *switch*-worktree's ref at all (stays pinned at its base; MEM-041/042 stuck at `5104a855` while clone-shaped MEM-044 advanced), forcing fresh-clone salvage to land. Likely a `.be`-switch-shape FF gap ([[GET-012]] area); `.refs.idx` was fresh (not the stale-idx trap). Needs a deterministic repro pinning the `.be` shape.
 
  -  [GET-018] — make `be get`'s wt update atomic (mid-write failure → ref/wtlog/tree all unchanged). Split from GET-016 Part 1: can't just reorder the commit point (breaks `test/get/09`/`10`'s documented wtlog-grows-then-`--force`-replay model); needs stage-to-temp+atomic-swap or journal+rollback, design pass first.
 
- -  [GET-020] — `be get file:<wt>` (worker-clone form) intermittently exits `SNIFFFAIL` with a HALF-POPULATED tree (empty `abc/`, missing `woof/` + 3 `test/tree/` files); store contention from concurrent worktree creation suspected. Complete-or-fail checkout; relates to [[GET-018]].
+GET-021 (a worktree silently diffs/statuses against an advanced cur — phantom `mod`/`mis`,
+revert landmine; `be status` now PREPENDS a cur-vs-tip `post`/`miss` commit block via SNIFF's
+own DAG walk) landed `ef8901fa`. Follow-up: the per-file stale re-materialize (the `miss`
+rows already warn the user to `be get`).
 
+ -  [GET-022] — no per-file checkout-from-rev: `be get <path>?<rev>` DROPS the path and resolves `?<rev>` as a branch → `KEEPNONE`/no-op (`sniff/GET.c:1711`). No git `checkout <rev> -- <path>` parity; `blob:`/`cat:` resolve it for reading but no verb writes it back. Needed by [[GET-021]] to restore one stale file without a whole-tree `be get` clobbering other WIP.
+
+GET-020 (`be get file:<wt>` left a HALF-POPULATED tree + `SNIFFFAIL` under concurrent
+worktree creation) landed `49039f36`. GET-026 (bare `be get` = default GET + resulting-state
+banner via the shared ROWS path; orphaned overview moved to [[STATUS-001]]) landed `1b5d3def`
++ sub-test fix `cb94e64e`. GET-027 (`be get be://` clone read a degenerate zero-length pack
+bookmark → WIRECRPT; the "off-by-one hashlet" theory was wrong, two independent bugs fixed)
+landed `a8fa2e87`.
+GET-023 (`be get '?#<sha>'` silently dropped the `#fragment` → landed on the tip;
+classify-or-reject arm + composer-built source URI) landed `d6f35358`; its
+regression GET-024 (`?#<sha>` recorded a DETACHED cur-tip → POSTDET, broke the
+SSH-gated `be-put-06-triangle`) landed `134b9e30` — fixed in the same arm (record
+trunk-state) + a non-SSH-gated guard in `test/get/33-detached-refuse-commit`.
+GET-025 (a SHORT `?#<short>` recorded the wtlog cur-tip + keeper REFS tip verbatim
+→ the 40-char-only baseline resolver read EMPTY: whole tree `new`, `be head` stuck)
+landed `4737404d` — record the RESOLVED full sha (`a_sha1hex(tgt_commit_sha)`) in the
+row + `REFSAppendVerb`; step 6 in `get/33` + `fragref` case 2. Also repaired the
+live `dogs/refs` (2 short rows the bug had written last night, blocking all posts).
+
+[GET-028]: GET-028.mkd "be execs a stale keeper helper → opaque ZINFFAIL clone"
 [GET-009]: GET-009.mkd "efficient be:// sync: reachability upload-pack + GC"
+[GET-021]: GET-021.mkd "worktree diffs against an advanced-but-unmaterialized cur; status must warn when stale"
+[GET-022]: GET-022.mkd "no per-file checkout-from-rev (be get path?rev drops the path)"
+[GET-023]: GET-023.mkd "be get '?#<sha>...' trailing dots resolve to the parent"
+[GET-024]: GET-024.mkd "be get ?#<sha> records detached cur-tip (GET-023 regression)"
+[GET-025]: GET-025.mkd "be get '?#<short-sha>' reconcile breaks the worktree baseline (whole tree reads new)"
 [GET-017]: GET-017.mkd "be get --nosub won't advance a switch-worktree's ref (forces fresh-clone salvage)"
 [GET-018]: GET-018.mkd "atomic wt GET: stage/swap or journal+rollback so mid-write failure leaves nothing changed"
 [GET-020]: GET-020.mkd "be get file:<wt> leaves an incomplete checkout + SNIFFFAIL"
+[GET-026]: GET-026.mkd "bare be get = default GET + resulting-state banner"
+[GET-027]: GET-027.mkd "be get be:// clone mangles object hashlet → WIRECRPT"
+[BE-005]: ../BE/BE-005.mkd "umbrella: shared ROWS state banner"
+[STATUS-001]: ../STATUS/STATUS-001.mkd "rehomes the branch/remote overview"
 [Issues]: ../../rule/Issues.mkd "the parallel fix-and-land loop"

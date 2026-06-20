@@ -18,7 +18,7 @@ The keeper owns the flat per-project object pool (git blobs/trees/commits; branc
 <h2>Active tickets</h2>
 <ul>
 <li><a href="KEEP-002.html">KEEP-002</a> *<strong>LANDED <code>8f7233c3</code></strong>* — torn <code>.keeper.idx</code> (concurrent posters sharing a pid-less temp) served as <code>KEEPNONE</code> for in-pack objects; fix = per-pid temp index names + <code>keep_rebuild_torn_idx</code> rebuilds a short index from the pack on rw-open (which also auto-recovered the live store). Hermetic repro <code>sniff/test/keep002-torn-idx.sh</code>, 282/282.</li>
-<li><a href="KEEP-001.html">KEEP-001</a> — converge the three near-duplicate keeper tree-walkers (<code>WALK.c:walk_tree_dive</code>, <code>KEEP.c:keep_walk_tree</code>, <code>WIRECLI.c:wpush_walk_tree</code>) into one visitor-driven walker; the MEM-023/024 work had to fix the same per-level-buffer leak in each copy. Blocked on landing <a href="../MEM/MEM-023.html">MEM-023</a>/<a href="../MEM/MEM-024.html">MEM-024</a> first.</li>
+<li><a href="KEEP-001.html">KEEP-001</a> *<strong>LANDED <code>0eb0afab</code></strong>* — converged FOUR near-duplicate tree-walkers (<code>WALK.c</code>, <code>KEEP.c</code> dead chain, <code>WIRECLI.c</code>, <code>CLOSE.c</code>) into one visitor-driven <code>KEEPWalkTree</code> (<code>WALK.h:66</code>); shape B (bounded recursion + hard <code>WALK_MAX_DEPTH</code> cap + right-sized carve, so it also delivers the unlanded MEM-023/024 safety goal), have/close-set dedup as a <code>WALKSKIP</code> visitor return; dead <code>keep_walk_tree</code>/<code>KEEPPush</code> chain deleted. New <code>CLOSEtest</code>, 396/396.</li>
 </ul>
 </body>
 </html>
