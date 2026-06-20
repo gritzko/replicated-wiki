@@ -1,0 +1,49 @@
+#   DIS-044: WEAVEMerge RGA order key is not causally monotonic
+
+[DIS-043] gave `dog/WEAVE` tokens an RGA stable order and sorts concurrent siblings by
+raw **commit-id DESC**. That is only causally valid when a commit's id is larger than
+its ancestors' — true for the DWEAVE fuzzer (it keys commit-id = line index, monotonic)
+but FALSE for real 60-bit commit hashlets, which are arbitrary. When the common-ancestor
+(spine) id exceeds the edit ids, a replace-edit's inserted token is stranded behind the
+dead original's whole subtree, and a same-line divergence can splice clean instead of
+conflicting — **silent merge data-loss**. Found during [DOG-005] (graf cut-over):
+diff/blame/cat/get are byte-parity-clean, but 11 real-commit merge tests fail. The
+green DIS-043 fuzz was misleading — its monotonic-id oracle could never hit this.
+
+##  Issues
+RGA needs a causally-monotonic order key; the raw commit-id is not one.
+
+ -  Repro (isolated dog-API harness): the bug toggles purely on `base<ours<theirs`
+    (passes) vs `base>ours` (fails) — `int x = 10` merges to `int x = ;` … `10` at EOF.
+ -  Failing: `be-patch-03/04/10/12/14/15/17/22/23/34`, `be-get-51-ff-weave-unindexed-merge`
+    (real-commit merges with arbitrary hashlets); synthetic small ordered ids (1/2/3) hide it.
+ -  Root: a descendant commit may have a SMALLER hashlet than its ancestor, so commit-id
+    order ≠ causal order; RGA's concurrent tie-break must be a causal/Lamport rank.
+ -  Fuzzer gap: `dog/fuzz/WEAVE` keys commit-id = line index (monotonic), accidentally a
+    valid causal order — so it can never surface this class.
+
+##  Planned
+Tie-break on the commit INDEX (already stored, causal), made path-independent.
+
+ -  The token already stores the commit INDEX, and `commits[]` is built ancestors-first
+    (spine = index 0), so `index(ancestor) < index(descendant)` — causal. Switch
+    `WEAVEMerge`'s RGA tie-break from the raw hashlet (`cid`, `dog/WEAVE.c:519/588`) to
+    the index; that fixes the spine-id > edit-id stranding directly. No new column.
+ -  CAVEAT — make the index path-independent: `WEAVEMerge` builds `commits[]` as
+    `a.commits ++ b.new`, so concurrent siblings flip index by parent role (the very
+    criss-cross DIS-043 used the hashlet to avoid). Build the merged `commits[]` in a
+    deterministic causal order (topo: ancestors first, concurrent commits tie-broken by
+    hashlet) so the index is a real topo rank — causal AND path-independent.
+ -  Extend `dog/fuzz/WEAVE` to non-monotonic / arbitrary commit-ids (its commit-id =
+    line-index oracle is why DIS-043 looked green); fold the DOG-005 `base>ours` repro +
+    the failing be-patch/be-get merges in as property tests, confirmed red pre-fix.
+
+##  Blockers
+ -  [DIS-043] is LANDED (`8eece3f3`) and carries this bug; this fixes it. [DOG-005]'s
+    merge cut-over gates on it (the diff/get cut-over is already byte-parity-clean).
+
+##  Landed
+ -  (open)
+
+[DIS-043]: DIS-043.mkd "RGA stable-order merge (landed 8eece3f3)"
+[DOG-005]: ../DOG/DOG-005.mkd "graf cut-over to dog/WEAVE"
